@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: personal-memory-palace
+    runtime: docker
+    plan: 0.5c-512mb
+    region: singapore
+    healthCheckPath: /login
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MEMORY_PALACE_DATASET
+        value: owner
+      - key: MEMORY_PALACE_DATA_DIR
+        value: /app/data
+      - key: MEMORY_PALACE_OWNER_PASSWORD
+        sync: false
+    disk:
+      name: memory-palace-data
+      mountPath: /app/data
+      sizeGB: 1

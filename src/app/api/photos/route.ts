@@ -1,0 +1,39 @@
+import { NextResponse } from "next/server";
+import { addUploadedPhotos } from "@/data/photo-repository";
+import { maximumUploadBytes, supportedImageTypes } from "@/storage/image-processor";
+import { imageStorage } from "@/storage/local-image-storage";
+import { isOwner } from "@/auth";
+
+export const runtime = "nodejs";
+
+export async function POST(request: Request) {
+  if (!(await isOwner())) return NextResponse.json({ error: "OWNER_REQUIRED" }, { status: 401 });
+  const formData = await request.formData();
+  const files = formData.getAll("photos").filter((value): value is File => value instanceof File);
+  const preserveOriginal = formData.get("preserveOriginal") === "true";
+  if (files.length === 0) {
+    return NextResponse.json({ error: "PHOTOS_REQUIRED" }, { status: 400 });
+  }
+  const invalid = files.find((file) => !supportedImageTypes.has(file.type) || file.size > maximumUploadBytes);
+  if (invalid) {
+    return NextResponse.json({ error: "INVALID_IMAGE", file: invalid.name }, { status: 400 });
+  }
+
+  const stored: Array<{ originalName: string; mimeType: string; saved: Awaited<ReturnType<typeof imageStorage.save>> }> = [];
+  try {
+    for (const file of files) {
+      const saved = await imageStorage.save({
+        data: Buffer.from(await file.arrayBuffer()),
+        originalName: file.name,
+        mimeType: file.type,
+        preserveOriginal,
+      });
+      stored.push({ originalName: file.name, mimeType: file.type, saved });
+    }
+    const photos = addUploadedPhotos(stored);
+    return NextResponse.json({ photos }, { status: 201 });
+  } catch {
+    await imageStorage.remove(stored.flatMap(({ saved }) => [saved.optimizedStorageKey, saved.originalStorageKey]));
+    return NextResponse.json({ error: "IMAGE_PROCESSING_FAILED" }, { status: 422 });
+  }
+}

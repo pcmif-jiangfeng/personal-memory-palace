@@ -1,0 +1,8 @@
+node_modules
+.next
+data/*.sqlite*
+data/images
+.git
+.env
+.env.*
+!.env.example
