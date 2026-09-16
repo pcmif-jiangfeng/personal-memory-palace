@@ -113,6 +113,9 @@ img { display: block; max-width: 100%; }
 .relation-editor { padding: 1rem 0; }
 .relation-editor summary { cursor: pointer; color: var(--accent); }
 .relation-editor .relation-list { margin: 1rem 0; }
+.memory-details-editor { grid-column: 1 / -1; padding: 1.4rem 0 2rem; border-bottom: 1px solid var(--line); }
+.memory-details-form { max-width: 820px; margin-top: 1.2rem; }
+.memory-management-message { grid-column: 1 / -1; margin: 0; color: var(--accent); }
 .trash-list { display: grid; gap: 3rem; margin-top: 3rem; }
 .trash-list h2 { font: 400 1.5rem Georgia, serif; }
 .trash-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 0; border-bottom: 1px solid var(--line); }

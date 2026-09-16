@@ -1,6 +1,47 @@
 import { randomUUID } from "node:crypto";
-import { getDatabase } from "./database";
-import { findMemoryById } from "./memory-repository";
+import type { DatabaseSync } from "node:sqlite";
+import { getDatabase } from "./database.ts";
+
+export interface UpdateMemoryDetailsInput {
+  title: string;
+  story: string;
+  stageId?: string | null;
+}
+
+export function updateMemoryDetailsInDatabase(
+  database: DatabaseSync,
+  memoryId: string,
+  input: UpdateMemoryDetailsInput,
+): void {
+  const title = input.title.trim();
+  const story = input.story.trim();
+  const stageId = input.stageId?.trim() || null;
+  if (!title) throw new Error("TITLE_REQUIRED");
+  if (title.length > 120) throw new Error("TITLE_TOO_LONG");
+  if (!story) throw new Error("STORY_REQUIRED");
+
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    if (!database.prepare(
+      "SELECT id FROM memories WHERE id = ? AND trashed_at IS NULL"
+    ).get(memoryId)) throw new Error("MEMORY_NOT_FOUND");
+    if (stageId && !database.prepare(
+      "SELECT id FROM stages WHERE id = ? AND trashed_at IS NULL"
+    ).get(stageId)) throw new Error("INVALID_STAGE");
+
+    database.prepare(
+      "UPDATE memories SET title = ?, story = ?, stage_id = ?, updated_at = ? WHERE id = ?"
+    ).run(title, story, stageId, new Date().toISOString(), memoryId);
+    database.exec("COMMIT");
+  } catch (error) {
+    database.exec("ROLLBACK");
+    throw error;
+  }
+}
+
+export function updateMemoryDetails(memoryId: string, input: UpdateMemoryDetailsInput): void {
+  updateMemoryDetailsInDatabase(getDatabase(), memoryId, input);
+}
 
 export function addLaterNote(memoryId: string, content: string) {
   const value = content.trim();
@@ -30,7 +71,6 @@ export function updateMemoryRelations(memoryId: string, relatedMemoryIds: string
     database.prepare("UPDATE memories SET updated_at = ? WHERE id = ?").run(now, memoryId);
     database.exec("COMMIT");
   } catch (error) { database.exec("ROLLBACK"); throw error; }
-  return findMemoryById(memoryId);
 }
 
 function mark(sql: string, id: string, error: string) {

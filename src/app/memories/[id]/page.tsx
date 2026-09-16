@@ -2,10 +2,9 @@ import { notFound } from "next/navigation";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { MemoryCard } from "@/components/memory-card";
-import { findMemoryDetails } from "@/data/memory-repository";
+import { findMemoryDetails, listActiveMemories, listActiveStages } from "@/data/memory-repository";
 import { copy } from "@/i18n/zh-CN";
 import { imageStorage } from "@/storage/local-image-storage";
-import { listActiveMemories } from "@/data/memory-repository";
 import { MemoryManagement } from "@/components/memory-management";
 import { ShareManager } from "@/components/share-manager";
 import { isOwner } from "@/auth";
@@ -60,7 +59,7 @@ export default async function MemoryExhibitionPage({ params }: { params: Promise
             : <strong>{copy.common.uncategorized}</strong>}
         </div>
       </footer>
-      {await isOwner() ? <section className="section-shell exhibition-management"><MemoryManagement memory={memory} candidates={listActiveMemories()} /><ShareManager memoryId={memory.id} /></section> : null}
+      {await isOwner() ? <section className="section-shell exhibition-management"><MemoryManagement memory={memory} candidates={listActiveMemories()} stages={listActiveStages()} /><ShareManager memoryId={memory.id} /></section> : null}
     </article>
   );
 }

@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
-import { addLaterNote, permanentlyDeleteMemory, trashMemory, updateMemoryRelations, restoreMemory } from "@/data/management-repository";
+import {
+  addLaterNote,
+  permanentlyDeleteMemory,
+  restoreMemory,
+  trashMemory,
+  updateMemoryDetails,
+  updateMemoryRelations,
+} from "@/data/management-repository";
 import { isOwner } from "@/auth";
 
 export const runtime = "nodejs";
@@ -8,8 +15,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!(await isOwner())) return NextResponse.json({ error: "OWNER_REQUIRED" }, { status: 401 });
   const { id } = await params;
   try {
-    const input = await request.json() as { action?: string; content?: string; relatedMemoryIds?: string[]; confirm?: boolean };
-    if (input.action === "note") addLaterNote(id, input.content ?? "");
+    const input = await request.json() as {
+      action?: string;
+      content?: string;
+      relatedMemoryIds?: string[];
+      confirm?: boolean;
+      title?: string;
+      story?: string;
+      stageId?: string | null;
+    };
+    if (input.action === "details") updateMemoryDetails(id, {
+      title: input.title ?? "",
+      story: input.story ?? "",
+      stageId: input.stageId,
+    });
+    else if (input.action === "note") addLaterNote(id, input.content ?? "");
     else if (input.action === "relations") updateMemoryRelations(id, input.relatedMemoryIds ?? []);
     else if (input.action === "trash") trashMemory(id);
     else if (input.action === "restore") restoreMemory(id);

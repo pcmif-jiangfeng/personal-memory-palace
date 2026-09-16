@@ -55,6 +55,18 @@ export const copy = {
     backToWorkspace: "返回照片整理台",
     noRelated: "暂无可关联的 Memory",
     saveFailed: "保存失败，请检查填写内容后重试。",
+    manageStages: "管理人生章节",
+    manageStagesHint: "会在新标签页打开；创建后刷新本页即可选择。",
+  },
+  management: {
+    editDetails: "编辑标题、Original Story 与人生章节",
+    originalStory: "Original Story",
+    saveDetails: "保存基本信息",
+    saving: "正在保存…",
+    saved: "基本信息已保存",
+    failed: "保存失败，请检查标题、Story 和人生章节。",
+    manageStages: "管理人生章节",
+    manageStagesHint: "创建新章节后刷新本页。",
   },
   exhibition: {
     label: "MEMORY EXHIBITION",

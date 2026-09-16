@@ -84,6 +84,7 @@ export function MemoryEditor({ photos, stages, memories }: {
       <label className="form-field"><span>{copy.editor.stage}</span>
         <select name="stageId" defaultValue=""><option value="">{copy.editor.uncategorized}</option>
           {stages.map((stage) => <option key={stage.id} value={stage.id}>{stage.title}</option>)}</select>
+        <small><Link href="/stages" target="_blank">{copy.editor.manageStages}</Link> {copy.editor.manageStagesHint}</small>
       </label>
       <fieldset>
         <legend>{copy.editor.related}</legend>
