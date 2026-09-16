@@ -2,6 +2,8 @@ import sharp from "sharp";
 
 export const supportedImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 export const maximumUploadBytes = 20 * 1024 * 1024;
+export const maximumUploadBatchBytes = 100 * 1024 * 1024;
+export const maximumUploadFileCount = 20;
 
 export interface OptimizedImage {
   data: Buffer;

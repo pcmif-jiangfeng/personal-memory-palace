@@ -28,6 +28,6 @@ pnpm dev
 
 公网或局域网部署前请设置 `MEMORY_PALACE_OWNER_PASSWORD`（见 `.env.example`）。编辑入口和写入 API 需要馆长登录；Visitor 通过 Owner 生成的 `/share/<token>` 链接访问。Docker 镜像已包含 standalone 启动方式，数据库和图片目录需要映射到持久卷。
 
-生产部署采用 Render Docker Web Service + `/app/data` 持久卷。完整部署与运维步骤见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)。
+生产部署采用腾讯云轻量应用服务器、Docker 和宿主机 `/opt/personal-memory-palace/data` 持久目录。Task07 的首次部署、容器重建、备份及隔离恢复步骤见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)。
 
 优化图片和可选原图保存在 `data/images/uploads/<dataset>/` 对应的数据集中，不会提交到版本库。

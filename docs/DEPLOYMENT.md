@@ -1,118 +1,264 @@
-# Personal Memory Palace V1 部署说明
+# Personal Memory Palace V1 — 腾讯云生产部署
 
-## Deployment Decision
+本文只覆盖 Task07 的 Production Baseline：通过腾讯云公网 IP 运行单 Owner 版本，并验证数据持久化、备份和隔离恢复。域名、反向代理与 HTTPS 等备案条件满足后再处理。
 
-- **Platform:** Render Web Service
-- **Reason:** 原生支持 Dockerfile 和单实例 Persistent Disk；适合当前 SQLite + 本地图片文件结构。持久磁盘会保留重启和重新部署后的数据，并提供每日快照。
-- **Build Method:** 仓库根目录 `Dockerfile`，Next.js standalone 多阶段构建。
-- **Start Command:** `node server.js`（由 Dockerfile `CMD` 提供）。
-- **Persistent Storage:** Render Disk，挂载到 `/app/data`，初始 1 GB。SQLite 和上传图片必须都写入此目录。
-- **Environment Variables:** `NODE_ENV=production`、`PORT=10000`、`MEMORY_PALACE_DATASET=owner`、`MEMORY_PALACE_DATA_DIR=/app/data`、`MEMORY_PALACE_OWNER_PASSWORD=<secret>`。
-
-Render 的持久磁盘只允许单个服务实例使用，因此本项目保持单实例运行。这也符合 V1 的 Single Owner 定位和 SQLite 的使用方式。
-
-## 当前架构
+## 1. 已确认的生产结构
 
 ```text
-Frontend:      Next.js App Router + React
-Backend:       Next.js Node.js Route Handlers
-Database:      SQLite (/app/data/palace.sqlite)
-Image Storage: Local filesystem (/app/data/images)
-Hosting:       Render Docker Web Service
-Persistence:   Render Persistent Disk mounted at /app/data
+Application:     Next.js standalone / Node.js
+Database:        /app/data/palace.sqlite
+Optimized image: /app/data/images/uploads/owner/optimized/
+Original image:  /app/data/images/uploads/owner/original/
+Backup root:     /app/backups/
 ```
 
-## 首次部署
+数据库、上传记录、Stage、Memory、Later Notes、关联关系和分享设置均在 `palace.sqlite`。优化图不能重新生成，因为原图是可选保存，所以数据库和整个 `images/uploads/owner` 都属于核心备份。
 
-1. 将项目推送到一个 Git 仓库。不要提交 `.env.local`、SQLite 文件或 `data/images`。
-2. 在 Render Dashboard 选择 **New > Blueprint**，连接该仓库。Render 会读取根目录的 `render.yaml`。
-3. 在创建过程中设置 `MEMORY_PALACE_OWNER_PASSWORD`。使用只用于本网站的长密码；不要写进代码或 `render.yaml`。
-4. 确认服务使用 Docker、区域为 Singapore、磁盘挂载路径为 `/app/data`。
-5. 创建 Blueprint。首次启动时应用会在持久卷中自动创建 `/app/data/palace.sqlite` 和图片目录。
-6. 打开 Render 提供的 `https://<service-name>.onrender.com` 地址，访问 `/login` 并用 Owner 密码登录。
-
-持久磁盘不支持 Render Free Web Service，因此必须选择可挂载磁盘的付费实例。不要在没有磁盘的临时实例中录入真实记忆。
-
-## 更新与重新部署
-
-1. 在本地完成并测试修改。
-2. 推送到已连接的 Git 分支；Render 自动重新构建 Docker 镜像并部署。
-3. 部署完成后检查 `/login`、首页、图片和分享链接。
-4. 不要删除、改名或更换 `/app/data` 磁盘，除非已经完成备份与恢复演练。
-
-代码部署与数据卷相互独立：新镜像不会覆盖 `/app/data` 中的 SQLite 和图片。
-
-## 修改环境变量
-
-在 Render Dashboard 的 **Environment** 页面修改变量并保存。修改会触发服务重启。
-
-- `MEMORY_PALACE_OWNER_PASSWORD`：Owner 登录密码。修改后旧 Owner Cookie 自动失效。
-- `MEMORY_PALACE_DATASET`：生产固定为 `owner`。
-- `MEMORY_PALACE_DATA_DIR`：生产固定为 `/app/data`。
-- `PORT`：保持 `10000`，与 Render Web Service 端口一致。
-
-## 数据与备份
-
-持久卷内容：
+推荐宿主机结构：
 
 ```text
-/app/data/
-├── palace.sqlite
-├── palace.sqlite-shm
-├── palace.sqlite-wal
-└── images/
-    └── uploads/owner/
-        ├── optimized/
-        └── original/
+/opt/personal-memory-palace/
+├── app/        # Git 仓库和 Docker build context
+├── data/       # palace.sqlite 与 images/
+├── backups/    # backup-YYYYMMDD-HHMMSS/
+├── config/     # 生产 env file
+└── restore-tests/
 ```
 
-Render 对持久磁盘提供每日快照。仍建议定期创建应用级一致性备份：先使用 SQLite backup 命令或短暂停止写入，再复制 `palace.sqlite` 及其 WAL/SHM 文件和整个 `images` 目录。不要只复制数据库而遗漏图片。
+代码、数据、备份和 Secret 彼此分离。重新拉取代码或构建镜像不得删除 `data/`。
 
-恢复时应先停止服务写入，将数据库和图片恢复到同一个 `/app/data` 卷，再重启并检查图片路径。
+## 2. 生产环境变量
 
-## 部署后验证
+| 变量 | 公网 IP 阶段 | 说明 |
+| --- | --- | --- |
+| `NODE_ENV` | `production` | 使用生产模式 |
+| `PORT` | `3000` | 容器内部端口 |
+| `MEMORY_PALACE_DATASET` | `owner` | 使用真实 Owner 数据库 |
+| `MEMORY_PALACE_DATA_DIR` | `/app/data` | 数据持久化挂载点 |
+| `MEMORY_PALACE_OWNER_PASSWORD` | 服务器私密值 | 不能提交 Git |
+| `MEMORY_PALACE_SECURE_COOKIES` | `false` | 仅为 HTTP/IP 验证；HTTPS 后改为 `true` |
 
-### Owner
+没有 Cookie Secret、Share Secret 或 Base URL。Owner Cookie 值由 Owner 密码摘要产生；分享访问值存储于 SQLite。
 
-- 未登录访问 `/`、`/workspace`、`/stages`、`/trash` 会跳转 `/login`。
-- 正确密码可以登录；错误密码返回拒绝。
-- 上传 JPG/PNG/WebP，创建包含 Story 的 Memory，刷新后内容和图片仍存在。
-- 测试 Later Note、Search、Time Gear、删除到回收站与恢复。
-- 在 Render Dashboard 重启服务，再次确认 Memory 和图片仍存在。
+## 3. 首次部署（腾讯云网页终端）
 
-### Visitor
+### 3.1 创建目录并拉取代码
 
-- 创建一条无密码分享链接，并用无痕窗口打开。
-- 创建一条密码分享链接，验证错误密码被拒绝、正确密码可访问。
-- 无痕窗口不能打开 Owner 页面，不能调用 POST/PUT/DELETE 写入 API。
-- private Memory 的直接 URL 不应向未登录访客展示内容。
+```bash
+sudo mkdir -p /opt/personal-memory-palace/app
+sudo mkdir -p /opt/personal-memory-palace/data
+sudo mkdir -p /opt/personal-memory-palace/backups
+sudo mkdir -p /opt/personal-memory-palace/config
+sudo mkdir -p /opt/personal-memory-palace/restore-tests
+sudo chown -R ubuntu:ubuntu /opt/personal-memory-palace
 
-### Desktop / Mobile
+git clone https://github.com/pcmif-jiangfeng/personal-memory-palace.git /opt/personal-memory-palace/app
+cd /opt/personal-memory-palace/app
+```
 
-- 分别检查首页、Stage、Memory Exhibition、Time Gear、Search 和分享链接。
-- 检查窄屏下无横向溢出，图片加载成功，表单按钮可操作。
+### 3.2 创建仅服务器可读的环境文件
 
-## 运维
+下面的命令会隐藏密码输入。不要把密码写到命令、截图或 Git 中。
 
-### 查看日志
+```bash
+umask 077
+read -rsp '设置主人密码：' OWNER_PASSWORD
+printf '\n'
+printf 'NODE_ENV=production\nPORT=3000\nMEMORY_PALACE_DATASET=owner\nMEMORY_PALACE_DATA_DIR=/app/data\nMEMORY_PALACE_OWNER_PASSWORD=%s\nMEMORY_PALACE_SECURE_COOKIES=false\n' "$OWNER_PASSWORD" > /opt/personal-memory-palace/config/app.env
+unset OWNER_PASSWORD
+chmod 600 /opt/personal-memory-palace/config/app.env
+```
 
-在 Render 服务的 **Logs** 页面查看构建日志和运行日志。重点关注 Docker 构建失败、SQLite 无法打开、磁盘权限和图片处理错误。
+### 3.3 构建并启动
 
-### 重启
+```bash
+cd /opt/personal-memory-palace/app
+docker build -t personal-memory-palace:task07 .
 
-在 Render Dashboard 使用 **Manual Deploy > Restart service**。重启后先验证已有 Memory 和图片仍在，再进行写入操作。
+docker run -d \
+  --name personal-memory-palace \
+  --restart unless-stopped \
+  --env-file /opt/personal-memory-palace/config/app.env \
+  -v /opt/personal-memory-palace/data:/app/data \
+  -v /opt/personal-memory-palace/backups:/app/backups \
+  -p 80:3000 \
+  personal-memory-palace:task07
 
-### 常见问题
+docker ps --filter name=personal-memory-palace
+docker logs --tail 100 personal-memory-palace
+curl -I http://127.0.0.1/login
+```
 
-- **重启后数据消失：** 检查磁盘是否挂载到 `/app/data`，以及 `MEMORY_PALACE_DATA_DIR` 是否完全一致。
-- **页面可开但无法登录：** 检查 `MEMORY_PALACE_OWNER_PASSWORD` 是否已设置，修改后重新登录。
-- **图片上传失败：** 检查磁盘剩余空间、挂载权限和日志中的 Sharp 错误。
-- **出现 Demo 内容：** 检查 `MEMORY_PALACE_DATASET` 必须为 `owner`。
-- **部署后 502：** 检查服务是否读取 `PORT=10000`，并确认启动命令为 `node server.js`。
+在腾讯云防火墙中放行 TCP 80 后访问：
 
-## 官方参考
+```text
+http://82.156.172.124
+```
 
-- [Render Docker 部署](https://render.com/docs/docker)
-- [Render Persistent Disks](https://render.com/docs/disks)
-- [Render Web Services](https://render.com/docs/web-services)
-- [Render Blueprint 规范](https://render.com/docs/blueprint-spec)
+## 4. Production Smoke Test
+
+在浏览器中逐项验证：
+
+1. 未登录打开首页会进入登录页。
+2. 错误密码被拒绝，正确密码可以登录。
+3. 首页、人生长廊、Stage、Memory Detail 和 Search 可访问。
+4. 创建 Stage：`Production Verification`。
+5. 上传一张测试图片，创建 Memory，Story 使用唯一文字：`Production persistence verification record.`
+6. 刷新 Memory、Stage 页面，确认图片继续显示。
+7. 创建一条无密码分享和一条密码分享，用无痕窗口验证 Visitor 只读。
+
+## 5. 持久化验证
+
+每一步完成后都检查测试 Stage、Memory、图片和分享设置。
+
+### 5.1 Container restart
+
+```bash
+docker restart personal-memory-palace
+docker ps --filter name=personal-memory-palace
+```
+
+### 5.2 Container recreate
+
+```bash
+docker stop personal-memory-palace
+docker rm personal-memory-palace
+
+docker run -d \
+  --name personal-memory-palace \
+  --restart unless-stopped \
+  --env-file /opt/personal-memory-palace/config/app.env \
+  -v /opt/personal-memory-palace/data:/app/data \
+  -v /opt/personal-memory-palace/backups:/app/backups \
+  -p 80:3000 \
+  personal-memory-palace:task07
+```
+
+删除的是容器，不是宿主机 `/opt/personal-memory-palace/data`，因此真实数据应继续存在。
+
+### 5.3 Image rebuild 后 recreate
+
+```bash
+cd /opt/personal-memory-palace/app
+git pull --ff-only
+docker build -t personal-memory-palace:task07 .
+docker stop personal-memory-palace
+docker rm personal-memory-palace
+```
+
+然后重复 5.2 的 `docker run`，再次验证旧数据。
+
+### 5.4 Server reboot
+
+从腾讯云控制台重启实例。恢复后执行：
+
+```bash
+docker ps --filter name=personal-memory-palace
+curl -I http://127.0.0.1/login
+```
+
+`--restart unless-stopped` 应保证 Docker daemon 启动后容器自动恢复。
+
+## 6. 手动一致性备份
+
+备份脚本使用 Node SQLite Backup API 创建数据库快照，随后复制 Owner 上传目录、运行 `PRAGMA integrity_check` 并写入 manifest。为了让数据库和图片属于同一个稳定快照，执行时必须短暂停止应用写入。
+
+```bash
+cd /opt/personal-memory-palace/app
+APP_VERSION="$(git rev-parse --short HEAD)"
+docker stop personal-memory-palace
+
+docker run --rm \
+  --entrypoint node \
+  -e MEMORY_PALACE_APP_VERSION="$APP_VERSION" \
+  -v /opt/personal-memory-palace/data:/app/data:ro \
+  -v /opt/personal-memory-palace/backups:/app/backups \
+  personal-memory-palace:task07 \
+  /app/maintenance/backup.mjs /app/data /app/backups
+
+docker start personal-memory-palace
+find /opt/personal-memory-palace/backups -maxdepth 2 -type f -print
+```
+
+输出目录示例：
+
+```text
+backup-20260916-210000/
+├── database/
+│   └── palace.sqlite
+├── uploads/
+│   └── owner/
+└── manifest.txt
+```
+
+如果备份命令失败，先重新启动主容器，再检查错误；脚本只会发布完整备份，失败的临时目录会被清理。
+
+## 7. 隔离恢复测试
+
+恢复工具拒绝写入非空目录，并会先检查 SQLite 完整性及所有数据库引用的上传文件。它不会覆盖生产数据。
+
+```bash
+LATEST_BACKUP="$(find /opt/personal-memory-palace/backups -mindepth 1 -maxdepth 1 -type d -name 'backup-*' | sort | tail -n 1)"
+RESTORE_DIR="/opt/personal-memory-palace/restore-tests/restore-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$RESTORE_DIR"
+
+docker run --rm \
+  --entrypoint node \
+  -v "$LATEST_BACKUP":/app/backup:ro \
+  -v "$RESTORE_DIR":/app/restore \
+  personal-memory-palace:task07 \
+  /app/maintenance/restore-backup.mjs /app/backup /app/restore
+
+docker run -d \
+  --name memory-palace-restore-test \
+  --env-file /opt/personal-memory-palace/config/app.env \
+  -v "$RESTORE_DIR":/app/data \
+  -p 127.0.0.1:8081:3000 \
+  personal-memory-palace:task07
+
+curl -I http://127.0.0.1:8081/login
+docker logs --tail 100 memory-palace-restore-test
+```
+
+恢复工具会输出 Stage、Memory 和引用图片数量。测试实例真实启动且 `/login` 返回成功后，停止并移除测试容器：
+
+```bash
+docker stop memory-palace-restore-test
+docker rm memory-palace-restore-test
+```
+
+保留本次 `restore-tests/restore-...` 目录，直到人工确认备份有效；不要用恢复测试覆盖唯一生产数据。
+
+## 8. 更新部署
+
+```bash
+cd /opt/personal-memory-palace/app
+git pull --ff-only
+docker build -t personal-memory-palace:task07 .
+```
+
+先按第 6 节备份，再按第 5.2 节重建容器。代码更新不会覆盖宿主机 data。
+
+## 9. 磁盘与运行检查
+
+```bash
+df -h
+du -sh /opt/personal-memory-palace/data
+du -sh /opt/personal-memory-palace/backups
+docker system df
+```
+
+Task07 不增加后台监控页面。发现磁盘紧张时先确认备份可恢复，再处理明确无用的旧镜像或备份，不得执行针对 data 的递归删除。
+
+## 10. 上传可靠性边界
+
+- 支持 JPEG、PNG、WebP。
+- 单文件上限 20MB。
+- 单批最多 20 个文件，原始数据总量最多 100MB。
+- 图片按顺序处理，适配 2GB 内存服务器。
+- 每个文件先写临时文件再原子重命名。
+- 图片处理中途失败会删除本次已写文件；数据库批量写入失败也会回滚并清理文件。
+
+## 11. Phase 2 停止点
+
+公网 IP 基线完成后停止。域名条件满足后再把 `MEMORY_PALACE_SECURE_COOKIES` 改为 `true`，并选择一种反向代理配置 HTTPS、HTTP 跳转及分享链接复测。本 Task 不实施 Phase 2。

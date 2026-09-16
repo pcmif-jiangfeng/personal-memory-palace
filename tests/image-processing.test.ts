@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import sharp from "sharp";
-import { createWebOptimizedImage, maximumUploadBytes, supportedImageTypes } from "../src/storage/image-processor.ts";
+import {
+  createWebOptimizedImage,
+  maximumUploadBatchBytes,
+  maximumUploadBytes,
+  maximumUploadFileCount,
+  supportedImageTypes,
+} from "../src/storage/image-processor.ts";
 
 test("creates a bounded WebP browsing image", async () => {
   const input = await sharp({
@@ -19,4 +25,6 @@ test("accepts only Task02 browser image formats", () => {
   assert.deepEqual([...supportedImageTypes].sort(), ["image/jpeg", "image/png", "image/webp"]);
   assert.equal(supportedImageTypes.has("image/x-canon-cr3"), false);
   assert.equal(maximumUploadBytes, 20 * 1024 * 1024);
+  assert.equal(maximumUploadBatchBytes, 100 * 1024 * 1024);
+  assert.equal(maximumUploadFileCount, 20);
 });

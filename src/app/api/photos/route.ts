@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { addUploadedPhotos } from "@/data/photo-repository";
-import { maximumUploadBytes, supportedImageTypes } from "@/storage/image-processor";
+import {
+  maximumUploadBatchBytes,
+  maximumUploadBytes,
+  maximumUploadFileCount,
+  supportedImageTypes,
+} from "@/storage/image-processor";
 import { imageStorage } from "@/storage/local-image-storage";
 import { isOwner } from "@/auth";
 
@@ -8,11 +13,18 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   if (!(await isOwner())) return NextResponse.json({ error: "OWNER_REQUIRED" }, { status: 401 });
+  const contentLength = Number(request.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > maximumUploadBatchBytes + 1024 * 1024) {
+    return NextResponse.json({ error: "UPLOAD_BATCH_TOO_LARGE" }, { status: 413 });
+  }
   const formData = await request.formData();
   const files = formData.getAll("photos").filter((value): value is File => value instanceof File);
   const preserveOriginal = formData.get("preserveOriginal") === "true";
   if (files.length === 0) {
     return NextResponse.json({ error: "PHOTOS_REQUIRED" }, { status: 400 });
+  }
+  if (files.length > maximumUploadFileCount || files.reduce((sum, file) => sum + file.size, 0) > maximumUploadBatchBytes) {
+    return NextResponse.json({ error: "UPLOAD_BATCH_TOO_LARGE" }, { status: 413 });
   }
   const invalid = files.find((file) => !supportedImageTypes.has(file.type) || file.size > maximumUploadBytes);
   if (invalid) {

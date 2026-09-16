@@ -29,7 +29,7 @@ export const copy = {
     title: "照片整理台",
     description: "先把照片放到整理台，再亲手选择哪些照片属于同一段记忆。",
     upload: "选择照片",
-    uploadHint: "支持 JPG、JPEG、PNG、WebP，可一次选择多张。",
+    uploadHint: "支持 JPG、JPEG、PNG、WebP；每张不超过 20MB，单批最多 20 张且不超过 100MB。",
     preserveOriginal: "同时保留原始上传文件",
     uploading: "正在整理照片…",
     selected: (count: number) => `已选择 ${count} 张`,

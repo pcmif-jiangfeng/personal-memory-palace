@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getDataset } from "@/data/database";
 import type { ImageStorage, SaveImageInput, SavedImage, StoredImage } from "./image-storage";
@@ -21,6 +21,17 @@ export function resolveStoredImagePath(key: string): string {
   return resolved;
 }
 
+async function writeAtomically(filePath: string, data: Buffer): Promise<void> {
+  await mkdir(path.dirname(filePath), { recursive: true });
+  const temporaryPath = `${filePath}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporaryPath, data, { flag: "wx" });
+    await rename(temporaryPath, filePath);
+  } finally {
+    await rm(temporaryPath, { force: true });
+  }
+}
+
 export class LocalImageStorage implements ImageStorage {
   resolve(key: string): StoredImage {
     const publicPath = key.startsWith("demo/") && key.endsWith(".svg")
@@ -31,26 +42,31 @@ export class LocalImageStorage implements ImageStorage {
 
   async save(input: SaveImageInput): Promise<SavedImage> {
     const id = randomUUID();
-    const optimized = await createWebOptimizedImage(input.data);
-    const optimizedStorageKey = `uploads/${getDataset()}/optimized/${id}.webp`;
-    const optimizedPath = resolveStoredImagePath(optimizedStorageKey);
-    await mkdir(path.dirname(optimizedPath), { recursive: true });
-    await writeFile(optimizedPath, optimized.data);
-
+    const writtenKeys: string[] = [];
+    let optimizedStorageKey = "";
     let originalStorageKey: string | null = null;
-    if (input.preserveOriginal) {
-      originalStorageKey = `uploads/${getDataset()}/original/${id}${extensionForMimeType(input.mimeType)}`;
-      const originalPath = resolveStoredImagePath(originalStorageKey);
-      await mkdir(path.dirname(originalPath), { recursive: true });
-      await writeFile(originalPath, input.data);
-    }
+    try {
+      const optimized = await createWebOptimizedImage(input.data);
+      optimizedStorageKey = `uploads/${getDataset()}/optimized/${id}.webp`;
+      await writeAtomically(resolveStoredImagePath(optimizedStorageKey), optimized.data);
+      writtenKeys.push(optimizedStorageKey);
 
-    return {
-      optimizedStorageKey,
-      originalStorageKey,
-      width: optimized.width,
-      height: optimized.height,
-    };
+      if (input.preserveOriginal) {
+        originalStorageKey = `uploads/${getDataset()}/original/${id}${extensionForMimeType(input.mimeType)}`;
+        await writeAtomically(resolveStoredImagePath(originalStorageKey), input.data);
+        writtenKeys.push(originalStorageKey);
+      }
+
+      return {
+        optimizedStorageKey,
+        originalStorageKey,
+        width: optimized.width,
+        height: optimized.height,
+      };
+    } catch (error) {
+      await this.remove(writtenKeys);
+      throw error;
+    }
   }
 
   async remove(keys: Array<string | null>): Promise<void> {
