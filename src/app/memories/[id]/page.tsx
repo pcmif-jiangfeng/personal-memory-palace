@@ -8,6 +8,7 @@ import { imageStorage } from "@/storage/local-image-storage";
 import { MemoryManagement } from "@/components/memory-management";
 import { ShareManager } from "@/components/share-manager";
 import { isOwner } from "@/auth";
+import { PhotoViewer } from "@/components/photo-viewer";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ export default async function MemoryExhibitionPage({ params }: { params: Promise
           <p className="exhibition-stage">{memory.stageTitle ?? copy.common.uncategorized}</p>
           <h1>{memory.title}</h1>
         </div>
-        {imagePath ? <figure className="exhibition-hero"><img className="exhibition-image" src={imagePath} alt="" /><figcaption>ARCHIVE · {memory.createdAt.slice(0, 10)}</figcaption></figure> : null}
+        {imagePath ? <figure className="exhibition-hero"><PhotoViewer imageClassName="exhibition-image" src={imagePath} /><figcaption>ARCHIVE · {memory.createdAt.slice(0, 10)}</figcaption></figure> : null}
       </header>
       <section className="story-hall section-shell">
         <div className="story-label"><span>01</span><h2>{copy.exhibition.story}</h2></div>

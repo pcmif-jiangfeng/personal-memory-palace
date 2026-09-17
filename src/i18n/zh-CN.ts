@@ -70,6 +70,10 @@ export const copy = {
   },
   exhibition: {
     label: "MEMORY EXHIBITION",
+    openPhotoViewer: "放大查看记忆照片",
+    closePhotoViewer: "关闭照片查看器",
+    viewerImageAlt: "放大查看的记忆照片",
+    photoViewerHint: "滚轮或双指缩放 · 放大后拖动",
     story: "Story",
     gallery: "照片画廊",
     related: "相关记忆",
