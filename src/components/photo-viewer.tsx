@@ -19,9 +19,17 @@ import {
   type PhotoViewerMetrics,
   type Point,
 } from "@/components/photo-viewer-geometry";
+import {
+  resolvePhotoSwipeDirection,
+  resolvePhotoViewerIndex,
+  type PhotoNavigationDirection,
+} from "@/components/photo-viewer-state";
 
 const INITIAL_TRANSFORM: PhotoTransform = { scale: MIN_PHOTO_SCALE, x: 0, y: 0 };
 const QUICK_ZOOM_SCALE = 2.5;
+const TOUCH_SWIPE_DISTANCE = 56;
+const TRACKPAD_SWIPE_DISTANCE = 12;
+const TRACKPAD_NAVIGATION_COOLDOWN = 420;
 
 type TrackedPointer = Point & { pointerType: string };
 type DragStart = Point & { originX: number; originY: number };
@@ -40,16 +48,27 @@ function midpointBetween(first: Point, second: Point): Point {
   return { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
 }
 
-export function PhotoViewer({
-  src,
-  alt = "",
-  imageClassName,
-}: {
+export type PhotoViewerItem = {
+  id: string;
   src: string;
-  alt?: string;
+  alt: string;
+};
+
+export function PhotoViewer({
+  images,
+  initialImageId,
+  imageClassName,
+  loading,
+}: {
+  images: readonly PhotoViewerItem[];
+  initialImageId: string;
   imageClassName?: string;
+  loading?: "eager" | "lazy";
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [activeImageId, setActiveImageId] = useState(initialImageId);
+  const [fallbackIndex, setFallbackIndex] = useState(0);
+  const [navigationDirection, setNavigationDirection] = useState<PhotoNavigationDirection>(0);
   const [isInteracting, setIsInteracting] = useState(false);
   const [transform, setTransform] = useState<PhotoTransform>(INITIAL_TRANSFORM);
   const transformRef = useRef<PhotoTransform>(INITIAL_TRANSFORM);
@@ -64,7 +83,12 @@ export function PhotoViewer({
   const gestureMovedRef = useRef(false);
   const lastTouchTapRef = useRef<{ time: number; point: Point } | null>(null);
   const lastInputWasTouchRef = useRef(false);
+  const lastTrackpadNavigationRef = useRef(0);
   const hintId = useId();
+  const initialIndex = resolvePhotoViewerIndex(images, initialImageId);
+  const activeIndex = resolvePhotoViewerIndex(images, activeImageId, fallbackIndex);
+  const triggerImage = initialIndex >= 0 ? images[initialIndex] : null;
+  const activeImage = activeIndex >= 0 ? images[activeIndex] : null;
 
   const readMetrics = useCallback((): PhotoViewerMetrics | null => {
     const stage = stageRef.current;
@@ -116,19 +140,39 @@ export function PhotoViewer({
     setIsInteracting(false);
   }, []);
 
+  const resetTransform = useCallback(() => {
+    transformRef.current = INITIAL_TRANSFORM;
+    setTransform(INITIAL_TRANSFORM);
+  }, []);
+
   const closeViewer = useCallback(() => {
     setIsOpen(false);
-    transformRef.current = INITIAL_TRANSFORM;
-    setTransform(INITIAL_TRANSFORM);
+    resetTransform();
     resetInteraction();
     requestAnimationFrame(() => triggerRef.current?.focus({ preventScroll: true }));
-  }, [resetInteraction]);
+  }, [resetInteraction, resetTransform]);
 
   const openViewer = () => {
-    transformRef.current = INITIAL_TRANSFORM;
-    setTransform(INITIAL_TRANSFORM);
+    if (!triggerImage) return;
+    setFallbackIndex(initialIndex);
+    setActiveImageId(triggerImage.id);
+    setNavigationDirection(0);
+    resetTransform();
     setIsOpen(true);
   };
+
+  const showImageAt = useCallback(
+    (index: number) => {
+      const nextImage = images[index];
+      if (!nextImage) return;
+      setNavigationDirection(index > activeIndex ? 1 : index < activeIndex ? -1 : 0);
+      setFallbackIndex(index);
+      setActiveImageId(nextImage.id);
+      resetTransform();
+      resetInteraction();
+    },
+    [activeIndex, images, resetInteraction, resetTransform],
+  );
 
   useEffect(() => {
     if (!isOpen) return;
@@ -153,6 +197,22 @@ export function PhotoViewer({
       window.removeEventListener("resize", handleResize);
     };
   }, [applyTransform, closeViewer, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "ArrowLeft" && activeIndex > 0) {
+        event.preventDefault();
+        showImageAt(activeIndex - 1);
+      } else if (event.key === "ArrowRight" && activeIndex < images.length - 1) {
+        event.preventDefault();
+        showImageAt(activeIndex + 1);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeIndex, images.length, isOpen, showImageAt]);
 
   const beginPinch = useCallback(() => {
     const points = [...pointersRef.current.values()];
@@ -257,6 +317,7 @@ export function PhotoViewer({
 
   const finishPointer = (event: ReactPointerEvent<HTMLDivElement>, allowTap: boolean) => {
     const tracked = pointersRef.current.get(event.pointerId);
+    const pointerOrigin = pointerOriginRef.current;
     pointersRef.current.delete(event.pointerId);
     try {
       event.currentTarget.releasePointerCapture(event.pointerId);
@@ -264,12 +325,21 @@ export function PhotoViewer({
       // Pointer capture may already be released by the browser.
     }
 
-    if (
-      allowTap &&
-      tracked?.pointerType === "touch" &&
-      pointersRef.current.size === 0 &&
-      !gestureMovedRef.current
-    ) {
+    const completedTouchGesture =
+      allowTap && tracked?.pointerType === "touch" && pointersRef.current.size === 0;
+    const swipeDirection =
+      completedTouchGesture && pointerOrigin && transformRef.current.scale === MIN_PHOTO_SCALE
+        ? resolvePhotoSwipeDirection(
+            event.clientX - pointerOrigin.x,
+            event.clientY - pointerOrigin.y,
+            TOUCH_SWIPE_DISTANCE,
+          )
+        : 0;
+
+    if (swipeDirection !== 0) {
+      lastTouchTapRef.current = null;
+      showImageAt(activeIndex + swipeDirection);
+    } else if (completedTouchGesture && !gestureMovedRef.current) {
       handleTouchTap({ x: event.clientX, y: event.clientY });
     }
 
@@ -291,6 +361,18 @@ export function PhotoViewer({
 
   const handleWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
     event.preventDefault();
+    const swipeDirection =
+      !event.ctrlKey && transformRef.current.scale === MIN_PHOTO_SCALE
+        ? resolvePhotoSwipeDirection(-event.deltaX, event.deltaY, TRACKPAD_SWIPE_DISTANCE)
+        : 0;
+    if (swipeDirection !== 0) {
+      const now = Date.now();
+      if (now - lastTrackpadNavigationRef.current >= TRACKPAD_NAVIGATION_COOLDOWN) {
+        lastTrackpadNavigationRef.current = now;
+        showImageAt(activeIndex + swipeDirection);
+      }
+      return;
+    }
     const scaleFactor = Math.exp(-event.deltaY * 0.002);
     zoomAt({ x: event.clientX, y: event.clientY }, transformRef.current.scale * scaleFactor);
   };
@@ -303,6 +385,8 @@ export function PhotoViewer({
     );
   };
 
+  if (!triggerImage) return null;
+
   return (
     <>
       <button
@@ -312,7 +396,12 @@ export function PhotoViewer({
         onClick={openViewer}
         aria-label={copy.exhibition.openPhotoViewer}
       >
-        <img className={imageClassName} src={src} alt={alt} />
+        <img
+          className={imageClassName}
+          src={triggerImage.src}
+          alt={triggerImage.alt}
+          loading={loading}
+        />
       </button>
       {isOpen ? (
         <div className="photo-viewer" role="dialog" aria-modal="true" aria-describedby={hintId}>
@@ -335,17 +424,45 @@ export function PhotoViewer({
             onPointerUp={(event) => finishPointer(event, true)}
             onPointerCancel={(event) => finishPointer(event, false)}
           >
-            <img
-              ref={imageRef}
-              className="photo-viewer-image"
-              src={src}
-              alt={alt || copy.exhibition.viewerImageAlt}
-              draggable={false}
-              style={{
-                transform: `translate3d(${transform.x}px, ${transform.y}px, 0) scale(${transform.scale})`,
-              }}
-            />
+            {activeImage ? (
+              <img
+                key={activeImage.id}
+                ref={imageRef}
+                className={`photo-viewer-image${navigationDirection === 1 ? " is-entering-from-right" : navigationDirection === -1 ? " is-entering-from-left" : ""}`}
+                src={activeImage.src}
+                alt={activeImage.alt || copy.exhibition.viewerImageAlt}
+                draggable={false}
+                style={{
+                  transform: `translate3d(${transform.x}px, ${transform.y}px, 0) scale(${transform.scale})`,
+                }}
+              />
+            ) : null}
           </div>
+          {images.length > 1 ? (
+            <>
+              <button
+                className="photo-viewer-navigation photo-viewer-previous"
+                type="button"
+                onClick={() => showImageAt(activeIndex - 1)}
+                disabled={activeIndex <= 0}
+                aria-label={copy.exhibition.previousPhoto}
+              >
+                <span aria-hidden="true">‹</span>
+              </button>
+              <button
+                className="photo-viewer-navigation photo-viewer-next"
+                type="button"
+                onClick={() => showImageAt(activeIndex + 1)}
+                disabled={activeIndex >= images.length - 1}
+                aria-label={copy.exhibition.nextPhoto}
+              >
+                <span aria-hidden="true">›</span>
+              </button>
+              <p className="photo-viewer-position">
+                {copy.exhibition.photoPosition(activeIndex + 1, images.length)}
+              </p>
+            </>
+          ) : null}
           <p id={hintId} className="photo-viewer-hint">
             {copy.exhibition.photoViewerHint} · {Math.round(transform.scale * 100)}%
           </p>
