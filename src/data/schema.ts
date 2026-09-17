@@ -48,6 +48,13 @@ CREATE TABLE IF NOT EXISTS uploaded_photos (
   used_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS photo_deletion_jobs (
+  photo_id TEXT PRIMARY KEY,
+  optimized_storage_key TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  last_error TEXT
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS one_cover_per_memory
 ON memory_images(memory_id) WHERE is_cover = 1;
 

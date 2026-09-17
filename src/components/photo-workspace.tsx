@@ -11,6 +11,16 @@ export interface WorkspacePhotoView {
   hasOriginal: boolean;
 }
 
+interface PhotoReferences {
+  memories: Array<{ id: string; title: string; isCover: boolean }>;
+  stages: Array<{ id: string; title: string }>;
+}
+
+interface DeleteIssue {
+  photoId: string;
+  references?: PhotoReferences;
+}
+
 export function PhotoWorkspace({ initialPhotos }: { initialPhotos: WorkspacePhotoView[] }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -19,6 +29,8 @@ export function PhotoWorkspace({ initialPhotos }: { initialPhotos: WorkspacePhot
   const [preserveOriginal, setPreserveOriginal] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
+  const [deleteIssue, setDeleteIssue] = useState<DeleteIssue | null>(null);
 
   async function upload(files: FileList | null) {
     if (!files?.length) return;
@@ -62,6 +74,40 @@ export function PhotoWorkspace({ initialPhotos }: { initialPhotos: WorkspacePhot
       else next.add(id);
       return next;
     });
+  }
+
+  async function deletePhoto(photo: WorkspacePhotoView) {
+    if (deletingPhotoId || !window.confirm(copy.workspace.deleteConfirm(photo.name))) return;
+    setDeletingPhotoId(photo.id);
+    setDeleteIssue(null);
+    try {
+      const response = await fetch(`/api/photos/${encodeURIComponent(photo.id)}`, {
+        method: "DELETE",
+      });
+      const result = (await response.json()) as {
+        error?: string;
+        details?: { references?: PhotoReferences };
+      };
+      if (!response.ok) {
+        if (response.status === 409 && result.error === "PHOTO_IN_USE") {
+          setDeleteIssue({ photoId: photo.id, references: result.details?.references });
+          return;
+        }
+        setDeleteIssue({ photoId: photo.id });
+        return;
+      }
+      setPhotos((current) => current.filter((item) => item.id !== photo.id));
+      setSelected((current) => {
+        const next = new Set(current);
+        next.delete(photo.id);
+        return next;
+      });
+      router.refresh();
+    } catch {
+      setDeleteIssue({ photoId: photo.id });
+    } finally {
+      setDeletingPhotoId(null);
+    }
   }
 
   const createHref = `/memories/new?photos=${encodeURIComponent([...selected].join(","))}`;
@@ -109,17 +155,55 @@ export function PhotoWorkspace({ initialPhotos }: { initialPhotos: WorkspacePhot
       ) : (
         <div className="photo-grid">
           {photos.map((photo) => (
-            <button
+            <article
               key={photo.id}
-              type="button"
               className={`photo-tile${selected.has(photo.id) ? " is-selected" : ""}`}
-              onClick={() => toggle(photo.id)}
-              aria-pressed={selected.has(photo.id)}
             >
-              <img src={photo.src} alt={photo.name} />
-              <span>{photo.name}</span>
-              {photo.hasOriginal ? <small>{copy.workspace.originalKept}</small> : null}
-            </button>
+              <button
+                type="button"
+                className="photo-tile-select"
+                onClick={() => toggle(photo.id)}
+                aria-pressed={selected.has(photo.id)}
+              >
+                <img src={photo.src} alt={photo.name} />
+                <span>{photo.name}</span>
+                {photo.hasOriginal ? <small>{copy.workspace.originalKept}</small> : null}
+              </button>
+              <button
+                type="button"
+                className="photo-tile-delete"
+                disabled={Boolean(deletingPhotoId)}
+                aria-label={copy.workspace.deletePhotoLabel(photo.name)}
+                onClick={() => void deletePhoto(photo)}
+              >
+                {deletingPhotoId === photo.id
+                  ? copy.workspace.deletingPhoto
+                  : copy.workspace.deletePhoto}
+              </button>
+              {deleteIssue?.photoId === photo.id ? (
+                <div className="photo-delete-issue" role="alert">
+                  <strong>
+                    {deleteIssue.references
+                      ? copy.workspace.deleteBlocked
+                      : copy.workspace.deleteFailed}
+                  </strong>
+                  {deleteIssue.references ? (
+                    <ul>
+                      {deleteIssue.references.memories.map((memory) => (
+                        <li key={`memory-${memory.id}`}>
+                          {copy.workspace.memoryReference(memory.title, memory.isCover)}
+                        </li>
+                      ))}
+                      {deleteIssue.references.stages.map((stage) => (
+                        <li key={`stage-${stage.id}`}>
+                          {copy.workspace.stageReference(stage.title)}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              ) : null}
+            </article>
           ))}
         </div>
       )}
