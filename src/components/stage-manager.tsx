@@ -2,21 +2,22 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { StageCoverSelector, type StageCoverPhotoOption } from "@/components/stage-cover-selector";
 import { StageDeleteAction } from "@/components/stage-delete-action";
 import type { Stage } from "@/domain/models";
 import { copy } from "@/i18n/zh-CN";
 
-interface CoverPhotoOption {
-  id: string;
-  name: string;
-  src: string;
-  storageKey: string;
-}
-
-export function StageManager({ stages, photos }: { stages: Stage[]; photos: CoverPhotoOption[] }) {
+export function StageManager({
+  stages,
+  photos,
+}: {
+  stages: Stage[];
+  photos: StageCoverPhotoOption[];
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const [newCoverVersion, setNewCoverVersion] = useState(0);
 
   async function save(event: React.FormEvent<HTMLFormElement>, stageId?: string) {
     event.preventDefault();
@@ -34,7 +35,10 @@ export function StageManager({ stages, photos }: { stages: Stage[]; photos: Cove
       }),
     });
     if (response.ok) {
-      if (!stageId) form.reset();
+      if (!stageId) {
+        form.reset();
+        setNewCoverVersion((current) => current + 1);
+      }
       setMessage(copy.stage.saved);
       router.refresh();
     } else {
@@ -43,8 +47,9 @@ export function StageManager({ stages, photos }: { stages: Stage[]; photos: Cove
     setBusy(null);
   }
 
-  function fields(stage?: Stage) {
+  function fields(stage?: Stage, selectorKey?: string) {
     const currentCover = photos.find((photo) => photo.storageKey === stage?.coverKey)?.id ?? "";
+    const currentCoverUnavailable = Boolean(stage?.coverKey) && !currentCover;
     return (
       <>
         <label className="form-field">
@@ -55,18 +60,13 @@ export function StageManager({ stages, photos }: { stages: Stage[]; photos: Cove
           <span>{copy.stage.description}</span>
           <textarea name="description" rows={3} defaultValue={stage?.description ?? ""} />
         </label>
-        <label className="form-field">
-          <span>{copy.stage.cover}</span>
-          <select name="coverPhotoId" defaultValue={currentCover}>
-            <option value="">{copy.stage.noCover}</option>
-            {photos.map((photo) => (
-              <option key={photo.id} value={photo.id}>
-                {photo.name}
-              </option>
-            ))}
-          </select>
-          <small>{copy.stage.coverHint}</small>
-        </label>
+        <StageCoverSelector
+          key={selectorKey}
+          photos={photos}
+          initialPhotoId={currentCover}
+          currentCoverUnavailable={currentCoverUnavailable}
+          initiallyExpanded={!stage}
+        />
       </>
     );
   }
@@ -75,7 +75,7 @@ export function StageManager({ stages, photos }: { stages: Stage[]; photos: Cove
     <div className="stage-manager">
       <form className="stage-form stage-form-new" onSubmit={(event) => void save(event)}>
         <h2>{copy.stage.create}</h2>
-        {fields()}
+        {fields(undefined, `new-cover-${newCoverVersion}`)}
         <button className="button-primary" disabled={busy === "new"}>
           {copy.stage.create}
         </button>

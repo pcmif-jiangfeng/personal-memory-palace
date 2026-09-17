@@ -529,6 +529,171 @@ img {
   gap: 1rem;
   flex-wrap: wrap;
 }
+.stage-cover-selector {
+  min-width: 0;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid rgba(133, 95, 64, 0.2);
+  background: rgba(255, 255, 255, 0.3);
+}
+.stage-cover-selector legend {
+  padding-inline: 0.4rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+}
+.stage-cover-preview {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid rgba(34, 33, 31, 0.1);
+  background: linear-gradient(145deg, rgba(233, 226, 213, 0.7), rgba(255, 255, 255, 0.8));
+}
+.stage-cover-preview > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.stage-cover-preview-empty {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-content: center;
+  gap: 0.7rem;
+  padding: 1rem;
+  color: var(--muted);
+  text-align: center;
+}
+.stage-cover-preview-empty span {
+  color: var(--brass);
+  font:
+    2.4rem/1 Georgia,
+    serif;
+}
+.stage-cover-preview-empty strong {
+  font:
+    400 0.9rem/1.5 Georgia,
+    "Songti SC",
+    serif;
+}
+.stage-cover-candidates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+  gap: 0.65rem;
+  padding: 0.15rem;
+}
+.stage-cover-browser-heading,
+.stage-cover-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.stage-cover-browser-heading {
+  margin-top: 0.8rem;
+}
+.stage-cover-candidate-browser {
+  margin-top: 0.65rem;
+  padding: 0.65rem;
+  border: 1px solid var(--line);
+  background: rgba(245, 242, 234, 0.58);
+}
+.stage-cover-pagination {
+  margin-top: 0.65rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
+}
+.stage-cover-option {
+  position: relative;
+  min-width: 0;
+  aspect-ratio: 1;
+  overflow: hidden;
+  padding: 0;
+  border: 2px solid transparent;
+  background: var(--paper-deep);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.stage-cover-option img,
+.stage-cover-none {
+  width: 100%;
+  height: 100%;
+}
+.stage-cover-option img {
+  object-fit: cover;
+}
+.stage-cover-none {
+  display: grid;
+  place-items: center;
+  color: var(--brass);
+  font:
+    2rem/1 Georgia,
+    serif;
+}
+.stage-cover-option-state {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 0.32rem 0.4rem;
+  background: rgba(38, 35, 31, 0.74);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.62rem;
+  text-align: center;
+  backdrop-filter: blur(8px);
+}
+.stage-cover-option.is-selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--paper);
+}
+.stage-cover-option.is-selected .stage-cover-option-state {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.stage-cover-option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.stage-cover-option.is-unavailable {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+.stage-cover-status {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.8rem;
+  margin-top: 0.65rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+.stage-cover-status span {
+  color: var(--brass);
+  letter-spacing: 0.08em;
+}
+.stage-cover-status p,
+.stage-cover-empty-state p {
+  margin: 0;
+}
+.stage-cover-empty-state {
+  margin-top: 0.8rem;
+  padding: 0.9rem;
+  border: 1px dashed var(--line);
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+.stage-cover-empty-state .text-link {
+  display: inline-block;
+  margin-top: 0.45rem;
+}
 .text-button {
   padding: 0.25rem 0;
   border: 0;
@@ -1672,6 +1837,10 @@ img {
   .selection-bar {
     align-items: flex-start;
     flex-direction: column;
+  }
+  .stage-cover-status {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
   }
   .museum-hero {
     min-height: auto;
