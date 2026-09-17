@@ -25,15 +25,11 @@ test("photo position is centered at minimum scale and bounded while zoomed", () 
 });
 
 test("zooming around an off-center point keeps that photo detail anchored", () => {
-  const result = zoomPhotoAroundPoint(
-    { scale: 1, x: 0, y: 0 },
-    2,
-    { x: 100, y: 50 },
-    metrics,
-  );
+  const result = zoomPhotoAroundPoint({ scale: 1, x: 0, y: 0 }, 2, { x: 100, y: 50 }, metrics);
   assert.deepEqual(result, { scale: 2, x: -100, y: -50 });
-  assert.deepEqual(
-    zoomPhotoAroundPoint(result, 1, { x: 100, y: 50 }, metrics),
-    { scale: 1, x: 0, y: 0 },
-  );
+  assert.deepEqual(zoomPhotoAroundPoint(result, 1, { x: 100, y: 50 }, metrics), {
+    scale: 1,
+    x: 0,
+    y: 0,
+  });
 });

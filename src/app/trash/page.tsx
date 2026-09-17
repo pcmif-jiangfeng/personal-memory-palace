@@ -8,5 +8,10 @@ import { redirect } from "next/navigation";
 export const dynamic = "force-dynamic";
 export default async function TrashPage() {
   if (!(await isOwner())) redirect("/login");
-  return <section className="section-shell skeleton-page"><PageIntro title={copy.trash.title} description={copy.trash.description} /><TrashManager memories={listTrashedMemories()} stages={listTrashedStages()} /></section>;
+  return (
+    <section className="section-shell skeleton-page">
+      <PageIntro title={copy.trash.title} description={copy.trash.description} />
+      <TrashManager memories={listTrashedMemories()} stages={listTrashedStages()} />
+    </section>
+  );
 }

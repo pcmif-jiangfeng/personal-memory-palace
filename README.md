@@ -209,6 +209,7 @@ data/images/uploads/<dataset>/
 | `MEMORY_PALACE_DATASET` | `demo` 或 `owner` |
 | `MEMORY_PALACE_DATA_DIR` | SQLite 与图片的持久化根目录 |
 | `MEMORY_PALACE_OWNER_PASSWORD` | Owner 登录密码，生产环境必须设置 |
+| `MEMORY_PALACE_SESSION_SECRET` | 独立会话签名密钥；生产环境至少 32 个字符，不能提交 Git |
 | `MEMORY_PALACE_SECURE_COOKIES` | HTTPS 环境设为 `true`；仅在 HTTP/IP 验证时使用 `false` |
 
 配置模板见 [`.env.example`](.env.example)。
@@ -221,6 +222,9 @@ data/images/uploads/<dataset>/
 | `pnpm build` | 创建生产构建 |
 | `pnpm start` | 启动生产服务 |
 | `pnpm typecheck` | TypeScript 类型检查 |
+| `pnpm lint` | ESLint 静态检查 |
+| `pnpm format` | 统一格式化源代码与测试 |
+| `pnpm check` | 依次执行类型、静态检查、测试和格式检查 |
 | `pnpm test` | 运行全部测试 |
 | `pnpm db:init` | 初始化当前数据集数据库 |
 | `pnpm db:demo:reset` | 重建 Demo 数据库 |

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { getDatabase } from "./database";
 import type { UploadedPhoto } from "@/domain/models";
 import type { SavedImage } from "@/storage/image-storage";
+import { withTransaction } from "./transaction";
 
 interface PhotoRow {
   id: string;
@@ -37,8 +38,7 @@ export function addUploadedPhotos(
     (id, original_name, mime_type, optimized_storage_key, original_storage_key, width, height, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
   const photos: UploadedPhoto[] = [];
-  database.exec("BEGIN IMMEDIATE");
-  try {
+  withTransaction(database, () => {
     for (const item of items) {
       const id = randomUUID();
       const createdAt = new Date().toISOString();
@@ -48,11 +48,7 @@ export function addUploadedPhotos(
         optimizedStorageKey: item.saved.optimizedStorageKey, originalStorageKey: item.saved.originalStorageKey,
         width: item.saved.width, height: item.saved.height, createdAt, usedAt: null });
     }
-    database.exec("COMMIT");
-  } catch (error) {
-    database.exec("ROLLBACK");
-    throw error;
-  }
+  });
   return photos;
 }
 

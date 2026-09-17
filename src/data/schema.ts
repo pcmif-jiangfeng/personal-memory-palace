@@ -51,6 +51,9 @@ CREATE TABLE IF NOT EXISTS uploaded_photos (
 CREATE UNIQUE INDEX IF NOT EXISTS one_cover_per_memory
 ON memory_images(memory_id) WHERE is_cover = 1;
 
+CREATE INDEX IF NOT EXISTS memory_images_memory_sort
+ON memory_images(memory_id, sort_order);
+
 CREATE TABLE IF NOT EXISTS memory_relations (
   memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
   related_memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
@@ -75,4 +78,19 @@ CREATE TABLE IF NOT EXISTS share_configs (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS memories_active_stage_created
+ON memories(stage_id, created_at DESC) WHERE trashed_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS memories_trashed_at
+ON memories(trashed_at) WHERE trashed_at IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS memory_relations_related
+ON memory_relations(related_memory_id);
+
+CREATE INDEX IF NOT EXISTS later_notes_memory_created
+ON later_notes(memory_id, created_at);
+
+CREATE INDEX IF NOT EXISTS share_configs_enabled
+ON share_configs(id, enabled);
 `;

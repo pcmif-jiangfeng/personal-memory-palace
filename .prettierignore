@@ -1,0 +1,8 @@
+node_modules
+.next
+data
+public
+docs
+任务文件
+README.md
+pnpm-lock.yaml

@@ -12,7 +12,9 @@ import {
 test("creates a bounded WebP browsing image", async () => {
   const input = await sharp({
     create: { width: 3000, height: 1200, channels: 3, background: "#8b7258" },
-  }).png().toBuffer();
+  })
+    .png()
+    .toBuffer();
   const result = await createWebOptimizedImage(input);
   const metadata = await sharp(result.data).metadata();
 

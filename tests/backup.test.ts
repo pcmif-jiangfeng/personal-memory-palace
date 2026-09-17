@@ -14,18 +14,28 @@ test("creates an integrity-checked backup and restores it into an isolated data 
   const storageKey = "uploads/owner/optimized/test-image.webp";
 
   try {
-    mkdirSync(path.join(dataDirectory, "images", "uploads", "owner", "optimized"), { recursive: true });
+    mkdirSync(path.join(dataDirectory, "images", "uploads", "owner", "optimized"), {
+      recursive: true,
+    });
     writeFileSync(path.join(dataDirectory, "images", storageKey), "test-image");
     const database = initializeDatabase(path.join(dataDirectory, "palace.sqlite"), false);
-    database.prepare(`INSERT INTO uploaded_photos
+    database
+      .prepare(
+        `INSERT INTO uploaded_photos
       (id, original_name, mime_type, optimized_storage_key, original_storage_key, width, height, created_at)
-      VALUES (?, ?, ?, ?, NULL, ?, ?, ?)`
-    ).run("photo-test", "test.webp", "image/webp", storageKey, 10, 10, new Date().toISOString());
+      VALUES (?, ?, ?, ?, NULL, ?, ?, ?)`,
+      )
+      .run("photo-test", "test.webp", "image/webp", storageKey, 10, 10, new Date().toISOString());
     database.close();
 
-    const backupResult = spawnSync(process.execPath, ["scripts/backup.mjs", dataDirectory, backupRoot], {
-      cwd: process.cwd(), encoding: "utf8",
-    });
+    const backupResult = spawnSync(
+      process.execPath,
+      ["scripts/backup.mjs", dataDirectory, backupRoot],
+      {
+        cwd: process.cwd(),
+        encoding: "utf8",
+      },
+    );
     assert.equal(backupResult.status, 0, backupResult.stderr);
     const backupDirectory = path.join(backupRoot, readdirSync(backupRoot)[0]);
 
@@ -42,7 +52,9 @@ test("creates an integrity-checked backup and restores it into an isolated data 
     );
 
     const restored = initializeDatabase(path.join(restoreDirectory, "palace.sqlite"), false);
-    const count = restored.prepare("SELECT COUNT(*) AS count FROM uploaded_photos").get() as { count: number };
+    const count = restored.prepare("SELECT COUNT(*) AS count FROM uploaded_photos").get() as {
+      count: number;
+    };
     restored.close();
     assert.equal(count.count, 1);
   } finally {

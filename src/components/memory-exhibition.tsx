@@ -5,7 +5,107 @@ import { copy } from "@/i18n/zh-CN";
 import { imageStorage } from "@/storage/local-image-storage";
 import { PhotoViewer } from "@/components/photo-viewer";
 
-export function MemoryExhibition({ memory, visitor = false }: { memory: MemoryDetails; visitor?: boolean }) {
+export function MemoryExhibition({
+  memory,
+  visitor = false,
+  shareToken,
+}: {
+  memory: MemoryDetails;
+  visitor?: boolean;
+  shareToken?: string;
+}) {
   const imagePath = memory.coverKey ? imageStorage.resolve(memory.coverKey).publicPath : null;
-  return <article className="exhibition"><header className="exhibition-opening section-shell"><div className="exhibition-title-block"><p className="eyebrow">{visitor ? "VISITOR EXHIBITION" : copy.exhibition.label}</p><p className="exhibition-stage">{memory.stageTitle ?? copy.common.uncategorized}</p><h1>{memory.title}</h1></div>{imagePath ? <figure className="exhibition-hero"><PhotoViewer imageClassName="exhibition-image" src={imagePath} /></figure> : null}</header><section className="story-hall section-shell"><div className="story-label"><span>01</span><h2>{copy.exhibition.story}</h2></div><p>{memory.story}</p></section>{memory.images.length ? <section className="exhibition-section exhibition-gallery-section section-shell"><div className="exhibition-section-heading"><span>02</span><h2>{copy.exhibition.gallery}</h2></div><div className="exhibition-gallery">{memory.images.map((image, index) => <figure key={image.id}><img src={imageStorage.resolve(image.storageKey).publicPath} alt={image.altText} /><figcaption>{copy.exhibition.imageNumber(index + 1)}</figcaption></figure>)}</div></section> : null}<section className="exhibition-section later-notes-hall section-shell"><div className="exhibition-section-heading"><span>03</span><h2>{copy.exhibition.laterNotes}</h2></div><div className="later-notes-list">{memory.laterNotes.length ? memory.laterNotes.map((note) => <article className="later-note" key={note.id}><time>{new Intl.DateTimeFormat("zh-CN", { dateStyle: "long" }).format(new Date(note.createdAt))}</time><p>{note.content}</p></article>) : <p className="quiet-empty">{copy.exhibition.noLaterNotes}</p>}</div></section>{!visitor && memory.relatedMemories.length ? <section className="exhibition-section"><div className="section-shell"><div className="exhibition-section-heading"><span>04</span><h2>{copy.exhibition.related}</h2></div><div className="memory-grid related-memory-grid">{memory.relatedMemories.map((related) => <MemoryCard key={related.id} memory={related} />)}</div></div></section> : null}<footer className="exhibition-stage-hall"><div className="section-shell"><p>{copy.exhibition.stage}</p>{!visitor && memory.stageId ? <Link href={`/stages/${memory.stageId}`}>{memory.stageTitle} <span>→</span></Link> : <strong>{memory.stageTitle ?? copy.common.uncategorized}</strong>}</div></footer></article>;
+  const accessibleImagePath = (path: string) =>
+    shareToken ? `${path}?share=${encodeURIComponent(shareToken)}` : path;
+  return (
+    <article className="exhibition">
+      <header className="exhibition-opening section-shell">
+        <div className="exhibition-title-block">
+          <p className="eyebrow">{visitor ? "VISITOR EXHIBITION" : copy.exhibition.label}</p>
+          <p className="exhibition-stage">{memory.stageTitle ?? copy.common.uncategorized}</p>
+          <h1>{memory.title}</h1>
+        </div>
+        {imagePath ? (
+          <figure className="exhibition-hero">
+            <PhotoViewer imageClassName="exhibition-image" src={accessibleImagePath(imagePath)} />
+          </figure>
+        ) : null}
+      </header>
+      <section className="story-hall section-shell">
+        <div className="story-label">
+          <span>01</span>
+          <h2>{copy.exhibition.story}</h2>
+        </div>
+        <p>{memory.story}</p>
+      </section>
+      {memory.images.length ? (
+        <section className="exhibition-section exhibition-gallery-section section-shell">
+          <div className="exhibition-section-heading">
+            <span>02</span>
+            <h2>{copy.exhibition.gallery}</h2>
+          </div>
+          <div className="exhibition-gallery">
+            {memory.images.map((image, index) => (
+              <figure key={image.id}>
+                <img
+                  src={accessibleImagePath(imageStorage.resolve(image.storageKey).publicPath)}
+                  alt={image.altText}
+                />
+                <figcaption>{copy.exhibition.imageNumber(index + 1)}</figcaption>
+              </figure>
+            ))}
+          </div>
+        </section>
+      ) : null}
+      <section className="exhibition-section later-notes-hall section-shell">
+        <div className="exhibition-section-heading">
+          <span>03</span>
+          <h2>{copy.exhibition.laterNotes}</h2>
+        </div>
+        <div className="later-notes-list">
+          {memory.laterNotes.length ? (
+            memory.laterNotes.map((note) => (
+              <article className="later-note" key={note.id}>
+                <time>
+                  {new Intl.DateTimeFormat("zh-CN", { dateStyle: "long" }).format(
+                    new Date(note.createdAt),
+                  )}
+                </time>
+                <p>{note.content}</p>
+              </article>
+            ))
+          ) : (
+            <p className="quiet-empty">{copy.exhibition.noLaterNotes}</p>
+          )}
+        </div>
+      </section>
+      {!visitor && memory.relatedMemories.length ? (
+        <section className="exhibition-section">
+          <div className="section-shell">
+            <div className="exhibition-section-heading">
+              <span>04</span>
+              <h2>{copy.exhibition.related}</h2>
+            </div>
+            <div className="memory-grid related-memory-grid">
+              {memory.relatedMemories.map((related) => (
+                <MemoryCard key={related.id} memory={related} />
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
+      <footer className="exhibition-stage-hall">
+        <div className="section-shell">
+          <p>{copy.exhibition.stage}</p>
+          {!visitor && memory.stageId ? (
+            <Link href={`/stages/${memory.stageId}`}>
+              {memory.stageTitle} <span>→</span>
+            </Link>
+          ) : (
+            <strong>{memory.stageTitle ?? copy.common.uncategorized}</strong>
+          )}
+        </div>
+      </footer>
+    </article>
+  );
 }

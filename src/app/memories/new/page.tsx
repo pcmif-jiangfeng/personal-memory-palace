@@ -9,18 +9,24 @@ import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default async function MemoryEditorPage({ searchParams }: {
+export default async function MemoryEditorPage({
+  searchParams,
+}: {
   searchParams: Promise<{ photos?: string | string[] }>;
 }) {
   if (!(await isOwner())) redirect("/login");
   const params = await searchParams;
-  const rawPhotoIds = Array.isArray(params.photos) ? params.photos.join(",") : params.photos ?? "";
+  const rawPhotoIds = Array.isArray(params.photos)
+    ? params.photos.join(",")
+    : (params.photos ?? "");
   const selectedIds = new Set(rawPhotoIds.split(",").filter(Boolean));
-  const photos = listWorkspacePhotos().filter((photo) => selectedIds.has(photo.id)).map((photo) => ({
-    id: photo.id,
-    name: photo.originalName,
-    src: imageStorage.resolve(photo.optimizedStorageKey).publicPath,
-  }));
+  const photos = listWorkspacePhotos()
+    .filter((photo) => selectedIds.has(photo.id))
+    .map((photo) => ({
+      id: photo.id,
+      name: photo.originalName,
+      src: imageStorage.resolve(photo.optimizedStorageKey).publicPath,
+    }));
   return (
     <section className="section-shell skeleton-page">
       <PageIntro title={copy.editor.title} description={copy.editor.description} />

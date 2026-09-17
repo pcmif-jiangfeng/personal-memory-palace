@@ -1,0 +1,9 @@
+export const MEMORY_TITLE_MAX_LENGTH = 120;
+export const MEMORY_STORY_MAX_LENGTH = 100_000;
+export const STAGE_TITLE_MAX_LENGTH = 80;
+export const STAGE_DESCRIPTION_MAX_LENGTH = 2_000;
+export const LATER_NOTE_MAX_LENGTH = 20_000;
+export const MAX_RELATED_MEMORIES = 100;
+export const MAX_MEMORY_PHOTOS = 20;
+export const MAX_PASSWORD_LENGTH = 512;
+export const MAX_IDENTIFIER_LENGTH = 200;

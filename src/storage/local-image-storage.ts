@@ -1,15 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { getDataDirectory } from "../config.ts";
 import { getDataset } from "@/data/database";
 import type { ImageStorage, SaveImageInput, SavedImage, StoredImage } from "./image-storage";
 import { createWebOptimizedImage, extensionForMimeType } from "./image-processor";
 
 export function getImageDataDirectory(): string {
-  const dataDirectory = process.env.MEMORY_PALACE_DATA_DIR
-    ? path.resolve(/* turbopackIgnore: true */ process.env.MEMORY_PALACE_DATA_DIR)
-    : path.join(process.cwd(), "data");
-  return path.join(/* turbopackIgnore: true */ dataDirectory, "images");
+  return path.join(/* turbopackIgnore: true */ getDataDirectory(), "images");
 }
 
 export function resolveStoredImagePath(key: string): string {
@@ -34,9 +32,10 @@ async function writeAtomically(filePath: string, data: Buffer): Promise<void> {
 
 export class LocalImageStorage implements ImageStorage {
   resolve(key: string): StoredImage {
-    const publicPath = key.startsWith("demo/") && key.endsWith(".svg")
-      ? `/images/${key}`
-      : `/media/${key.split("/").map(encodeURIComponent).join("/")}`;
+    const publicPath =
+      key.startsWith("demo/") && key.endsWith(".svg")
+        ? `/images/${key}`
+        : `/media/${key.split("/").map(encodeURIComponent).join("/")}`;
     return { key, publicPath };
   }
 
@@ -70,9 +69,13 @@ export class LocalImageStorage implements ImageStorage {
   }
 
   async remove(keys: Array<string | null>): Promise<void> {
-    await Promise.all(keys.filter((key): key is string => Boolean(key)).map(async (key) => {
-      await rm(resolveStoredImagePath(key), { force: true });
-    }));
+    await Promise.all(
+      keys
+        .filter((key): key is string => Boolean(key))
+        .map(async (key) => {
+          await rm(resolveStoredImagePath(key), { force: true });
+        }),
+    );
   }
 }
 

@@ -9,11 +9,21 @@ export function TimeGear() {
   async function recall() {
     setBusy(true);
     const response = await fetch("/api/recall", { cache: "no-store" });
-    const result = await response.json() as { memory?: { id: string } };
+    const result = (await response.json()) as { memory?: { id: string } };
     if (result.memory) router.push(`/memories/${result.memory.id}`);
     else setBusy(false);
   }
-  return <button className={`time-gear${busy ? " is-spinning" : ""}`} onClick={() => void recall()} disabled={busy} aria-label="随机回忆">
-    <span className="time-gear-ring" aria-hidden="true">✦</span><span>{busy ? "正在翻阅…" : "随机回忆"}</span>
-  </button>;
+  return (
+    <button
+      className={`time-gear${busy ? " is-spinning" : ""}`}
+      onClick={() => void recall()}
+      disabled={busy}
+      aria-label="随机回忆"
+    >
+      <span className="time-gear-ring" aria-hidden="true">
+        ✦
+      </span>
+      <span>{busy ? "正在翻阅…" : "随机回忆"}</span>
+    </button>
+  );
 }

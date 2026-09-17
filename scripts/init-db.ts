@@ -9,10 +9,13 @@ if (process.argv.includes("--reset") && existsSync(databasePath)) {
 }
 
 const database = initializeDatabase(databasePath, dataset === "demo");
-const stageCount = database.prepare("SELECT COUNT(*) AS count FROM stages").get() as { count: number };
-const memoryCount = database.prepare("SELECT COUNT(*) AS count FROM memories").get() as { count: number };
+const stageCount = database.prepare("SELECT COUNT(*) AS count FROM stages").get() as {
+  count: number;
+};
+const memoryCount = database.prepare("SELECT COUNT(*) AS count FROM memories").get() as {
+  count: number;
+};
 database.close();
 
 console.log(`Database ready: ${databasePath}`);
 console.log(`Dataset: ${dataset}; stages: ${stageCount.count}; memories: ${memoryCount.count}`);
-
