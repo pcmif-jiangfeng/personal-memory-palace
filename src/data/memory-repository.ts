@@ -166,7 +166,8 @@ export function findMemoryById(id: string): MemorySummary | null {
 export function findStageById(id: string): Stage | null {
   const row = getDatabase().prepare(
     `SELECT stages.*, stage_covers.storage_key AS cover_key FROM stages
-     LEFT JOIN stage_covers ON stage_covers.stage_id = stages.id WHERE stages.id = ?`
+     LEFT JOIN stage_covers ON stage_covers.stage_id = stages.id
+     WHERE stages.id = ? AND stages.trashed_at IS NULL`
   ).get(id) as unknown as StageRow | undefined;
   return row ? mapStage(row) : null;
 }

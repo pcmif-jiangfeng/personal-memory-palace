@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { StageDeleteAction } from "@/components/stage-delete-action";
 import type { Stage } from "@/domain/models";
 import { copy } from "@/i18n/zh-CN";
 
@@ -70,14 +71,6 @@ export function StageManager({ stages, photos }: { stages: Stage[]; photos: Cove
     );
   }
 
-  async function trash(stageId: string) {
-    if (!window.confirm("将这一章移入回收站？其中的 Memory 会保留。")) return;
-    setBusy(stageId);
-    await fetch(`/api/stages/${stageId}`, { method: "DELETE" });
-    setBusy(null);
-    router.refresh();
-  }
-
   return (
     <div className="stage-manager">
       <form className="stage-form stage-form-new" onSubmit={(event) => void save(event)}>
@@ -91,6 +84,7 @@ export function StageManager({ stages, photos }: { stages: Stage[]; photos: Cove
         {stages.map((stage) => (
           <form
             key={stage.id}
+            id={`stage-${stage.id}`}
             className="stage-form"
             onSubmit={(event) => void save(event, stage.id)}
           >
@@ -100,14 +94,7 @@ export function StageManager({ stages, photos }: { stages: Stage[]; photos: Cove
               <button className="button-secondary" disabled={busy === stage.id}>
                 {copy.stage.save}
               </button>
-              <button
-                type="button"
-                className="text-button danger"
-                disabled={busy === stage.id}
-                onClick={() => void trash(stage.id)}
-              >
-                移入回收站
-              </button>
+              <StageDeleteAction stageId={stage.id} stageTitle={stage.title} />
             </div>
           </form>
         ))}

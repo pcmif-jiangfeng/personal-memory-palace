@@ -862,6 +862,93 @@ img {
   align-items: end;
   perspective: 1000px;
 }
+.stage-book-shell {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+}
+.stage-card-menu {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.9rem;
+  z-index: 5;
+}
+.stage-card-menu details {
+  position: relative;
+}
+.stage-card-menu summary {
+  display: block;
+  padding: 0.45rem 0.3rem 0.55rem 0.55rem;
+  border: 0;
+  background: none;
+  color: rgba(255, 255, 255, 0.76);
+  cursor: pointer;
+  font: 700 0.92rem/1 sans-serif;
+  letter-spacing: 0.22em;
+  list-style: none;
+  text-shadow: 0 1px 0.4rem rgba(20, 16, 13, 0.65);
+  transition: color 0.2s ease;
+}
+.stage-card-menu summary:hover,
+.stage-card-menu details[open] summary {
+  color: rgba(255, 255, 255, 0.98);
+}
+.stage-card-menu summary:focus-visible {
+  color: #fff;
+  outline: 1px dashed rgba(255, 255, 255, 0.62);
+  outline-offset: 0.15rem;
+}
+.stage-card-menu summary::-webkit-details-marker {
+  display: none;
+}
+.stage-card-menu-panel {
+  position: absolute;
+  top: calc(100% + 0.45rem);
+  right: 0;
+  min-width: 8.5rem;
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 0.35rem;
+  background: #fffaf0;
+  box-shadow: 0 1rem 2.4rem rgba(35, 28, 22, 0.22);
+}
+.stage-card-menu-panel a,
+.stage-card-menu-panel button {
+  padding: 0.72rem 0.9rem;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  text-align: left;
+  white-space: nowrap;
+}
+.stage-card-menu-panel a:hover,
+.stage-card-menu-panel button:hover {
+  background: rgba(133, 95, 64, 0.1);
+}
+.stage-card-menu-panel button {
+  color: #9a4439;
+}
+.stage-card-menu-panel button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+.stage-delete-action {
+  display: grid;
+  justify-items: start;
+  gap: 0.4rem;
+}
+.stage-delete-error {
+  display: block;
+  max-width: 15rem;
+  margin-top: 0.35rem;
+  color: #9a4439;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
 .stage-preview-stack {
   position: absolute;
   inset: 0 1.1rem 7.5rem;
@@ -900,7 +987,7 @@ img {
 }
 .stage-book {
   position: relative;
-  z-index: 2;
+  z-index: 1;
   width: 100%;
   min-height: 280px;
   overflow: hidden;
@@ -1077,7 +1164,7 @@ img {
   gap: clamp(3rem, 8vw, 8rem);
   margin-bottom: clamp(4rem, 8vw, 7rem);
 }
-.stage-view-header .page-intro {
+.stage-view-copy {
   position: relative;
   z-index: 2;
 }
@@ -1102,13 +1189,13 @@ img {
   filter: saturate(0.82);
 }
 .stage-view-count {
-  position: absolute;
-  left: 0;
-  bottom: -2.5rem;
-  margin: 0;
+  margin: 1.5rem 0 0;
   color: var(--muted);
   font-size: 0.72rem;
   letter-spacing: 0.12em;
+}
+.stage-view-actions {
+  margin-top: 1rem;
 }
 .stage-memory-grid {
   padding-top: 2rem;
@@ -1593,10 +1680,6 @@ img {
   .stage-view-header {
     grid-template-columns: 1fr;
     gap: 3rem;
-  }
-  .stage-view-count {
-    position: static;
-    grid-column: 1;
   }
   .exhibition-opening {
     min-height: auto;

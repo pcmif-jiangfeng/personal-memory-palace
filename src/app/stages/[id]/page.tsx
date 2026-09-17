@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { MemoryCard } from "@/components/memory-card";
 import { PageIntro } from "@/components/page-intro";
+import { StageDeleteAction } from "@/components/stage-delete-action";
 import { findStageById, listMemoriesByStage } from "@/data/memory-repository";
 import { copy } from "@/i18n/zh-CN";
 import { imageStorage } from "@/storage/local-image-storage";
@@ -20,13 +21,22 @@ export default async function StageViewPage({ params }: { params: Promise<{ id: 
   return (
     <section className="stage-view section-shell">
       <header className="stage-view-header">
-        <PageIntro eyebrow={copy.stage.label} title={stage.title} description={stage.description} />
+        <div className="stage-view-copy">
+          <PageIntro
+            eyebrow={copy.stage.label}
+            title={stage.title}
+            description={stage.description}
+          />
+          <p className="stage-view-count">{copy.stage.memoryCount(memories.length)}</p>
+          <div className="stage-view-actions">
+            <StageDeleteAction stageId={stage.id} stageTitle={stage.title} redirectTo="/" />
+          </div>
+        </div>
         {coverKey ? (
           <div className="stage-view-art">
             <img src={imageStorage.resolve(coverKey).publicPath} alt="" />
           </div>
         ) : null}
-        <p className="stage-view-count">{copy.stage.memoryCount(memories.length)}</p>
       </header>
       {memories.length > 0 ? (
         <div className="memory-grid stage-memory-grid">

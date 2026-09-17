@@ -85,7 +85,24 @@ export function restoreMemory(id: string) {
   const result = getDatabase().prepare("UPDATE memories SET trashed_at = NULL WHERE id = ? AND trashed_at IS NOT NULL").run(id);
   if (!result.changes) throw new Error("MEMORY_NOT_FOUND");
 }
-export function trashStage(id: string) { mark("UPDATE stages SET trashed_at = ? WHERE id = ? AND trashed_at IS NULL", id, "STAGE_NOT_FOUND"); }
+export function trashStageInDatabase(database: DatabaseSync, id: string): void {
+  const now = new Date().toISOString();
+  withTransaction(database, () => {
+    const result = database
+      .prepare(
+        "UPDATE stages SET trashed_at = ?, updated_at = ? WHERE id = ? AND trashed_at IS NULL",
+      )
+      .run(now, now, id);
+    if (!result.changes) throw new Error("STAGE_NOT_FOUND");
+
+    database
+      .prepare("UPDATE memories SET stage_id = NULL, updated_at = ? WHERE stage_id = ?")
+      .run(now, id);
+  });
+}
+export function trashStage(id: string) {
+  trashStageInDatabase(getDatabase(), id);
+}
 export function restoreStage(id: string) {
   const result = getDatabase().prepare("UPDATE stages SET trashed_at = NULL WHERE id = ? AND trashed_at IS NOT NULL").run(id);
   if (!result.changes) throw new Error("STAGE_NOT_FOUND");
