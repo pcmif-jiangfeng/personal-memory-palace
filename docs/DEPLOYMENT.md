@@ -1,6 +1,6 @@
 # Personal Memory Palace V1 — 腾讯云生产部署
 
-本文只覆盖 Task07 的 Production Baseline：通过腾讯云公网 IP 运行单 Owner 版本，并验证数据持久化、备份和隔离恢复。域名、反向代理与 HTTPS 等备案条件满足后再处理。
+本文覆盖当前 V1 的腾讯云单 Owner 部署，并包含数据持久化、更新、备份和隔离恢复流程。域名、反向代理与 HTTPS 等备案条件满足后再处理。
 
 ## 1. 已确认的生产结构
 
@@ -36,9 +36,10 @@ Backup root:     /app/backups/
 | `MEMORY_PALACE_DATASET` | `owner` | 使用真实 Owner 数据库 |
 | `MEMORY_PALACE_DATA_DIR` | `/app/data` | 数据持久化挂载点 |
 | `MEMORY_PALACE_OWNER_PASSWORD` | 服务器私密值 | 不能提交 Git |
+| `MEMORY_PALACE_SESSION_SECRET` | 服务器随机私密值 | 独立签名会话和分享访问 Cookie；至少 32 个字符 |
 | `MEMORY_PALACE_SECURE_COOKIES` | `false` | 仅为 HTTP/IP 验证；HTTPS 后改为 `true` |
 
-没有 Cookie Secret、Share Secret 或 Base URL。Owner Cookie 值由 Owner 密码摘要产生；分享访问值存储于 SQLite。
+Owner 会话和密码分享访问值由独立 Session Secret 签名。Owner 密码和 Session Secret 都不能进入 Git、镜像或日志。
 
 ## 3. 首次部署（腾讯云网页终端）
 
@@ -64,8 +65,10 @@ cd /opt/personal-memory-palace/app
 umask 077
 read -rsp '设置主人密码：' OWNER_PASSWORD
 printf '\n'
-printf 'NODE_ENV=production\nPORT=3000\nMEMORY_PALACE_DATASET=owner\nMEMORY_PALACE_DATA_DIR=/app/data\nMEMORY_PALACE_OWNER_PASSWORD=%s\nMEMORY_PALACE_SECURE_COOKIES=false\n' "$OWNER_PASSWORD" > /opt/personal-memory-palace/config/app.env
+SESSION_SECRET="$(openssl rand -base64 48 | tr -d '\n')"
+printf 'NODE_ENV=production\nPORT=3000\nMEMORY_PALACE_DATASET=owner\nMEMORY_PALACE_DATA_DIR=/app/data\nMEMORY_PALACE_OWNER_PASSWORD=%s\nMEMORY_PALACE_SESSION_SECRET=%s\nMEMORY_PALACE_SECURE_COOKIES=false\n' "$OWNER_PASSWORD" "$SESSION_SECRET" > /opt/personal-memory-palace/config/app.env
 unset OWNER_PASSWORD
+unset SESSION_SECRET
 chmod 600 /opt/personal-memory-palace/config/app.env
 ```
 
@@ -73,7 +76,7 @@ chmod 600 /opt/personal-memory-palace/config/app.env
 
 ```bash
 cd /opt/personal-memory-palace/app
-docker build -t personal-memory-palace:task07 .
+docker build -t personal-memory-palace:current .
 
 docker run -d \
   --name personal-memory-palace \
@@ -82,7 +85,7 @@ docker run -d \
   -v /opt/personal-memory-palace/data:/app/data \
   -v /opt/personal-memory-palace/backups:/app/backups \
   -p 80:3000 \
-  personal-memory-palace:task07
+  personal-memory-palace:current
 
 docker ps --filter name=personal-memory-palace
 docker logs --tail 100 personal-memory-palace
@@ -131,7 +134,7 @@ docker run -d \
   -v /opt/personal-memory-palace/data:/app/data \
   -v /opt/personal-memory-palace/backups:/app/backups \
   -p 80:3000 \
-  personal-memory-palace:task07
+  personal-memory-palace:current
 ```
 
 删除的是容器，不是宿主机 `/opt/personal-memory-palace/data`，因此真实数据应继续存在。
@@ -141,7 +144,7 @@ docker run -d \
 ```bash
 cd /opt/personal-memory-palace/app
 git pull --ff-only
-docker build -t personal-memory-palace:task07 .
+docker build -t personal-memory-palace:current .
 docker stop personal-memory-palace
 docker rm personal-memory-palace
 ```
@@ -173,7 +176,7 @@ docker run --rm \
   -e MEMORY_PALACE_APP_VERSION="$APP_VERSION" \
   -v /opt/personal-memory-palace/data:/app/data:ro \
   -v /opt/personal-memory-palace/backups:/app/backups \
-  personal-memory-palace:task07 \
+  personal-memory-palace:current \
   /app/maintenance/backup.mjs /app/data /app/backups
 
 docker start personal-memory-palace
@@ -206,7 +209,7 @@ docker run --rm \
   --entrypoint node \
   -v "$LATEST_BACKUP":/app/backup:ro \
   -v "$RESTORE_DIR":/app/restore \
-  personal-memory-palace:task07 \
+  personal-memory-palace:current \
   /app/maintenance/restore-backup.mjs /app/backup /app/restore
 
 docker run -d \
@@ -214,7 +217,7 @@ docker run -d \
   --env-file /opt/personal-memory-palace/config/app.env \
   -v "$RESTORE_DIR":/app/data \
   -p 127.0.0.1:8081:3000 \
-  personal-memory-palace:task07
+  personal-memory-palace:current
 
 curl -I http://127.0.0.1:8081/login
 docker logs --tail 100 memory-palace-restore-test
@@ -234,7 +237,7 @@ docker rm memory-palace-restore-test
 ```bash
 cd /opt/personal-memory-palace/app
 git pull --ff-only
-docker build -t personal-memory-palace:task07 .
+docker build -t personal-memory-palace:current .
 ```
 
 先按第 6 节备份，再按第 5.2 节重建容器。代码更新不会覆盖宿主机 data。
@@ -248,7 +251,7 @@ du -sh /opt/personal-memory-palace/backups
 docker system df
 ```
 
-Task07 不增加后台监控页面。发现磁盘紧张时先确认备份可恢复，再处理明确无用的旧镜像或备份，不得执行针对 data 的递归删除。
+V1 不增加后台监控页面。发现磁盘紧张时先确认备份可恢复，再处理明确无用的旧镜像或备份，不得执行针对 data 的递归删除。
 
 ## 10. 上传可靠性边界
 

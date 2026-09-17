@@ -15,7 +15,10 @@ export function MemoryCard({ memory }: { memory: MemorySummary }) {
         <p className="memory-card-stage">{memory.stageTitle ?? copy.common.uncategorized}</p>
         <h3>{memory.title}</h3>
         <p className="memory-card-story">{memory.story}</p>
-        <div className="memory-card-footer"><span>{copy.common.imageCount(memory.imageCount)}</span><span>{copy.gallery.enterMemory} →</span></div>
+        <div className="memory-card-footer">
+          <span>{copy.common.imageCount(memory.imageCount)}</span>
+          <span>{copy.gallery.enterMemory} →</span>
+        </div>
       </div>
     </Link>
   );

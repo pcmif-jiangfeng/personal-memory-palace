@@ -93,9 +93,14 @@ export async function createBackup({
 
 const invokedPath = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : "";
 if (import.meta.url === invokedPath) {
-  const dataDirectory = path.resolve(process.argv[2] || process.env.MEMORY_PALACE_DATA_DIR || "data");
+  const dataDirectory = path.resolve(
+    process.argv[2] || process.env.MEMORY_PALACE_DATA_DIR || "data",
+  );
   const backupRoot = path.resolve(process.argv[3] || "backups");
   createBackup({ dataDirectory, backupRoot })
     .then((destination) => console.log(`Backup created: ${destination}`))
-    .catch((error) => { console.error(error.message); process.exitCode = 1; });
+    .catch((error) => {
+      console.error(error.message);
+      process.exitCode = 1;
+    });
 }

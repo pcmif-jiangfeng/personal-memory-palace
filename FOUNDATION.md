@@ -1,5 +1,7 @@
 # Task01 基础选型
 
+> 历史快照：本文记录 Task01 当时的基础选型。当前实现与安全边界请以 `README.md`、`docs/ARCHITECTURE.md` 和代码为准。
+
 - **Frontend**: Next.js App Router + React + TypeScript。基础路由和响应式 UI 可在同一项目中继续演进。
 - **Backend**: Next.js Node.js 服务端。V1 基础阶段不拆分独立 API 服务。
 - **Database**: SQLite + 显式 SQL schema。零额外数据库运行时依赖，本地初始化直接。

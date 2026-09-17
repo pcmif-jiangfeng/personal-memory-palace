@@ -5,7 +5,12 @@ import { useRouter } from "next/navigation";
 import type { Stage } from "@/domain/models";
 import { copy } from "@/i18n/zh-CN";
 
-interface CoverPhotoOption { id: string; name: string; src: string; storageKey: string }
+interface CoverPhotoOption {
+  id: string;
+  name: string;
+  src: string;
+  storageKey: string;
+}
 
 export function StageManager({ stages, photos }: { stages: Stage[]; photos: CoverPhotoOption[] }) {
   const router = useRouter();
@@ -41,15 +46,26 @@ export function StageManager({ stages, photos }: { stages: Stage[]; photos: Cove
     const currentCover = photos.find((photo) => photo.storageKey === stage?.coverKey)?.id ?? "";
     return (
       <>
-        <label className="form-field"><span>{copy.stage.name}</span>
-          <input name="title" required maxLength={80} defaultValue={stage?.title ?? ""} /></label>
-        <label className="form-field"><span>{copy.stage.description}</span>
-          <textarea name="description" rows={3} defaultValue={stage?.description ?? ""} /></label>
-        <label className="form-field"><span>{copy.stage.cover}</span>
+        <label className="form-field">
+          <span>{copy.stage.name}</span>
+          <input name="title" required maxLength={80} defaultValue={stage?.title ?? ""} />
+        </label>
+        <label className="form-field">
+          <span>{copy.stage.description}</span>
+          <textarea name="description" rows={3} defaultValue={stage?.description ?? ""} />
+        </label>
+        <label className="form-field">
+          <span>{copy.stage.cover}</span>
           <select name="coverPhotoId" defaultValue={currentCover}>
             <option value="">{copy.stage.noCover}</option>
-            {photos.map((photo) => <option key={photo.id} value={photo.id}>{photo.name}</option>)}
-          </select><small>{copy.stage.coverHint}</small></label>
+            {photos.map((photo) => (
+              <option key={photo.id} value={photo.id}>
+                {photo.name}
+              </option>
+            ))}
+          </select>
+          <small>{copy.stage.coverHint}</small>
+        </label>
       </>
     );
   }
@@ -65,18 +81,42 @@ export function StageManager({ stages, photos }: { stages: Stage[]; photos: Cove
   return (
     <div className="stage-manager">
       <form className="stage-form stage-form-new" onSubmit={(event) => void save(event)}>
-        <h2>{copy.stage.create}</h2>{fields()}
-        <button className="button-primary" disabled={busy === "new"}>{copy.stage.create}</button>
+        <h2>{copy.stage.create}</h2>
+        {fields()}
+        <button className="button-primary" disabled={busy === "new"}>
+          {copy.stage.create}
+        </button>
       </form>
       <div className="stage-edit-list">
         {stages.map((stage) => (
-          <form key={stage.id} className="stage-form" onSubmit={(event) => void save(event, stage.id)}>
-            <h2>{stage.title}</h2>{fields(stage)}
-            <div className="stage-form-actions"><button className="button-secondary" disabled={busy === stage.id}>{copy.stage.save}</button><button type="button" className="text-button danger" disabled={busy === stage.id} onClick={() => void trash(stage.id)}>移入回收站</button></div>
+          <form
+            key={stage.id}
+            className="stage-form"
+            onSubmit={(event) => void save(event, stage.id)}
+          >
+            <h2>{stage.title}</h2>
+            {fields(stage)}
+            <div className="stage-form-actions">
+              <button className="button-secondary" disabled={busy === stage.id}>
+                {copy.stage.save}
+              </button>
+              <button
+                type="button"
+                className="text-button danger"
+                disabled={busy === stage.id}
+                onClick={() => void trash(stage.id)}
+              >
+                移入回收站
+              </button>
+            </div>
           </form>
         ))}
       </div>
-      {message ? <p className="form-message" role="status">{message}</p> : null}
+      {message ? (
+        <p className="form-message" role="status">
+          {message}
+        </p>
+      ) : null}
     </div>
   );
 }

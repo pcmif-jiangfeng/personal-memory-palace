@@ -21,11 +21,22 @@ export default async function StageViewPage({ params }: { params: Promise<{ id: 
     <section className="stage-view section-shell">
       <header className="stage-view-header">
         <PageIntro eyebrow={copy.stage.label} title={stage.title} description={stage.description} />
-        {coverKey ? <div className="stage-view-art"><img src={imageStorage.resolve(coverKey).publicPath} alt="" /></div> : null}
+        {coverKey ? (
+          <div className="stage-view-art">
+            <img src={imageStorage.resolve(coverKey).publicPath} alt="" />
+          </div>
+        ) : null}
         <p className="stage-view-count">{copy.stage.memoryCount(memories.length)}</p>
       </header>
-      {memories.length > 0 ? <div className="memory-grid stage-memory-grid">{memories.map((memory) => <MemoryCard key={memory.id} memory={memory} />)}</div>
-        : <div className="empty-state">{copy.stage.empty}</div>}
+      {memories.length > 0 ? (
+        <div className="memory-grid stage-memory-grid">
+          {memories.map((memory) => (
+            <MemoryCard key={memory.id} memory={memory} />
+          ))}
+        </div>
+      ) : (
+        <div className="empty-state">{copy.stage.empty}</div>
+      )}
     </section>
   );
 }

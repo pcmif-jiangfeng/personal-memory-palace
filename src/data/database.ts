@@ -3,17 +3,16 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { demoSeedSql } from "./demo-seed.ts";
 import { schemaSql } from "./schema.ts";
+import { getDataDirectory, getDatasetConfig, type Dataset } from "../config.ts";
 
-export type Dataset = "demo" | "owner";
+export type { Dataset } from "../config.ts";
 
 export function getDataset(): Dataset {
-  return process.env.MEMORY_PALACE_DATASET === "owner" ? "owner" : "demo";
+  return getDatasetConfig();
 }
 
 export function getDatabasePath(dataset: Dataset = getDataset()): string {
-  const dataDirectory = process.env.MEMORY_PALACE_DATA_DIR
-    ? path.resolve(/* turbopackIgnore: true */ process.env.MEMORY_PALACE_DATA_DIR)
-    : path.join(process.cwd(), "data");
+  const dataDirectory = getDataDirectory();
   mkdirSync(dataDirectory, { recursive: true });
   return path.join(/* turbopackIgnore: true */ dataDirectory, dataset === "demo" ? "demo.sqlite" : "palace.sqlite");
 }

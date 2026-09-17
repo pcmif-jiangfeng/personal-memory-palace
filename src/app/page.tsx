@@ -22,22 +22,64 @@ export default async function LifeGalleryPage() {
       <section className="museum-hero section-shell">
         <div className="museum-hero-copy">
           {getDataset() === "demo" ? <span className="demo-badge">{copy.common.demo}</span> : null}
-          <PageIntro eyebrow={copy.gallery.eyebrow} title={copy.gallery.title} description={copy.gallery.intro} />
-          <div className="archive-mark"><span>EST.</span><strong>V1</strong><span>PRIVATE ARCHIVE</span></div>
+          <PageIntro
+            eyebrow={copy.gallery.eyebrow}
+            title={copy.gallery.title}
+            description={copy.gallery.intro}
+          />
+          <div className="archive-mark">
+            <span>EST.</span>
+            <strong>V1</strong>
+            <span>PRIVATE ARCHIVE</span>
+          </div>
         </div>
-        {featured?.coverKey ? <a className="museum-hero-art" href={`/memories/${featured.id}`}>
-          <img src={imageStorage.resolve(featured.coverKey).publicPath} alt="" />
-          <span><small>NOW EXHIBITING</small>{featured.title}</span>
-        </a> : <div className="museum-hero-art museum-hero-art-empty" />}
+        {featured?.coverKey ? (
+          <a className="museum-hero-art" href={`/memories/${featured.id}`}>
+            <img src={imageStorage.resolve(featured.coverKey).publicPath} alt="" />
+            <span>
+              <small>NOW EXHIBITING</small>
+              {featured.title}
+            </span>
+          </a>
+        ) : (
+          <div className="museum-hero-art museum-hero-art-empty" />
+        )}
       </section>
-      <section className="recall-section section-shell"><div><p className="eyebrow">TIME GEAR · 回到某一刻</p><h2>让时间替你翻开一页</h2><p>从所有未归档的 Memory 中，完全随机遇见一段过去。</p></div><TimeGear /></section>
+      <section className="recall-section section-shell">
+        <div>
+          <p className="eyebrow">TIME GEAR · 回到某一刻</p>
+          <h2>让时间替你翻开一页</h2>
+          <p>从所有未归档的 Memory 中，完全随机遇见一段过去。</p>
+        </div>
+        <TimeGear />
+      </section>
       <section className="stage-gallery section-shell" id="stage-shelf">
-        <header className="section-heading"><div><p>{copy.gallery.stagesKicker}</p><h2>{copy.gallery.stages}</h2></div><p>{copy.gallery.stagesIntro}</p></header>
-        <div className="stage-shelf">{stages.map((stage, index) => <StageCard key={stage.id} stage={stage} index={index} />)}</div>
+        <header className="section-heading">
+          <div>
+            <p>{copy.gallery.stagesKicker}</p>
+            <h2>{copy.gallery.stages}</h2>
+          </div>
+          <p>{copy.gallery.stagesIntro}</p>
+        </header>
+        <div className="stage-shelf">
+          {stages.map((stage, index) => (
+            <StageCard key={stage.id} stage={stage} index={index} />
+          ))}
+        </div>
       </section>
       <section className="section-shell collection-section">
-        <header className="section-heading"><div><p>{copy.gallery.memoriesKicker}</p><h2>{copy.gallery.memories}</h2></div><p>{copy.gallery.memoriesIntro}</p></header>
-        <div className="memory-grid">{memories.map((memory) => <MemoryCard key={memory.id} memory={memory} />)}</div>
+        <header className="section-heading">
+          <div>
+            <p>{copy.gallery.memoriesKicker}</p>
+            <h2>{copy.gallery.memories}</h2>
+          </div>
+          <p>{copy.gallery.memoriesIntro}</p>
+        </header>
+        <div className="memory-grid">
+          {memories.map((memory) => (
+            <MemoryCard key={memory.id} memory={memory} />
+          ))}
+        </div>
       </section>
     </>
   );

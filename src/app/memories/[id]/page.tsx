@@ -12,7 +12,11 @@ import { PhotoViewer } from "@/components/photo-viewer";
 
 export const dynamic = "force-dynamic";
 
-export default async function MemoryExhibitionPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function MemoryExhibitionPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   if (!(await isOwner())) redirect("/login");
   const { id } = await params;
   const memory = findMemoryDetails(id);
@@ -27,40 +31,100 @@ export default async function MemoryExhibitionPage({ params }: { params: Promise
           <p className="exhibition-stage">{memory.stageTitle ?? copy.common.uncategorized}</p>
           <h1>{memory.title}</h1>
         </div>
-        {imagePath ? <figure className="exhibition-hero"><PhotoViewer imageClassName="exhibition-image" src={imagePath} /><figcaption>ARCHIVE · {memory.createdAt.slice(0, 10)}</figcaption></figure> : null}
+        {imagePath ? (
+          <figure className="exhibition-hero">
+            <PhotoViewer imageClassName="exhibition-image" src={imagePath} />
+            <figcaption>ARCHIVE · {memory.createdAt.slice(0, 10)}</figcaption>
+          </figure>
+        ) : null}
       </header>
       <section className="story-hall section-shell">
-        <div className="story-label"><span>01</span><h2>{copy.exhibition.story}</h2></div>
+        <div className="story-label">
+          <span>01</span>
+          <h2>{copy.exhibition.story}</h2>
+        </div>
         <p>{memory.story}</p>
       </section>
-      {memory.images.length > 0 ? <section className="exhibition-section exhibition-gallery-section section-shell">
-        <div className="exhibition-section-heading"><span>02</span><h2>{copy.exhibition.gallery}</h2><p>{copy.common.imageCount(memory.images.length)}</p></div>
-        <div className="exhibition-gallery">{memory.images.map((image, index) => (
-          <figure key={image.id}>
-            <img loading="lazy" src={imageStorage.resolve(image.storageKey).publicPath} alt={image.altText} />
-            <figcaption>{copy.exhibition.imageNumber(index + 1)}</figcaption>
-          </figure>
-        ))}</div>
-      </section> : null}
+      {memory.images.length > 0 ? (
+        <section className="exhibition-section exhibition-gallery-section section-shell">
+          <div className="exhibition-section-heading">
+            <span>02</span>
+            <h2>{copy.exhibition.gallery}</h2>
+            <p>{copy.common.imageCount(memory.images.length)}</p>
+          </div>
+          <div className="exhibition-gallery">
+            {memory.images.map((image, index) => (
+              <figure key={image.id}>
+                <img
+                  loading="lazy"
+                  src={imageStorage.resolve(image.storageKey).publicPath}
+                  alt={image.altText}
+                />
+                <figcaption>{copy.exhibition.imageNumber(index + 1)}</figcaption>
+              </figure>
+            ))}
+          </div>
+        </section>
+      ) : null}
       <section className="exhibition-section later-notes-hall section-shell">
-        <div className="exhibition-section-heading"><span>03</span><h2>{copy.exhibition.laterNotes}</h2></div>
-        {memory.laterNotes.length > 0 ? <div className="later-notes-list">{memory.laterNotes.map((note) => (
-          <article className="later-note" key={note.id}><time>{new Intl.DateTimeFormat("zh-CN", { dateStyle: "long" }).format(new Date(note.createdAt))}</time><p>{note.content}</p></article>
-        ))}</div> : <p className="quiet-empty">{copy.exhibition.noLaterNotes}</p>}
+        <div className="exhibition-section-heading">
+          <span>03</span>
+          <h2>{copy.exhibition.laterNotes}</h2>
+        </div>
+        {memory.laterNotes.length > 0 ? (
+          <div className="later-notes-list">
+            {memory.laterNotes.map((note) => (
+              <article className="later-note" key={note.id}>
+                <time>
+                  {new Intl.DateTimeFormat("zh-CN", { dateStyle: "long" }).format(
+                    new Date(note.createdAt),
+                  )}
+                </time>
+                <p>{note.content}</p>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="quiet-empty">{copy.exhibition.noLaterNotes}</p>
+        )}
       </section>
-      {memory.relatedMemories.length > 0 ? <section className="exhibition-section">
-        <div className="section-shell"><div className="exhibition-section-heading"><span>04</span><h2>{copy.exhibition.related}</h2></div>
-        <div className="memory-grid related-memory-grid">{memory.relatedMemories.map((related) => (
-          <MemoryCard key={related.id} memory={related} />
-        ))}</div></div>
-      </section> : null}
+      {memory.relatedMemories.length > 0 ? (
+        <section className="exhibition-section">
+          <div className="section-shell">
+            <div className="exhibition-section-heading">
+              <span>04</span>
+              <h2>{copy.exhibition.related}</h2>
+            </div>
+            <div className="memory-grid related-memory-grid">
+              {memory.relatedMemories.map((related) => (
+                <MemoryCard key={related.id} memory={related} />
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
       <footer className="exhibition-stage-hall">
-        <div className="section-shell"><p>{copy.exhibition.stage}</p>
-          {memory.stageId ? <Link href={`/stages/${memory.stageId}`}>{memory.stageTitle} <span>→</span></Link>
-            : <strong>{copy.common.uncategorized}</strong>}
+        <div className="section-shell">
+          <p>{copy.exhibition.stage}</p>
+          {memory.stageId ? (
+            <Link href={`/stages/${memory.stageId}`}>
+              {memory.stageTitle} <span>→</span>
+            </Link>
+          ) : (
+            <strong>{copy.common.uncategorized}</strong>
+          )}
         </div>
       </footer>
-      {await isOwner() ? <section className="section-shell exhibition-management"><MemoryManagement memory={memory} candidates={listActiveMemories()} stages={listActiveStages()} /><ShareManager memoryId={memory.id} /></section> : null}
+      {(await isOwner()) ? (
+        <section className="section-shell exhibition-management">
+          <MemoryManagement
+            memory={memory}
+            candidates={listActiveMemories()}
+            stages={listActiveStages()}
+          />
+          <ShareManager memoryId={memory.id} />
+        </section>
+      ) : null}
     </article>
   );
 }

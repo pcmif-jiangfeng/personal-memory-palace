@@ -1,5 +1,5 @@
-import { getDatabase } from "./database";
-import type { LaterNote, MemoryDetails, MemoryImage, MemorySummary, Stage, StageShelfItem } from "@/domain/models";
+import { getDatabase } from "./database.ts";
+import type { LaterNote, MemoryDetails, MemoryImage, MemorySummary, Stage, StageShelfItem } from "../domain/models.ts";
 
 interface StageRow {
   id: string;
@@ -91,20 +91,38 @@ export function listActiveStages(): Stage[] {
 
 export function listStageShelfItems(): StageShelfItem[] {
   const database = getDatabase();
-  return listActiveStages().map((stage) => {
-    const previews = database.prepare(`
-      SELECT memory_images.storage_key
-      FROM memory_images
-      JOIN memories ON memories.id = memory_images.memory_id
-      WHERE memories.stage_id = ? AND memories.trashed_at IS NULL
-      ORDER BY memory_images.is_cover DESC, memories.created_at DESC, memory_images.sort_order
-      LIMIT 3
-    `).all(stage.id) as unknown as Array<{ storage_key: string }>;
-    const count = database.prepare(
-      "SELECT COUNT(*) AS count FROM memories WHERE stage_id = ? AND trashed_at IS NULL"
-    ).get(stage.id) as { count: number };
-    return { ...stage, previewImageKeys: previews.map((preview) => preview.storage_key), memoryCount: count.count };
-  });
+  const stages = listActiveStages();
+  const counts = database.prepare(`
+    SELECT stage_id, COUNT(*) AS count
+    FROM memories
+    WHERE trashed_at IS NULL AND stage_id IS NOT NULL
+    GROUP BY stage_id
+  `).all() as unknown as Array<{ stage_id: string; count: number }>;
+  const previews = database.prepare(`
+    WITH ranked AS (
+      SELECT memories.stage_id, memory_images.storage_key,
+        ROW_NUMBER() OVER (
+          PARTITION BY memories.stage_id
+          ORDER BY memory_images.is_cover DESC, memories.created_at DESC, memory_images.sort_order
+        ) AS position
+      FROM memories
+      JOIN memory_images ON memory_images.memory_id = memories.id
+      WHERE memories.trashed_at IS NULL AND memories.stage_id IS NOT NULL
+    )
+    SELECT stage_id, storage_key FROM ranked WHERE position <= 3 ORDER BY stage_id, position
+  `).all() as unknown as Array<{ stage_id: string; storage_key: string }>;
+  const countByStage = new Map(counts.map((row) => [row.stage_id, row.count]));
+  const previewsByStage = new Map<string, string[]>();
+  for (const preview of previews) {
+    const stagePreviews = previewsByStage.get(preview.stage_id) ?? [];
+    stagePreviews.push(preview.storage_key);
+    previewsByStage.set(preview.stage_id, stagePreviews);
+  }
+  return stages.map((stage) => ({
+    ...stage,
+    previewImageKeys: previewsByStage.get(stage.id) ?? [],
+    memoryCount: countByStage.get(stage.id) ?? 0,
+  }));
 }
 
 export function listActiveMemories(): MemorySummary[] {
@@ -173,9 +191,16 @@ export function findMemoryDetails(id: string): MemoryDetails | null {
     SELECT CASE WHEN memory_id = ? THEN related_memory_id ELSE memory_id END AS id
     FROM memory_relations WHERE memory_id = ? OR related_memory_id = ?
   `).all(id, id, id) as unknown as Array<{ id: string }>;
-  const relatedMemories = relationRows
-    .map((row) => findMemoryById(row.id))
-    .filter((item): item is MemorySummary => item !== null && item.trashedAt === null);
+  let relatedMemories: MemorySummary[] = [];
+  if (relationRows.length > 0) {
+    const relatedIds = relationRows.map((row) => row.id);
+    const placeholders = relatedIds.map(() => "?").join(",");
+    const relatedRows = database.prepare(
+      `${summarySql} WHERE memories.id IN (${placeholders}) AND memories.trashed_at IS NULL
+       GROUP BY memories.id ORDER BY memories.created_at DESC`,
+    ).all(...relatedIds) as unknown as MemorySummaryRow[];
+    relatedMemories = relatedRows.map(mapMemory);
+  }
   const noteRows = database.prepare(
     "SELECT * FROM later_notes WHERE memory_id = ? ORDER BY created_at"
   ).all(id) as unknown as LaterNoteRow[];

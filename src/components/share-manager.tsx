@@ -1,7 +1,65 @@
 "use client";
 import { useState } from "react";
 export function ShareManager({ memoryId }: { memoryId: string }) {
-  const [mode, setMode] = useState<"link" | "password">("link"); const [password, setPassword] = useState(""); const [url, setUrl] = useState(""); const [enabled, setEnabled] = useState(false); const [message, setMessage] = useState("");
-  async function save(event: React.FormEvent) { event.preventDefault(); const response = await fetch("/api/shares", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ memoryId, enabled, mode, password }) }); const result = await response.json(); if (response.ok) { setUrl(`${window.location.origin}${result.url}`); setMessage("分享方式已保存"); } else setMessage("分享保存失败，请检查馆长登录状态。"); }
-  return <form className="share-manager" onSubmit={save}><h3>分享这场展览</h3><label className="check-row"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />允许 Visitor 参观</label>{enabled ? <><select value={mode} onChange={(event) => setMode(event.target.value as "link" | "password")}><option value="link">有链接即可访问</option><option value="password">链接 + 密码</option></select>{mode === "password" ? <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="访问密码" type="password" required /> : null}</> : null}<button className="button-secondary">保存分享设置</button>{url ? <input className="share-url" readOnly value={url} onFocus={(event) => event.currentTarget.select()} /> : null}{message ? <p className="form-message">{message}</p> : null}</form>;
+  const [mode, setMode] = useState<"link" | "password">("link");
+  const [password, setPassword] = useState("");
+  const [url, setUrl] = useState("");
+  const [enabled, setEnabled] = useState(false);
+  const [message, setMessage] = useState("");
+  async function save(event: React.FormEvent) {
+    event.preventDefault();
+    const response = await fetch("/api/shares", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ memoryId, enabled, mode, password }),
+    });
+    const result = await response.json();
+    if (response.ok) {
+      setUrl(`${window.location.origin}${result.url}`);
+      setMessage("分享方式已保存");
+    } else setMessage("分享保存失败，请检查馆长登录状态。");
+  }
+  return (
+    <form className="share-manager" onSubmit={save}>
+      <h3>分享这场展览</h3>
+      <label className="check-row">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(event) => setEnabled(event.target.checked)}
+        />
+        允许 Visitor 参观
+      </label>
+      {enabled ? (
+        <>
+          <select
+            value={mode}
+            onChange={(event) => setMode(event.target.value as "link" | "password")}
+          >
+            <option value="link">有链接即可访问</option>
+            <option value="password">链接 + 密码</option>
+          </select>
+          {mode === "password" ? (
+            <input
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="访问密码"
+              type="password"
+              required
+            />
+          ) : null}
+        </>
+      ) : null}
+      <button className="button-secondary">保存分享设置</button>
+      {url ? (
+        <input
+          className="share-url"
+          readOnly
+          value={url}
+          onFocus={(event) => event.currentTarget.select()}
+        />
+      ) : null}
+      {message ? <p className="form-message">{message}</p> : null}
+    </form>
+  );
 }

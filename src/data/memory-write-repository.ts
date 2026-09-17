@@ -1,7 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { getDatabase } from "./database";
 import { findMemoryById } from "./memory-repository";
+import { withTransaction } from "./transaction";
 import type { MemorySummary } from "@/domain/models";
+import {
+  MAX_MEMORY_PHOTOS,
+  MAX_RELATED_MEMORIES,
+  MEMORY_STORY_MAX_LENGTH,
+  MEMORY_TITLE_MAX_LENGTH,
+} from "@/domain/rules";
 
 export interface CreateMemoryInput {
   title: string;
@@ -20,8 +27,12 @@ export function createMemory(input: CreateMemoryInput): MemorySummary {
   const photoIds = [...new Set(input.photoIds)];
   const relatedIds = [...new Set(input.relatedMemoryIds ?? [])];
   if (!title) throw new Error("TITLE_REQUIRED");
+  if (title.length > MEMORY_TITLE_MAX_LENGTH) throw new Error("TITLE_TOO_LONG");
   if (!story) throw new Error("STORY_REQUIRED");
+  if (story.length > MEMORY_STORY_MAX_LENGTH) throw new Error("STORY_TOO_LONG");
   if (photoIds.length === 0) throw new Error("PHOTOS_REQUIRED");
+  if (photoIds.length > MAX_MEMORY_PHOTOS) throw new Error("INVALID_PHOTOS");
+  if (relatedIds.length > MAX_RELATED_MEMORIES) throw new Error("INVALID_RELATIONS");
   if (!photoIds.includes(input.coverPhotoId)) throw new Error("INVALID_COVER");
 
   const database = getDatabase();
@@ -46,8 +57,7 @@ export function createMemory(input: CreateMemoryInput): MemorySummary {
   const id = randomUUID();
   const now = new Date().toISOString();
   const photoById = new Map(photos.map((photo) => [photo.id, photo]));
-  database.exec("BEGIN IMMEDIATE");
-  try {
+  withTransaction(database, () => {
     database.prepare(`INSERT INTO memories
       (id, stage_id, title, story, visibility, created_at, updated_at)
       VALUES (?, ?, ?, ?, 'private', ?, ?)`
@@ -65,10 +75,6 @@ export function createMemory(input: CreateMemoryInput): MemorySummary {
     database.prepare(
       `UPDATE uploaded_photos SET used_at = ? WHERE id IN (${placeholders})`
     ).run(now, ...photoIds);
-    database.exec("COMMIT");
-  } catch (error) {
-    database.exec("ROLLBACK");
-    throw error;
-  }
+  });
   return findMemoryById(id)!;
 }

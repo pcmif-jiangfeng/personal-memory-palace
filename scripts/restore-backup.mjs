@@ -18,11 +18,13 @@ function referencedStorageKeys(database) {
   const add = (value) => {
     if (typeof value === "string" && value.startsWith("uploads/")) keys.add(value);
   };
-  for (const row of database.prepare("SELECT storage_key FROM memory_images").all()) add(row.storage_key);
-  for (const row of database.prepare("SELECT storage_key FROM stage_covers").all()) add(row.storage_key);
-  for (const row of database.prepare(
-    "SELECT optimized_storage_key, original_storage_key FROM uploaded_photos"
-  ).all()) {
+  for (const row of database.prepare("SELECT storage_key FROM memory_images").all())
+    add(row.storage_key);
+  for (const row of database.prepare("SELECT storage_key FROM stage_covers").all())
+    add(row.storage_key);
+  for (const row of database
+    .prepare("SELECT optimized_storage_key, original_storage_key FROM uploaded_photos")
+    .all()) {
     add(row.optimized_storage_key);
     add(row.original_storage_key);
   }
@@ -78,5 +80,8 @@ if (import.meta.url === invokedPath) {
   const targetDataDirectory = path.resolve(process.argv[3] || "restore-test");
   restoreBackup({ backupDirectory, targetDataDirectory })
     .then((summary) => console.log(`Restore prepared: ${JSON.stringify(summary)}`))
-    .catch((error) => { console.error(error.message); process.exitCode = 1; });
+    .catch((error) => {
+      console.error(error.message);
+      process.exitCode = 1;
+    });
 }
