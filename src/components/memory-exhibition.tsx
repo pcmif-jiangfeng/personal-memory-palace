@@ -17,6 +17,11 @@ export function MemoryExhibition({
   const imagePath = memory.coverKey ? imageStorage.resolve(memory.coverKey).publicPath : null;
   const accessibleImagePath = (path: string) =>
     shareToken ? `${path}?share=${encodeURIComponent(shareToken)}` : path;
+  const viewerImages = memory.images.map((image) => ({
+    id: image.id,
+    src: accessibleImagePath(imageStorage.resolve(image.storageKey).publicPath),
+    alt: image.altText,
+  }));
   return (
     <article className="exhibition">
       <header className="exhibition-opening section-shell">
@@ -27,7 +32,11 @@ export function MemoryExhibition({
         </div>
         {imagePath ? (
           <figure className="exhibition-hero">
-            <PhotoViewer imageClassName="exhibition-image" src={accessibleImagePath(imagePath)} />
+            <img
+              className="exhibition-image"
+              src={accessibleImagePath(imagePath)}
+              alt={memory.title}
+            />
           </figure>
         ) : null}
       </header>
@@ -47,9 +56,11 @@ export function MemoryExhibition({
           <div className="exhibition-gallery">
             {memory.images.map((image, index) => (
               <figure key={image.id}>
-                <img
-                  src={accessibleImagePath(imageStorage.resolve(image.storageKey).publicPath)}
-                  alt={image.altText}
+                <PhotoViewer
+                  images={viewerImages}
+                  initialImageId={image.id}
+                  imageClassName="exhibition-gallery-image"
+                  loading="lazy"
                 />
                 <figcaption>{copy.exhibition.imageNumber(index + 1)}</figcaption>
               </figure>

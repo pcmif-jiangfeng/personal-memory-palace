@@ -22,6 +22,11 @@ export default async function MemoryExhibitionPage({
   const memory = findMemoryDetails(id);
   if (!memory) notFound();
   const imagePath = memory.coverKey ? imageStorage.resolve(memory.coverKey).publicPath : null;
+  const viewerImages = memory.images.map((image) => ({
+    id: image.id,
+    src: imageStorage.resolve(image.storageKey).publicPath,
+    alt: image.altText,
+  }));
 
   return (
     <article className="exhibition">
@@ -33,7 +38,7 @@ export default async function MemoryExhibitionPage({
         </div>
         {imagePath ? (
           <figure className="exhibition-hero">
-            <PhotoViewer imageClassName="exhibition-image" src={imagePath} />
+            <img className="exhibition-image" src={imagePath} alt={memory.title} />
             <figcaption>ARCHIVE · {memory.createdAt.slice(0, 10)}</figcaption>
           </figure>
         ) : null}
@@ -55,10 +60,11 @@ export default async function MemoryExhibitionPage({
           <div className="exhibition-gallery">
             {memory.images.map((image, index) => (
               <figure key={image.id}>
-                <img
+                <PhotoViewer
+                  images={viewerImages}
+                  initialImageId={image.id}
+                  imageClassName="exhibition-gallery-image"
                   loading="lazy"
-                  src={imageStorage.resolve(image.storageKey).publicPath}
-                  alt={image.altText}
                 />
                 <figcaption>{copy.exhibition.imageNumber(index + 1)}</figcaption>
               </figure>
