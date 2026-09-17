@@ -7,6 +7,7 @@ import {
   maximumUploadBytes,
   maximumUploadFileCount,
   supportedImageTypes,
+  validateWebOptimizedImage,
 } from "../src/storage/image-processor.ts";
 
 test("creates a bounded WebP browsing image", async () => {
@@ -29,4 +30,25 @@ test("accepts only Task02 browser image formats", () => {
   assert.equal(maximumUploadBytes, 20 * 1024 * 1024);
   assert.equal(maximumUploadBatchBytes, 100 * 1024 * 1024);
   assert.equal(maximumUploadFileCount, 20);
+});
+
+test("validates a decoded WebP optimized by the client", async () => {
+  const input = await sharp({
+    create: { width: 2560, height: 1440, channels: 3, background: "#705742" },
+  })
+    .webp({ quality: 82 })
+    .toBuffer();
+  const result = await validateWebOptimizedImage(input);
+  assert.equal(result.width, 2560);
+  assert.equal(result.height, 1440);
+  assert.equal(result.data, input);
+});
+
+test("rejects a claimed optimized image when its real format is not WebP", async () => {
+  const png = await sharp({
+    create: { width: 120, height: 80, channels: 3, background: "#705742" },
+  })
+    .png()
+    .toBuffer();
+  await assert.rejects(validateWebOptimizedImage(png), /Invalid optimized image/);
 });
