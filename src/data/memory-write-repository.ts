@@ -37,27 +37,35 @@ export function createMemory(input: CreateMemoryInput): MemorySummary {
 
   const database = getDatabase();
   const placeholders = photoIds.map(() => "?").join(",");
-  const photos = database.prepare(
-    `SELECT id, optimized_storage_key AS storage_key FROM uploaded_photos WHERE id IN (${placeholders}) AND used_at IS NULL`
-  ).all(...photoIds) as unknown as PhotoKeyRow[];
-  if (photos.length !== photoIds.length) throw new Error("INVALID_PHOTOS");
-
-  if (input.stageId) {
-    const stage = database.prepare("SELECT id FROM stages WHERE id = ? AND trashed_at IS NULL").get(input.stageId);
-    if (!stage) throw new Error("INVALID_STAGE");
-  }
-  if (relatedIds.length > 0) {
-    const relatedPlaceholders = relatedIds.map(() => "?").join(",");
-    const rows = database.prepare(
-      `SELECT id FROM memories WHERE id IN (${relatedPlaceholders}) AND trashed_at IS NULL`
-    ).all(...relatedIds);
-    if (rows.length !== relatedIds.length) throw new Error("INVALID_RELATIONS");
-  }
-
   const id = randomUUID();
   const now = new Date().toISOString();
-  const photoById = new Map(photos.map((photo) => [photo.id, photo]));
   withTransaction(database, () => {
+    const photos = database
+      .prepare(
+        `SELECT id, optimized_storage_key AS storage_key
+         FROM uploaded_photos
+         WHERE id IN (${placeholders}) AND used_at IS NULL`,
+      )
+      .all(...photoIds) as unknown as PhotoKeyRow[];
+    if (photos.length !== photoIds.length) throw new Error("INVALID_PHOTOS");
+    const photoById = new Map(photos.map((photo) => [photo.id, photo]));
+
+    if (input.stageId) {
+      const stage = database
+        .prepare("SELECT id FROM stages WHERE id = ? AND trashed_at IS NULL")
+        .get(input.stageId);
+      if (!stage) throw new Error("INVALID_STAGE");
+    }
+    if (relatedIds.length > 0) {
+      const relatedPlaceholders = relatedIds.map(() => "?").join(",");
+      const rows = database
+        .prepare(
+          `SELECT id FROM memories WHERE id IN (${relatedPlaceholders}) AND trashed_at IS NULL`,
+        )
+        .all(...relatedIds);
+      if (rows.length !== relatedIds.length) throw new Error("INVALID_RELATIONS");
+    }
+
     database.prepare(`INSERT INTO memories
       (id, stage_id, title, story, visibility, created_at, updated_at)
       VALUES (?, ?, ?, ?, 'private', ?, ?)`
@@ -72,9 +80,9 @@ export function createMemory(input: CreateMemoryInput): MemorySummary {
     const insertRelation = database.prepare(`INSERT INTO memory_relations
       (memory_id, related_memory_id, created_at) VALUES (?, ?, ?)`);
     relatedIds.forEach((relatedId) => insertRelation.run(id, relatedId, now));
-    database.prepare(
-      `UPDATE uploaded_photos SET used_at = ? WHERE id IN (${placeholders})`
-    ).run(now, ...photoIds);
+    database
+      .prepare(`UPDATE uploaded_photos SET used_at = ? WHERE id IN (${placeholders})`)
+      .run(now, ...photoIds);
   });
   return findMemoryById(id)!;
 }

@@ -37,6 +37,16 @@ export const copy = {
     empty: "整理台还是空的。先选择几张照片吧。",
     invalid: "请选择有效的常见网页图片，每张不超过 20MB。",
     originalKept: "已保留原图",
+    deletePhoto: "删除",
+    deletingPhoto: "删除中…",
+    deletePhotoLabel: (name: string) => `删除照片“${name}”`,
+    deleteConfirm: (name: string) =>
+      `确定永久删除照片“${name}”的网页优化版本吗？若仍被 Memory 或 Stage 使用，系统会阻止删除。历史原图不会被本操作删除。`,
+    deleteBlocked: "这张照片仍在展览中使用，请先解除以下关联：",
+    deleteFailed: "删除没有完成，请重试。",
+    memoryReference: (title: string, isCover: boolean) =>
+      `Memory：${title}${isCover ? "（封面）" : ""}`,
+    stageReference: (title: string) => `Stage：${title}（封面）`,
   },
   editor: {
     title: "创建一段 Memory",

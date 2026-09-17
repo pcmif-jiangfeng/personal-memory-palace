@@ -44,6 +44,7 @@ test("initializes the core schema and isolated demo data", () => {
       "memories",
       "memory_images",
       "memory_relations",
+      "photo_deletion_jobs",
       "share_configs",
       "stage_covers",
       "stages",
