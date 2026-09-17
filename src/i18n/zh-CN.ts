@@ -100,6 +100,13 @@ export const copy = {
     memoryCount: (count: number) => `${count} 场记忆展览`,
     enter: "翻开这一章",
     empty: "这一章还没有 Memory。",
+    openActions: "打开 Stage 操作菜单",
+    editAction: "编辑 Stage",
+    deleteAction: "删除 Stage",
+    deleting: "正在删除…",
+    deleteFailed: "删除失败，请稍后重试。",
+    deleteConfirm: (title: string) =>
+      `确定删除人生章节“${title}”吗？Stage 会从人生长廊中消失，其中的 Memory 会完整保留并变为“未归类”。`,
   },
   search: {
     title: "搜索",
