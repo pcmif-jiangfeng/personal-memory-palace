@@ -3,7 +3,13 @@ import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getDataDirectory } from "../config.ts";
 import { getDataset } from "@/data/database";
-import type { ImageStorage, SaveImageInput, SavedImage, StoredImage } from "./image-storage";
+import type {
+  ImageStorage,
+  SaveImageInput,
+  SaveOptimizedImageInput,
+  SavedImage,
+  StoredImage,
+} from "./image-storage";
 import { createWebOptimizedImage, extensionForMimeType } from "./image-processor";
 
 export function getImageDataDirectory(): string {
@@ -64,6 +70,22 @@ export class LocalImageStorage implements ImageStorage {
       };
     } catch (error) {
       await this.remove(writtenKeys);
+      throw error;
+    }
+  }
+
+  async saveOptimized(input: SaveOptimizedImageInput): Promise<SavedImage> {
+    const optimizedStorageKey = `uploads/${getDataset()}/optimized/${randomUUID()}.webp`;
+    try {
+      await writeAtomically(resolveStoredImagePath(optimizedStorageKey), input.data);
+      return {
+        optimizedStorageKey,
+        originalStorageKey: null,
+        width: input.width,
+        height: input.height,
+      };
+    } catch (error) {
+      await this.remove([optimizedStorageKey]);
       throw error;
     }
   }

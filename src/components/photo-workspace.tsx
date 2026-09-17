@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { copy } from "@/i18n/zh-CN";
+import { useUploadTasks } from "@/components/upload-task-provider";
 
 export interface WorkspacePhotoView {
   id: string;
@@ -23,48 +24,19 @@ interface DeleteIssue {
 
 export function PhotoWorkspace({ initialPhotos }: { initialPhotos: WorkspacePhotoView[] }) {
   const router = useRouter();
+  const { startUpload } = useUploadTasks();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [photos, setPhotos] = useState(initialPhotos);
+  const [hiddenPhotoIds, setHiddenPhotoIds] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [preserveOriginal, setPreserveOriginal] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState("");
   const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
   const [deleteIssue, setDeleteIssue] = useState<DeleteIssue | null>(null);
 
-  async function upload(files: FileList | null) {
+  const photos = initialPhotos.filter((photo) => !hiddenPhotoIds.has(photo.id));
+
+  function upload(files: FileList | null) {
     if (!files?.length) return;
-    setUploading(true);
-    setError("");
-    const formData = new FormData();
-    Array.from(files).forEach((file) => formData.append("photos", file));
-    formData.set("preserveOriginal", String(preserveOriginal));
-    try {
-      const response = await fetch("/api/photos", { method: "POST", body: formData });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error);
-      const uploaded: WorkspacePhotoView[] = result.photos.map(
-        (photo: {
-          id: string;
-          originalName: string;
-          optimizedStorageKey: string;
-          originalStorageKey: string | null;
-        }) => ({
-          id: photo.id,
-          name: photo.originalName,
-          src: `/media/${photo.optimizedStorageKey}`,
-          hasOriginal: Boolean(photo.originalStorageKey),
-        }),
-      );
-      setPhotos((current) => [...uploaded, ...current]);
-      setSelected(new Set(uploaded.map((photo) => photo.id)));
-      if (inputRef.current) inputRef.current.value = "";
-      router.refresh();
-    } catch {
-      setError(copy.workspace.invalid);
-    } finally {
-      setUploading(false);
-    }
+    startUpload(Array.from(files));
+    if (inputRef.current) inputRef.current.value = "";
   }
 
   function toggle(id: string) {
@@ -77,7 +49,7 @@ export function PhotoWorkspace({ initialPhotos }: { initialPhotos: WorkspacePhot
   }
 
   async function deletePhoto(photo: WorkspacePhotoView) {
-    if (deletingPhotoId || !window.confirm(copy.workspace.deleteConfirm(photo.name))) return;
+    if (deletingPhotoId) return;
     setDeletingPhotoId(photo.id);
     setDeleteIssue(null);
     try {
@@ -96,7 +68,7 @@ export function PhotoWorkspace({ initialPhotos }: { initialPhotos: WorkspacePhot
         setDeleteIssue({ photoId: photo.id });
         return;
       }
-      setPhotos((current) => current.filter((item) => item.id !== photo.id));
+      setHiddenPhotoIds((current) => new Set(current).add(photo.id));
       setSelected((current) => {
         const next = new Set(current);
         next.delete(photo.id);
@@ -115,33 +87,17 @@ export function PhotoWorkspace({ initialPhotos }: { initialPhotos: WorkspacePhot
     <div className="workspace-panel">
       <div className="upload-bar">
         <label className="button-primary">
-          {uploading ? copy.workspace.uploading : copy.workspace.upload}
+          {copy.workspace.upload}
           <input
             ref={inputRef}
             type="file"
             multiple
             accept="image/jpeg,image/png,image/webp"
-            disabled={uploading}
-            onChange={(event) => void upload(event.target.files)}
+            onChange={(event) => upload(event.target.files)}
           />
         </label>
-        <div>
-          <p>{copy.workspace.uploadHint}</p>
-          <label className="check-row">
-            <input
-              type="checkbox"
-              checked={preserveOriginal}
-              onChange={(event) => setPreserveOriginal(event.target.checked)}
-            />
-            {copy.workspace.preserveOriginal}
-          </label>
-        </div>
+        <p>{copy.workspace.uploadHint}</p>
       </div>
-      {error ? (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      ) : null}
       <div className="selection-bar">
         <strong>{copy.workspace.selected(selected.size)}</strong>
         {selected.size > 0 ? (

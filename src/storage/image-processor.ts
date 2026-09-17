@@ -4,6 +4,7 @@ export const supportedImageTypes = new Set(["image/jpeg", "image/png", "image/we
 export const maximumUploadBytes = 20 * 1024 * 1024;
 export const maximumUploadBatchBytes = 100 * 1024 * 1024;
 export const maximumUploadFileCount = 20;
+export const maximumOptimizedDimension = 2560;
 
 export interface OptimizedImage {
   data: Buffer;
@@ -22,6 +23,26 @@ export async function createWebOptimizedImage(data: Buffer): Promise<OptimizedIm
   }
 
   return { data: result.data, width: result.info.width, height: result.info.height };
+}
+
+export async function validateWebOptimizedImage(data: Buffer): Promise<OptimizedImage> {
+  if (data.length === 0 || data.length > maximumUploadBytes) {
+    throw new Error("Invalid optimized image size");
+  }
+  const image = sharp(data, { failOn: "error", limitInputPixels: maximumOptimizedDimension ** 2 });
+  const metadata = await image.metadata();
+  if (
+    metadata.format !== "webp" ||
+    !metadata.width ||
+    !metadata.height ||
+    metadata.width > maximumOptimizedDimension ||
+    metadata.height > maximumOptimizedDimension ||
+    (metadata.pages ?? 1) !== 1
+  ) {
+    throw new Error("Invalid optimized image");
+  }
+  await image.clone().raw().toBuffer();
+  return { data, width: metadata.width, height: metadata.height };
 }
 
 export function extensionForMimeType(mimeType: string): string {

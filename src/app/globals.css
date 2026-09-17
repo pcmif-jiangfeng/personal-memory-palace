@@ -310,7 +310,7 @@ img {
   background: rgba(255, 255, 255, 0.35);
 }
 .upload-bar p {
-  margin: 0 0 0.6rem;
+  margin: 0;
   color: var(--muted);
   font-size: 0.88rem;
 }
@@ -321,6 +321,150 @@ img {
   color: var(--muted);
   font-size: 0.88rem;
   cursor: pointer;
+}
+.upload-task-stack {
+  position: fixed;
+  z-index: 90;
+  right: 1rem;
+  bottom: 1rem;
+  display: grid;
+  width: min(390px, calc(100vw - 2rem));
+  max-height: min(76vh, 680px);
+  gap: 0.65rem;
+  overflow-y: auto;
+}
+.upload-task-card {
+  border: 1px solid rgba(174, 151, 119, 0.42);
+  background: rgba(34, 31, 28, 0.97);
+  color: #f4efe8;
+  box-shadow: 0 18px 44px rgba(20, 17, 14, 0.28);
+  backdrop-filter: blur(14px);
+}
+.upload-task-heading {
+  display: flex;
+  align-items: stretch;
+}
+.upload-task-heading > button:first-child {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-width: 0;
+  padding: 0.72rem 0.9rem 0.58rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.upload-task-heading span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.upload-task-heading strong {
+  color: #cfb38f;
+  white-space: nowrap;
+}
+.upload-task-heading small {
+  color: #a99e92;
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+.upload-task-dismiss {
+  width: 42px;
+  border: 0;
+  background: transparent;
+  color: #d5ccc0;
+  font-size: 1.3rem;
+  cursor: pointer;
+}
+.upload-task-card progress {
+  display: block;
+  width: calc(100% - 2rem);
+  height: 4px;
+  margin: 0 1rem;
+  border: 0;
+  accent-color: #b89367;
+}
+.upload-task-card.is-collapsed progress {
+  margin-bottom: 0.7rem;
+}
+.upload-task-summary {
+  margin: 0;
+  padding: 0.65rem 1rem;
+  color: #bdb3a8;
+  font-size: 0.76rem;
+}
+.upload-task-details {
+  margin-top: 0.7rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+.upload-task-details ul {
+  max-height: 250px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.upload-task-details li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.3rem 0.75rem;
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  font-size: 0.78rem;
+}
+.upload-task-details li > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.upload-task-details li > div {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+.upload-task-details li button,
+.upload-task-actions button,
+.upload-task-actions a {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #cfb38f;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.upload-task-details li button:disabled {
+  color: #8d857c;
+  cursor: wait;
+}
+.upload-task-details li > p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #e1a58e;
+  line-height: 1.45;
+}
+.upload-status {
+  color: #bdb3a8;
+  white-space: nowrap;
+}
+.upload-status.is-success {
+  color: #a8c5ac;
+}
+.upload-status.is-failed,
+.upload-status.is-cancelled {
+  color: #d3a18f;
+}
+.upload-task-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem 1rem;
+  font-size: 0.78rem;
 }
 .selection-bar {
   min-height: 76px;
@@ -1093,13 +1237,17 @@ img {
 }
 .stage-card-menu summary {
   display: block;
-  padding: 0.45rem 0.3rem 0.55rem 0.55rem;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  padding: 0.42rem 0.3rem;
   border: 0;
   background: none;
   color: rgba(255, 255, 255, 0.76);
   cursor: pointer;
-  font: 700 0.92rem/1 sans-serif;
-  letter-spacing: 0.22em;
+  font: 700 0.96rem/1 sans-serif;
+  letter-spacing: 0.06em;
+  text-align: center;
+  text-indent: 0.06em;
   list-style: none;
   text-shadow: 0 1px 0.4rem rgba(20, 16, 13, 0.65);
   transition: color 0.2s ease;
@@ -1801,6 +1949,12 @@ img {
 }
 
 @media (max-width: 760px) {
+  .upload-task-stack {
+    right: 0.65rem;
+    bottom: 0.65rem;
+    width: calc(100vw - 1.3rem);
+    max-height: 68vh;
+  }
   .site-header {
     min-height: auto;
     align-items: stretch;

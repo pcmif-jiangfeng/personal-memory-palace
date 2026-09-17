@@ -1,11 +1,6 @@
 import { NextResponse } from "next/server";
 import { addUploadedPhotos } from "@/data/photo-repository";
-import {
-  maximumUploadBatchBytes,
-  maximumUploadBytes,
-  maximumUploadFileCount,
-  supportedImageTypes,
-} from "@/storage/image-processor";
+import { maximumUploadBytes, validateWebOptimizedImage } from "@/storage/image-processor";
 import { imageStorage } from "@/storage/local-image-storage";
 import { isOwner } from "@/auth";
 import { ownerRequiredResponse } from "@/http/api-error";
@@ -15,8 +10,8 @@ export const runtime = "nodejs";
 export async function POST(request: Request) {
   if (!(await isOwner())) return ownerRequiredResponse();
   const contentLength = Number(request.headers.get("content-length"));
-  if (Number.isFinite(contentLength) && contentLength > maximumUploadBatchBytes + 1024 * 1024) {
-    return NextResponse.json({ error: "UPLOAD_BATCH_TOO_LARGE" }, { status: 413 });
+  if (Number.isFinite(contentLength) && contentLength > maximumUploadBytes + 1024 * 1024) {
+    return NextResponse.json({ error: "OPTIMIZED_IMAGE_TOO_LARGE" }, { status: 413 });
   }
   let formData: FormData;
   try {
@@ -25,44 +20,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "INVALID_FORM_DATA" }, { status: 400 });
   }
   const files = formData.getAll("photos").filter((value): value is File => value instanceof File);
-  const preserveOriginal = formData.get("preserveOriginal") === "true";
-  if (files.length === 0) {
+  if (files.length !== 1) {
     return NextResponse.json({ error: "PHOTOS_REQUIRED" }, { status: 400 });
   }
-  if (
-    files.length > maximumUploadFileCount ||
-    files.reduce((sum, file) => sum + file.size, 0) > maximumUploadBatchBytes
-  ) {
-    return NextResponse.json({ error: "UPLOAD_BATCH_TOO_LARGE" }, { status: 413 });
-  }
-  const invalid = files.find(
-    (file) => !supportedImageTypes.has(file.type) || file.size > maximumUploadBytes,
-  );
-  if (invalid) {
-    return NextResponse.json({ error: "INVALID_IMAGE", file: invalid.name }, { status: 400 });
+  const file = files[0];
+  if (file.size > maximumUploadBytes) {
+    return NextResponse.json({ error: "OPTIMIZED_IMAGE_TOO_LARGE" }, { status: 413 });
   }
 
-  const stored: Array<{
-    originalName: string;
-    mimeType: string;
-    saved: Awaited<ReturnType<typeof imageStorage.save>>;
-  }> = [];
+  let validated: Awaited<ReturnType<typeof validateWebOptimizedImage>>;
   try {
-    for (const file of files) {
-      const saved = await imageStorage.save({
-        data: Buffer.from(await file.arrayBuffer()),
-        originalName: file.name,
-        mimeType: file.type,
-        preserveOriginal,
-      });
-      stored.push({ originalName: file.name, mimeType: file.type, saved });
-    }
-    const photos = addUploadedPhotos(stored);
+    validated = await validateWebOptimizedImage(Buffer.from(await file.arrayBuffer()));
+  } catch {
+    return NextResponse.json({ error: "INVALID_OPTIMIZED_IMAGE" }, { status: 422 });
+  }
+
+  let saved: Awaited<ReturnType<typeof imageStorage.saveOptimized>> | null = null;
+  try {
+    saved = await imageStorage.saveOptimized(validated);
+    const requestedName = formData.get("originalName");
+    const originalName =
+      typeof requestedName === "string" && requestedName.trim()
+        ? requestedName.trim().slice(0, 255)
+        : "未命名照片.webp";
+    const photos = addUploadedPhotos([{ originalName, mimeType: "image/webp", saved }]);
     return NextResponse.json({ photos }, { status: 201 });
   } catch {
-    await imageStorage.remove(
-      stored.flatMap(({ saved }) => [saved.optimizedStorageKey, saved.originalStorageKey]),
-    );
-    return NextResponse.json({ error: "IMAGE_PROCESSING_FAILED" }, { status: 422 });
+    if (saved) await imageStorage.remove([saved.optimizedStorageKey]);
+    return NextResponse.json({ error: "IMAGE_STORAGE_FAILED" }, { status: 500 });
   }
 }

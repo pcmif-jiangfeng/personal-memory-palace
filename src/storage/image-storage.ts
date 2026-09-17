@@ -17,8 +17,15 @@ export interface SavedImage {
   height: number;
 }
 
+export interface SaveOptimizedImageInput {
+  data: Buffer;
+  width: number;
+  height: number;
+}
+
 export interface ImageStorage {
   resolve(key: string): StoredImage;
   save(input: SaveImageInput): Promise<SavedImage>;
+  saveOptimized(input: SaveOptimizedImageInput): Promise<SavedImage>;
   remove(keys: Array<string | null>): Promise<void>;
 }
