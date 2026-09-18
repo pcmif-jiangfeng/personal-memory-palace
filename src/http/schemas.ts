@@ -1,5 +1,7 @@
 import { ApiError } from "./errors.ts";
 import {
+  EXHIBIT_DESCRIPTION_MAX_LENGTH,
+  EXHIBIT_TITLE_MAX_LENGTH,
   LATER_NOTE_MAX_LENGTH,
   MAX_IDENTIFIER_LENGTH,
   MAX_MEMORY_PHOTOS,
@@ -153,6 +155,43 @@ export async function parseMemoryAction(request: Request) {
     return {
       action,
       relatedMemoryIds: stringArray(input, "relatedMemoryIds", { max: MAX_RELATED_MEMORIES }),
+    } as const;
+  }
+  if (action === "addPhotos") {
+    return {
+      action,
+      photoIds: stringArray(input, "photoIds", {
+        required: true,
+        min: 1,
+        max: MAX_MEMORY_PHOTOS,
+      }),
+    } as const;
+  }
+  if (action === "removePhoto" || action === "setCover") {
+    return {
+      action,
+      photoId: stringValue(input, "photoId", {
+        required: true,
+        maxLength: MAX_IDENTIFIER_LENGTH,
+      })!,
+    } as const;
+  }
+  if (action === "reorderPhotos") {
+    return {
+      action,
+      photoIds: stringArray(input, "photoIds", { max: MAX_MEMORY_PHOTOS }),
+    } as const;
+  }
+  if (action === "exhibitMetadata") {
+    return {
+      action,
+      photoId: stringValue(input, "photoId", {
+        required: true,
+        maxLength: MAX_IDENTIFIER_LENGTH,
+      })!,
+      title: stringValue(input, "title", { maxLength: EXHIBIT_TITLE_MAX_LENGTH }) ?? "",
+      description:
+        stringValue(input, "description", { maxLength: EXHIBIT_DESCRIPTION_MAX_LENGTH }) ?? "",
     } as const;
   }
   if (action === "trash" || action === "restore") return { action } as const;

@@ -5,15 +5,24 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { MemoryDetails, MemorySummary, Stage } from "@/domain/models";
 import { copy } from "@/i18n/zh-CN";
+import {
+  MemoryExhibitManager,
+  type ExhibitLibraryPhotoView,
+  type ExhibitPhotoView,
+} from "@/components/memory-exhibit-manager";
 
 export function MemoryManagement({
   memory,
   candidates,
   stages,
+  exhibits,
+  libraryPhotos,
 }: {
   memory: MemoryDetails;
   candidates: MemorySummary[];
   stages: Stage[];
+  exhibits: ExhibitPhotoView[];
+  libraryPhotos: ExhibitLibraryPhotoView[];
 }) {
   const router = useRouter();
   const [title, setTitle] = useState(memory.title);
@@ -108,6 +117,14 @@ export function MemoryManagement({
           </button>
         </form>
       </details>
+
+      <MemoryExhibitManager
+        key={`${memory.id}-${memory.updatedAt}`}
+        memoryId={memory.id}
+        exhibits={exhibits}
+        libraryPhotos={libraryPhotos}
+        stages={stages.map((stage) => ({ id: stage.id, title: stage.title }))}
+      />
 
       {message ? (
         <p className="memory-management-message" role="status">

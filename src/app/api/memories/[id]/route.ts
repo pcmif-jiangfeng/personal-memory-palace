@@ -7,6 +7,13 @@ import {
   updateMemoryDetails,
   updateMemoryRelations,
 } from "@/data/management-repository";
+import {
+  addMemoryPhotos,
+  removeMemoryPhoto,
+  reorderMemoryPhotos,
+  setMemoryCover,
+  updateMemoryExhibitMetadata,
+} from "@/data/memory-exhibit-repository";
 import { isOwner } from "@/auth";
 import { apiErrorResponse, ownerRequiredResponse } from "@/http/api-error";
 import { parseMemoryAction } from "@/http/schemas";
@@ -28,6 +35,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       trashMemory(id);
     } else if (input.action === "restore") {
       restoreMemory(id);
+    } else if (input.action === "addPhotos") {
+      addMemoryPhotos(id, input.photoIds);
+    } else if (input.action === "removePhoto") {
+      removeMemoryPhoto(id, input.photoId);
+    } else if (input.action === "reorderPhotos") {
+      reorderMemoryPhotos(id, input.photoIds);
+    } else if (input.action === "setCover") {
+      setMemoryCover(id, input.photoId);
+    } else if (input.action === "exhibitMetadata") {
+      updateMemoryExhibitMetadata(id, input.photoId, input);
     } else {
       permanentlyDeleteMemory(id);
     }

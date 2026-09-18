@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS memory_images (
   memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
   storage_key TEXT NOT NULL,
   alt_text TEXT NOT NULL DEFAULT '',
+  exhibit_title TEXT NOT NULL DEFAULT '',
+  exhibit_description TEXT NOT NULL DEFAULT '',
   sort_order INTEGER NOT NULL DEFAULT 0,
   is_cover INTEGER NOT NULL DEFAULT 0 CHECK (is_cover IN (0, 1)),
   created_at TEXT NOT NULL
@@ -61,6 +63,9 @@ ON memory_images(memory_id) WHERE is_cover = 1;
 
 CREATE INDEX IF NOT EXISTS memory_images_memory_sort
 ON memory_images(memory_id, sort_order);
+
+CREATE UNIQUE INDEX IF NOT EXISTS memory_images_unique_photo
+ON memory_images(memory_id, storage_key);
 
 CREATE TABLE IF NOT EXISTS memory_relations (
   memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,

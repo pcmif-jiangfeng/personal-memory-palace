@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { MemoryCard } from "@/components/memory-card";
 import { findMemoryDetails, listActiveMemories, listActiveStages } from "@/data/memory-repository";
+import { listWorkspacePhotoCatalog } from "@/data/photo-repository";
 import { copy } from "@/i18n/zh-CN";
 import { imageStorage } from "@/storage/local-image-storage";
 import { MemoryManagement } from "@/components/memory-management";
@@ -26,6 +27,26 @@ export default async function MemoryExhibitionPage({
     id: image.id,
     src: imageStorage.resolve(image.storageKey).publicPath,
     alt: image.altText,
+  }));
+  const stages = listActiveStages();
+  const catalog = listWorkspacePhotoCatalog();
+  const catalogById = new Map(catalog.map((photo) => [photo.id, photo]));
+  const exhibits = memory.images.map((image) => ({
+    photoId: image.photoId,
+    name: catalogById.get(image.photoId)?.originalName ?? copy.exhibits.unnamed,
+    src: imageStorage.resolve(image.storageKey).publicPath,
+    isCover: image.isCover,
+    exhibitTitle: image.exhibitTitle,
+    exhibitDescription: image.exhibitDescription,
+  }));
+  const libraryPhotos = catalog.map((photo) => ({
+    id: photo.id,
+    name: photo.originalName,
+    src: imageStorage.resolve(photo.optimizedStorageKey).publicPath,
+    libraryMember: photo.libraryMember,
+    activeMemoryCount: photo.activeMemoryCount,
+    memoryTitles: photo.memoryTitles,
+    stageIds: photo.stageIds,
   }));
 
   return (
@@ -66,7 +87,10 @@ export default async function MemoryExhibitionPage({
                   imageClassName="exhibition-gallery-image"
                   loading="lazy"
                 />
-                <figcaption>{copy.exhibition.imageNumber(index + 1)}</figcaption>
+                <figcaption>
+                  <strong>{image.exhibitTitle || copy.exhibition.imageNumber(index + 1)}</strong>
+                  {image.exhibitDescription ? <p>{image.exhibitDescription}</p> : null}
+                </figcaption>
               </figure>
             ))}
           </div>
@@ -126,7 +150,9 @@ export default async function MemoryExhibitionPage({
           <MemoryManagement
             memory={memory}
             candidates={listActiveMemories()}
-            stages={listActiveStages()}
+            stages={stages}
+            exhibits={exhibits}
+            libraryPhotos={libraryPhotos}
           />
           <ShareManager memoryId={memory.id} />
         </section>
