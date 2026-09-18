@@ -14,8 +14,11 @@ interface StageRow {
 interface MemoryImageRow {
   id: string;
   memory_id: string;
+  photo_id: string;
   storage_key: string;
   alt_text: string;
+  exhibit_title: string;
+  exhibit_description: string;
   sort_order: number;
   is_cover: number;
   created_at: string;
@@ -184,13 +187,20 @@ export function findMemoryDetails(id: string): MemoryDetails | null {
   if (!memory) return null;
   const database = getDatabase();
   const imageRows = database.prepare(
-    "SELECT * FROM memory_images WHERE memory_id = ? ORDER BY sort_order"
+    `SELECT memory_images.*, uploaded_photos.id AS photo_id
+     FROM memory_images
+     JOIN uploaded_photos ON uploaded_photos.optimized_storage_key = memory_images.storage_key
+     WHERE memory_images.memory_id = ?
+     ORDER BY memory_images.sort_order`,
   ).all(id) as unknown as MemoryImageRow[];
   const images: MemoryImage[] = imageRows.map((row) => ({
     id: row.id,
     memoryId: row.memory_id,
+    photoId: row.photo_id,
     storageKey: row.storage_key,
     altText: row.alt_text,
+    exhibitTitle: row.exhibit_title,
+    exhibitDescription: row.exhibit_description,
     sortOrder: row.sort_order,
     isCover: row.is_cover === 1,
     createdAt: row.created_at,

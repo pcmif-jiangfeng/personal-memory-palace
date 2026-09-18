@@ -37,8 +37,11 @@ export interface Memory {
 export interface MemoryImage {
   id: string;
   memoryId: string;
+  photoId: string;
   storageKey: string;
   altText: string;
+  exhibitTitle: string;
+  exhibitDescription: string;
   sortOrder: number;
   isCover: boolean;
   createdAt: string;

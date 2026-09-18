@@ -171,6 +171,57 @@ test("backfills library membership for a legacy photo already referenced by a Me
   }
 });
 
+test("adds exhibit metadata columns and relation uniqueness to a legacy database", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "memory-palace-exhibit-migrate-"));
+  const databasePath = path.join(directory, "owner.sqlite");
+
+  try {
+    const legacyDatabase = new DatabaseSync(databasePath);
+    legacyDatabase.exec(`
+      CREATE TABLE memory_images (
+        id TEXT PRIMARY KEY,
+        memory_id TEXT NOT NULL,
+        storage_key TEXT NOT NULL,
+        alt_text TEXT NOT NULL DEFAULT '',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        is_cover INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      );
+      INSERT INTO memory_images
+        (id, memory_id, storage_key, alt_text, sort_order, is_cover, created_at)
+      VALUES
+        ('legacy-image', 'legacy-memory', 'optimized/legacy.webp', '', 0, 1,
+         '2026-09-01T00:00:00.000Z');
+    `);
+    legacyDatabase.close();
+
+    const database = initializeDatabase(databasePath, false);
+    const columns = database
+      .prepare("PRAGMA table_info(memory_images)")
+      .all()
+      .map((row) => (row as { name: string }).name);
+    const metadata = database
+      .prepare("SELECT exhibit_title, exhibit_description FROM memory_images WHERE id = ?")
+      .get("legacy-image") as {
+      exhibit_title: string;
+      exhibit_description: string;
+    };
+    const indexNames = database
+      .prepare("PRAGMA index_list(memory_images)")
+      .all()
+      .map((row) => (row as { name: string }).name);
+    database.close();
+
+    assert.ok(columns.includes("exhibit_title"));
+    assert.ok(columns.includes("exhibit_description"));
+    assert.equal(metadata.exhibit_title, "");
+    assert.equal(metadata.exhibit_description, "");
+    assert.ok(indexNames.includes("memory_images_unique_photo"));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("updates Memory title, Original Story and optional Stage without touching its exhibition data", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "memory-palace-edit-"));
   const databasePath = path.join(directory, "owner.sqlite");

@@ -39,6 +39,7 @@ interface QueueEntry {
   batchId: string;
   itemId: string;
   file: File;
+  onPhotoUploaded?: (photoId: string) => void | Promise<void>;
 }
 
 interface ActiveEntry {
@@ -47,7 +48,12 @@ interface ActiveEntry {
 }
 
 interface UploadTaskContextValue {
-  startUpload: (files: File[]) => void;
+  startUpload: (
+    files: File[],
+    options?: {
+      onPhotoUploaded?: (photoId: string) => void | Promise<void>;
+    },
+  ) => void;
 }
 
 const UploadTaskContext = createContext<UploadTaskContextValue | null>(null);
@@ -145,11 +151,21 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
         };
         const photoId = result.photos?.[0]?.id;
         if (response.ok && photoId) {
-          patchItem(entry.batchId, entry.itemId, {
-            status: "success",
-            photoId,
-            cancelRequested: false,
-          });
+          try {
+            await entry.onPhotoUploaded?.(photoId);
+            patchItem(entry.batchId, entry.itemId, {
+              status: "success",
+              photoId,
+              cancelRequested: false,
+            });
+          } catch {
+            patchItem(entry.batchId, entry.itemId, {
+              status: "failed",
+              photoId,
+              error: "照片已上传，但未能加入当前 Memory；可从已有照片库重新选择。",
+              cancelRequested: false,
+            });
+          }
           router.refresh();
         } else if (cancelledRef.current.has(key)) {
           patchItem(entry.batchId, entry.itemId, { status: "cancelled", cancelRequested: false });
@@ -197,7 +213,7 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
   }, [pump]);
 
   const startUpload = useCallback(
-    (files: File[]) => {
+    (files: File[], options?: { onPhotoUploaded?: (photoId: string) => void | Promise<void> }) => {
       if (files.length === 0) return;
       const batchId = crypto.randomUUID();
       const items = files.map<UploadItem>((file, index) => ({
@@ -218,6 +234,7 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
           batchId,
           itemId: item.id,
           file: files[index],
+          onPhotoUploaded: options?.onPhotoUploaded,
         })),
       );
       queueMicrotask(() => pumpRef.current());

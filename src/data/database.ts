@@ -20,11 +20,30 @@ export function getDatabasePath(dataset: Dataset = getDataset()): string {
 export function initializeDatabase(databasePath = getDatabasePath(), seedDemo = getDataset() === "demo"): DatabaseSync {
   const database = new DatabaseSync(databasePath);
   database.exec(schemaSql);
+  ensureMemoryExhibitSchema(database);
   ensurePhotoLibrarySchema(database);
   if (seedDemo) {
     database.exec(demoSeedSql);
   }
   return database;
+}
+
+function ensureMemoryExhibitSchema(database: DatabaseSync): void {
+  const columns = database.prepare("PRAGMA table_info(memory_images)").all() as Array<{
+    name: string;
+  }>;
+  if (!columns.some((column) => column.name === "exhibit_title")) {
+    database.exec("ALTER TABLE memory_images ADD COLUMN exhibit_title TEXT NOT NULL DEFAULT ''");
+  }
+  if (!columns.some((column) => column.name === "exhibit_description")) {
+    database.exec(
+      "ALTER TABLE memory_images ADD COLUMN exhibit_description TEXT NOT NULL DEFAULT ''",
+    );
+  }
+  database.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS memory_images_unique_photo
+    ON memory_images(memory_id, storage_key)
+  `);
 }
 
 function ensurePhotoLibrarySchema(database: DatabaseSync): void {

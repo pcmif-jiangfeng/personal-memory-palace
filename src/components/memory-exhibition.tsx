@@ -62,7 +62,10 @@ export function MemoryExhibition({
                   imageClassName="exhibition-gallery-image"
                   loading="lazy"
                 />
-                <figcaption>{copy.exhibition.imageNumber(index + 1)}</figcaption>
+                <figcaption>
+                  <strong>{image.exhibitTitle || copy.exhibition.imageNumber(index + 1)}</strong>
+                  {image.exhibitDescription ? <p>{image.exhibitDescription}</p> : null}
+                </figcaption>
               </figure>
             ))}
           </div>
