@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  hasExhibitMetadata,
   resolvePhotoSwipeDirection,
   resolvePhotoViewerIndex,
 } from "../src/components/photo-viewer-state.ts";
@@ -28,4 +29,12 @@ test("recognizes deliberate horizontal swipes without stealing vertical gestures
   assert.equal(resolvePhotoSwipeDirection(80, 10, 56), -1);
   assert.equal(resolvePhotoSwipeDirection(30, 5, 56), 0);
   assert.equal(resolvePhotoSwipeDirection(80, 100, 56), 0);
+});
+
+test("renders viewer metadata only when a title or description has content", () => {
+  assert.equal(hasExhibitMetadata({}), false);
+  assert.equal(hasExhibitMetadata({ exhibitTitle: "  ", exhibitDescription: "" }), false);
+  assert.equal(hasExhibitMetadata({ exhibitTitle: "标题" }), true);
+  assert.equal(hasExhibitMetadata({ exhibitDescription: "说明" }), true);
+  assert.equal(hasExhibitMetadata({ exhibitTitle: "标题", exhibitDescription: "说明" }), true);
 });

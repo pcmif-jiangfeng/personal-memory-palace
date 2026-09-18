@@ -1,6 +1,13 @@
 export type IdentifiedPhoto = { id: string };
 export type PhotoNavigationDirection = -1 | 0 | 1;
 
+export function hasExhibitMetadata(photo: {
+  exhibitTitle?: string | null;
+  exhibitDescription?: string | null;
+}): boolean {
+  return Boolean(photo.exhibitTitle?.trim() || photo.exhibitDescription?.trim());
+}
+
 export function resolvePhotoViewerIndex(
   photos: readonly IdentifiedPhoto[],
   requestedPhotoId: string | null | undefined,

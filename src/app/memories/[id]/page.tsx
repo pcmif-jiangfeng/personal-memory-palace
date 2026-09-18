@@ -27,6 +27,8 @@ export default async function MemoryExhibitionPage({
     id: image.id,
     src: imageStorage.resolve(image.storageKey).publicPath,
     alt: image.altText,
+    exhibitTitle: image.exhibitTitle,
+    exhibitDescription: image.exhibitDescription,
   }));
   const stages = listActiveStages();
   const catalog = listWorkspacePhotoCatalog();
@@ -79,7 +81,7 @@ export default async function MemoryExhibitionPage({
             <p>{copy.common.imageCount(memory.images.length)}</p>
           </div>
           <div className="exhibition-gallery">
-            {memory.images.map((image, index) => (
+            {memory.images.map((image) => (
               <figure key={image.id}>
                 <PhotoViewer
                   images={viewerImages}
@@ -87,10 +89,12 @@ export default async function MemoryExhibitionPage({
                   imageClassName="exhibition-gallery-image"
                   loading="lazy"
                 />
-                <figcaption>
-                  <strong>{image.exhibitTitle || copy.exhibition.imageNumber(index + 1)}</strong>
-                  {image.exhibitDescription ? <p>{image.exhibitDescription}</p> : null}
-                </figcaption>
+                {image.exhibitTitle || image.exhibitDescription ? (
+                  <figcaption>
+                    {image.exhibitTitle ? <strong>{image.exhibitTitle}</strong> : null}
+                    {image.exhibitDescription ? <p>{image.exhibitDescription}</p> : null}
+                  </figcaption>
+                ) : null}
               </figure>
             ))}
           </div>

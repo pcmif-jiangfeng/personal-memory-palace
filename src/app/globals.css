@@ -1953,6 +1953,12 @@ img {
   overscroll-behavior: contain;
   cursor: zoom-in;
 }
+.photo-viewer-stage.has-metadata {
+  padding-bottom: clamp(11rem, 30dvh, 18rem);
+}
+.photo-viewer-stage.has-metadata .photo-viewer-image {
+  max-height: 60dvh;
+}
 .photo-viewer-stage.is-draggable {
   cursor: grab;
 }
@@ -2063,6 +2069,35 @@ img {
   letter-spacing: 0.12em;
   transform: translateX(-50%);
   pointer-events: none;
+}
+.photo-viewer-metadata {
+  position: absolute;
+  left: 50%;
+  bottom: max(4.25rem, calc(env(safe-area-inset-bottom) + 3.4rem));
+  z-index: 3;
+  width: min(720px, calc(100vw - 8rem));
+  max-height: min(24dvh, 15rem);
+  overflow-y: auto;
+  padding: 1rem 1.15rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(20, 18, 16, 0.76);
+  color: rgba(255, 255, 255, 0.82);
+  transform: translateX(-50%);
+  backdrop-filter: blur(14px);
+}
+.photo-viewer-metadata h2 {
+  margin: 0;
+  color: #f4efe6;
+  font:
+    400 clamp(1rem, 2vw, 1.3rem) / 1.35 Georgia,
+    "Songti SC",
+    serif;
+}
+.photo-viewer-metadata p {
+  margin: 0.55rem 0 0;
+  font-size: 0.86rem;
+  line-height: 1.7;
+  white-space: pre-wrap;
 }
 .photo-viewer-hint {
   position: absolute;
@@ -2416,9 +2451,21 @@ img {
   .photo-viewer-stage {
     padding: 1rem;
   }
+  .photo-viewer-stage.has-metadata {
+    padding: 1rem 1rem clamp(10.5rem, 33dvh, 15rem);
+  }
   .photo-viewer-image {
     max-width: 92vw;
     max-height: 72dvh;
+  }
+  .photo-viewer-stage.has-metadata .photo-viewer-image {
+    max-height: 54dvh;
+  }
+  .photo-viewer-metadata {
+    bottom: max(3.9rem, calc(env(safe-area-inset-bottom) + 3.2rem));
+    width: calc(100vw - 2rem);
+    max-height: 25dvh;
+    padding: 0.8rem 0.9rem;
   }
   .photo-viewer-navigation {
     width: 42px;
