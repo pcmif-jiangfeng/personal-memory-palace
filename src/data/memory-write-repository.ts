@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { getDatabase } from "./database";
-import { findMemoryById } from "./memory-repository";
-import { withTransaction } from "./transaction";
-import type { MemorySummary } from "@/domain/models";
+import { getDatabase } from "./database.ts";
+import { findMemoryByIdInDatabase } from "./memory-repository.ts";
+import { withTransaction } from "./transaction.ts";
+import type { MemorySummary } from "../domain/models.ts";
 import {
   MAX_MEMORY_PHOTOS,
   MAX_RELATED_MEMORIES,
   MEMORY_STORY_MAX_LENGTH,
   MEMORY_TITLE_MAX_LENGTH,
-} from "@/domain/rules";
+} from "../domain/rules.ts";
 
 export interface CreateMemoryInput {
   title: string;
@@ -22,6 +22,13 @@ export interface CreateMemoryInput {
 interface PhotoKeyRow { id: string; storage_key: string }
 
 export function createMemory(input: CreateMemoryInput): MemorySummary {
+  return createMemoryInDatabase(getDatabase(), input);
+}
+
+export function createMemoryInDatabase(
+  database: ReturnType<typeof getDatabase>,
+  input: CreateMemoryInput,
+): MemorySummary {
   const title = input.title.trim();
   const story = input.story.trim();
   const photoIds = [...new Set(input.photoIds)];
@@ -35,7 +42,6 @@ export function createMemory(input: CreateMemoryInput): MemorySummary {
   if (relatedIds.length > MAX_RELATED_MEMORIES) throw new Error("INVALID_RELATIONS");
   if (!photoIds.includes(input.coverPhotoId)) throw new Error("INVALID_COVER");
 
-  const database = getDatabase();
   const placeholders = photoIds.map(() => "?").join(",");
   const id = randomUUID();
   const now = new Date().toISOString();
@@ -44,7 +50,7 @@ export function createMemory(input: CreateMemoryInput): MemorySummary {
       .prepare(
         `SELECT id, optimized_storage_key AS storage_key
          FROM uploaded_photos
-         WHERE id IN (${placeholders}) AND used_at IS NULL`,
+         WHERE id IN (${placeholders})`,
       )
       .all(...photoIds) as unknown as PhotoKeyRow[];
     if (photos.length !== photoIds.length) throw new Error("INVALID_PHOTOS");
@@ -81,8 +87,12 @@ export function createMemory(input: CreateMemoryInput): MemorySummary {
       (memory_id, related_memory_id, created_at) VALUES (?, ?, ?)`);
     relatedIds.forEach((relatedId) => insertRelation.run(id, relatedId, now));
     database
-      .prepare(`UPDATE uploaded_photos SET used_at = ? WHERE id IN (${placeholders})`)
+      .prepare(
+        `UPDATE uploaded_photos
+         SET used_at = COALESCE(used_at, ?)
+         WHERE id IN (${placeholders})`,
+      )
       .run(now, ...photoIds);
   });
-  return findMemoryById(id)!;
+  return findMemoryByIdInDatabase(database, id)!;
 }

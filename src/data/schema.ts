@@ -45,7 +45,8 @@ CREATE TABLE IF NOT EXISTS uploaded_photos (
   width INTEGER NOT NULL,
   height INTEGER NOT NULL,
   created_at TEXT NOT NULL,
-  used_at TEXT
+  used_at TEXT,
+  library_archived_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS photo_deletion_jobs (
