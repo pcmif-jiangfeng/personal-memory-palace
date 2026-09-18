@@ -20,10 +20,38 @@ export function getDatabasePath(dataset: Dataset = getDataset()): string {
 export function initializeDatabase(databasePath = getDatabasePath(), seedDemo = getDataset() === "demo"): DatabaseSync {
   const database = new DatabaseSync(databasePath);
   database.exec(schemaSql);
+  ensurePhotoLibrarySchema(database);
   if (seedDemo) {
     database.exec(demoSeedSql);
   }
   return database;
+}
+
+function ensurePhotoLibrarySchema(database: DatabaseSync): void {
+  const columns = database.prepare("PRAGMA table_info(uploaded_photos)").all() as Array<{
+    name: string;
+  }>;
+  if (!columns.some((column) => column.name === "library_archived_at")) {
+    database.exec("ALTER TABLE uploaded_photos ADD COLUMN library_archived_at TEXT");
+  }
+  database.exec(`
+    UPDATE uploaded_photos
+    SET used_at = (
+      SELECT MIN(memory_images.created_at)
+      FROM memory_images
+      WHERE memory_images.storage_key = uploaded_photos.optimized_storage_key
+    )
+    WHERE used_at IS NULL
+      AND EXISTS (
+        SELECT 1
+        FROM memory_images
+        WHERE memory_images.storage_key = uploaded_photos.optimized_storage_key
+      )
+  `);
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS uploaded_photos_library
+    ON uploaded_photos(used_at, library_archived_at, created_at DESC)
+  `);
 }
 
 let database: DatabaseSync | undefined;

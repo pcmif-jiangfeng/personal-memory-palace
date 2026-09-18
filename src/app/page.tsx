@@ -1,6 +1,7 @@
 import { MemoryCard } from "@/components/memory-card";
 import { PageIntro } from "@/components/page-intro";
 import { StageCard } from "@/components/stage-card";
+import { StageCarousel } from "@/components/stage-carousel";
 import { getDataset } from "@/data/database";
 import { listActiveMemories, listStageShelfItems } from "@/data/memory-repository";
 import { copy } from "@/i18n/zh-CN";
@@ -61,11 +62,11 @@ export default async function LifeGalleryPage() {
           </div>
           <p>{copy.gallery.stagesIntro}</p>
         </header>
-        <div className="stage-shelf">
+        <StageCarousel itemCount={stages.length}>
           {stages.map((stage, index) => (
             <StageCard key={stage.id} stage={stage} index={index} />
           ))}
-        </div>
+        </StageCarousel>
       </section>
       <section className="section-shell collection-section">
         <header className="section-heading">

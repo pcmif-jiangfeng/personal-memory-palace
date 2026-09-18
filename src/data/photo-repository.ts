@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { getDatabase } from "./database";
-import type { UploadedPhoto } from "@/domain/models";
-import type { SavedImage } from "@/storage/image-storage";
-import { withTransaction } from "./transaction";
+import { getDatabase } from "./database.ts";
+import type { UploadedPhoto } from "../domain/models.ts";
+import type { SavedImage } from "../storage/image-storage.ts";
+import { withTransaction } from "./transaction.ts";
+import { ApiError } from "../http/errors.ts";
 
 interface PhotoRow {
   id: string;
@@ -14,6 +15,21 @@ interface PhotoRow {
   height: number;
   created_at: string;
   used_at: string | null;
+  library_archived_at: string | null;
+}
+
+interface PhotoReferenceRow {
+  photo_id: string;
+  memory_id: string;
+  memory_title: string;
+  stage_id: string | null;
+}
+
+export interface WorkspacePhoto extends UploadedPhoto {
+  libraryMember: boolean;
+  activeMemoryCount: number;
+  memoryTitles: string[];
+  stageIds: string[];
 }
 
 function mapPhoto(row: PhotoRow): UploadedPhoto {
@@ -27,6 +43,7 @@ function mapPhoto(row: PhotoRow): UploadedPhoto {
     height: row.height,
     createdAt: row.created_at,
     usedAt: row.used_at,
+    libraryArchivedAt: row.library_archived_at,
   };
 }
 
@@ -46,7 +63,8 @@ export function addUploadedPhotos(
         item.saved.originalStorageKey, item.saved.width, item.saved.height, createdAt);
       photos.push({ id, originalName: item.originalName, mimeType: item.mimeType,
         optimizedStorageKey: item.saved.optimizedStorageKey, originalStorageKey: item.saved.originalStorageKey,
-        width: item.saved.width, height: item.saved.height, createdAt, usedAt: null });
+        width: item.saved.width, height: item.saved.height, createdAt, usedAt: null,
+        libraryArchivedAt: null });
     }
   });
   return photos;
@@ -54,7 +72,9 @@ export function addUploadedPhotos(
 
 export function listWorkspacePhotos(): UploadedPhoto[] {
   const rows = getDatabase().prepare(
-    "SELECT * FROM uploaded_photos WHERE used_at IS NULL ORDER BY created_at DESC"
+    `SELECT * FROM uploaded_photos
+     WHERE used_at IS NULL AND library_archived_at IS NULL
+     ORDER BY created_at DESC`
   ).all() as unknown as PhotoRow[];
   return rows.map(mapPhoto);
 }
@@ -64,4 +84,91 @@ export function listAllUploadedPhotos(): UploadedPhoto[] {
     "SELECT * FROM uploaded_photos ORDER BY created_at DESC"
   ).all() as unknown as PhotoRow[];
   return rows.map(mapPhoto);
+}
+
+export function listUploadedPhotosByIds(ids: string[]): UploadedPhoto[] {
+  const uniqueIds = [...new Set(ids)];
+  if (uniqueIds.length === 0) return [];
+  const placeholders = uniqueIds.map(() => "?").join(",");
+  const rows = getDatabase()
+    .prepare(`SELECT * FROM uploaded_photos WHERE id IN (${placeholders})`)
+    .all(...uniqueIds) as unknown as PhotoRow[];
+  const photosById = new Map(rows.map((row) => [row.id, mapPhoto(row)]));
+  return uniqueIds.flatMap((id) => {
+    const photo = photosById.get(id);
+    return photo ? [photo] : [];
+  });
+}
+
+export function listWorkspacePhotoCatalog(): WorkspacePhoto[] {
+  return listWorkspacePhotoCatalogInDatabase(getDatabase());
+}
+
+export function listWorkspacePhotoCatalogInDatabase(
+  database: ReturnType<typeof getDatabase>,
+): WorkspacePhoto[] {
+  const photos = database
+    .prepare("SELECT * FROM uploaded_photos ORDER BY created_at DESC")
+    .all() as unknown as PhotoRow[];
+  const references = database
+    .prepare(
+      `SELECT uploaded_photos.id AS photo_id,
+              memories.id AS memory_id,
+              memories.title AS memory_title,
+              memories.stage_id
+       FROM uploaded_photos
+       JOIN memory_images
+         ON memory_images.storage_key = uploaded_photos.optimized_storage_key
+       JOIN memories
+         ON memories.id = memory_images.memory_id
+        AND memories.trashed_at IS NULL`,
+    )
+    .all() as unknown as PhotoReferenceRow[];
+  const referencesByPhoto = new Map<
+    string,
+    { memoryIds: Set<string>; memoryTitles: Set<string>; stageIds: Set<string> }
+  >();
+  for (const reference of references) {
+    const current = referencesByPhoto.get(reference.photo_id) ?? {
+      memoryIds: new Set<string>(),
+      memoryTitles: new Set<string>(),
+      stageIds: new Set<string>(),
+    };
+    current.memoryIds.add(reference.memory_id);
+    current.memoryTitles.add(reference.memory_title);
+    if (reference.stage_id) current.stageIds.add(reference.stage_id);
+    referencesByPhoto.set(reference.photo_id, current);
+  }
+  return photos.map((row) => {
+    const photo = mapPhoto(row);
+    const reference = referencesByPhoto.get(photo.id);
+    return {
+      ...photo,
+      libraryMember: Boolean(
+        photo.usedAt || photo.libraryArchivedAt || (reference?.memoryIds.size ?? 0) > 0,
+      ),
+      activeMemoryCount: reference?.memoryIds.size ?? 0,
+      memoryTitles: [...(reference?.memoryTitles ?? [])],
+      stageIds: [...(reference?.stageIds ?? [])],
+    };
+  });
+}
+
+export function archiveUploadedPhoto(photoId: string): { archived: true } {
+  return archiveUploadedPhotoInDatabase(getDatabase(), photoId);
+}
+
+export function archiveUploadedPhotoInDatabase(
+  database: ReturnType<typeof getDatabase>,
+  photoId: string,
+): { archived: true } {
+  const result = database
+    .prepare(
+      `UPDATE uploaded_photos
+       SET library_archived_at = COALESCE(library_archived_at, ?)
+       WHERE id = ?`,
+    )
+    .run(new Date().toISOString(), photoId);
+  if (result.changes === 0) throw new ApiError("PHOTO_NOT_FOUND", 404);
+  return { archived: true };
 }

@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { DatabaseSync } from "node:sqlite";
 import { initializeDatabase } from "../src/data/database.ts";
 import { updateMemoryDetailsInDatabase } from "../src/data/management-repository.ts";
 
@@ -71,6 +72,100 @@ test("owner database starts without demo records", () => {
     };
     database.close();
     assert.equal(memoryCount.count, 0);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("adds photo library membership to an existing owner database without losing photos", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "memory-palace-migrate-"));
+  const databasePath = path.join(directory, "owner.sqlite");
+
+  try {
+    const legacyDatabase = new DatabaseSync(databasePath);
+    legacyDatabase.exec(`
+      CREATE TABLE uploaded_photos (
+        id TEXT PRIMARY KEY,
+        original_name TEXT NOT NULL,
+        mime_type TEXT NOT NULL,
+        optimized_storage_key TEXT NOT NULL UNIQUE,
+        original_storage_key TEXT,
+        width INTEGER NOT NULL,
+        height INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        used_at TEXT
+      );
+      INSERT INTO uploaded_photos
+        (id, original_name, mime_type, optimized_storage_key, width, height, created_at)
+      VALUES
+        ('legacy-photo', 'legacy.jpg', 'image/jpeg', 'optimized/legacy.webp', 1200, 800,
+         '2026-09-01T00:00:00.000Z');
+    `);
+    legacyDatabase.close();
+
+    const database = initializeDatabase(databasePath, false);
+    const columns = database
+      .prepare("PRAGMA table_info(uploaded_photos)")
+      .all()
+      .map((row) => (row as { name: string }).name);
+    const photo = database
+      .prepare("SELECT id, library_archived_at FROM uploaded_photos WHERE id = ?")
+      .get("legacy-photo") as { id: string; library_archived_at: string | null };
+    database.close();
+
+    assert.ok(columns.includes("library_archived_at"));
+    assert.equal(photo.id, "legacy-photo");
+    assert.equal(photo.library_archived_at, null);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("backfills library membership for a legacy photo already referenced by a Memory", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "memory-palace-membership-"));
+  const databasePath = path.join(directory, "owner.sqlite");
+  const createdAt = "2026-09-01T00:00:00.000Z";
+
+  try {
+    const original = initializeDatabase(databasePath, false);
+    original
+      .prepare(
+        `
+        INSERT INTO uploaded_photos
+          (id, original_name, mime_type, optimized_storage_key, original_storage_key,
+           width, height, created_at, used_at)
+        VALUES ('legacy-used', 'legacy.jpg', 'image/jpeg', 'optimized/legacy-used.webp',
+                NULL, 1200, 800, ?, NULL)
+      `,
+      )
+      .run(createdAt);
+    original
+      .prepare(
+        `
+        INSERT INTO memories
+          (id, stage_id, title, story, visibility, created_at, updated_at)
+        VALUES ('legacy-memory', NULL, '旧 Memory', 'Story', 'private', ?, ?)
+      `,
+      )
+      .run(createdAt, createdAt);
+    original
+      .prepare(
+        `
+        INSERT INTO memory_images
+          (id, memory_id, storage_key, alt_text, sort_order, is_cover, created_at)
+        VALUES ('legacy-image', 'legacy-memory', 'optimized/legacy-used.webp', '', 0, 1, ?)
+      `,
+      )
+      .run(createdAt);
+    original.close();
+
+    const migrated = initializeDatabase(databasePath, false);
+    const photo = migrated
+      .prepare("SELECT used_at FROM uploaded_photos WHERE id = ?")
+      .get("legacy-used") as { used_at: string };
+    migrated.close();
+
+    assert.equal(photo.used_at, createdAt);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

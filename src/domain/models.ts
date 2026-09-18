@@ -20,6 +20,7 @@ export interface UploadedPhoto {
   height: number;
   createdAt: string;
   usedAt: string | null;
+  libraryArchivedAt: string | null;
 }
 
 export interface Memory {

@@ -473,6 +473,54 @@ img {
   justify-content: space-between;
   gap: 1rem;
 }
+.workspace-source-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+  border-bottom: 1px solid var(--line);
+}
+.workspace-source-tabs button {
+  padding: 0.85rem 1rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.workspace-source-tabs button.is-active {
+  border-bottom-color: var(--accent);
+  color: var(--ink);
+}
+.workspace-source-tabs span {
+  margin-left: 0.4rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.workspace-filters {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.75fr) minmax(240px, 1.5fr) minmax(180px, 1fr);
+  gap: 1rem;
+  margin-top: 1.25rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.35);
+}
+.workspace-filters label {
+  display: grid;
+  gap: 0.45rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.workspace-filters input,
+.workspace-filters select {
+  min-width: 0;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ink);
+  font: inherit;
+}
 .photo-grid,
 .editor-photo-grid,
 .exhibition-gallery {
@@ -508,12 +556,27 @@ img {
   aspect-ratio: 1;
   object-fit: cover;
 }
-.photo-tile span {
+.photo-tile-image {
+  position: relative;
+}
+.photo-tile-name {
   display: block;
   padding: 0.65rem 0.7rem 0.25rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.photo-library-status {
+  position: absolute;
+  left: 0.55rem;
+  bottom: 0.55rem;
+  padding: 0.32rem 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 999px;
+  background: rgba(38, 35, 31, 0.72);
+  color: #fff;
+  font-size: 0.66rem;
+  backdrop-filter: blur(8px);
 }
 .photo-tile small {
   display: block;
@@ -545,6 +608,39 @@ img {
 .photo-tile-delete:disabled {
   cursor: wait;
   opacity: 0.6;
+}
+.photo-tile-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.15rem 0.7rem 0.7rem;
+}
+.photo-tile-footer button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.photo-tile-footer button:disabled {
+  color: var(--muted);
+  cursor: wait;
+}
+.photo-tile-footer small {
+  padding: 0;
+  color: #6f382f;
+}
+.workspace-load-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 .photo-delete-issue {
   padding: 0.7rem;
@@ -1196,30 +1292,98 @@ img {
 .stage-gallery .section-heading > p {
   color: rgba(242, 237, 228, 0.6);
 }
-.stage-shelf {
+.stage-carousel {
+  --stage-card-width: 330px;
+  --stage-card-gap: clamp(1.25rem, 3vw, 2.6rem);
+  --stage-shelf-padding: 1rem;
   position: relative;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: clamp(1.25rem, 3vw, 2.6rem);
-  padding: 0 1rem 2.6rem;
 }
-.stage-shelf::after {
+.stage-carousel::after {
   content: "";
   position: absolute;
-  left: 0;
+  z-index: 0;
   right: 0;
   bottom: 0;
+  left: 0;
   height: 1.55rem;
   background: linear-gradient(#8e6d4c, #4c3828);
   box-shadow: 0 0.75rem 1.4rem rgba(0, 0, 0, 0.35);
 }
+.stage-shelf {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: var(--stage-card-gap);
+  padding: 0 var(--stage-shelf-padding) 2.6rem;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scroll-behavior: smooth;
+  scroll-padding-inline: var(--stage-shelf-padding);
+  scroll-snap-type: x mandatory;
+  scrollbar-color: rgba(199, 166, 121, 0.65) rgba(255, 255, 255, 0.08);
+  scrollbar-width: thin;
+  touch-action: pan-x pan-y;
+}
+.stage-shelf.is-scrollable::after {
+  content: "";
+  flex: 0 0 max(0px, calc(100% - var(--stage-card-width) - var(--stage-card-gap)));
+}
 .stage-volume {
   position: relative;
-  min-width: 0;
+  flex: 0 0 var(--stage-card-width);
+  width: var(--stage-card-width);
   height: 390px;
   display: flex;
   align-items: end;
   perspective: 1000px;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+.stage-carousel-controls {
+  position: absolute;
+  z-index: 6;
+  inset: 0;
+  pointer-events: none;
+}
+.stage-carousel-control {
+  position: absolute;
+  top: 50%;
+  width: 2.75rem;
+  height: 3.6rem;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 0.25rem;
+  background: rgba(27, 23, 20, 0.78);
+  color: #f2ede4;
+  cursor: pointer;
+  font:
+    1.3rem/1 Georgia,
+    serif;
+  pointer-events: auto;
+  transform: translateY(-50%);
+  backdrop-filter: blur(8px);
+  transition:
+    background 0.2s ease,
+    opacity 0.2s ease;
+}
+.stage-carousel-control:hover:not(:disabled) {
+  background: rgba(126, 93, 63, 0.94);
+}
+.stage-carousel-control:focus-visible {
+  outline: 2px solid #d7b98d;
+  outline-offset: 0.18rem;
+}
+.stage-carousel-control:disabled {
+  cursor: default;
+  opacity: 0.24;
+}
+.stage-carousel-previous {
+  left: 0.3rem;
+}
+.stage-carousel-next {
+  right: 0.3rem;
 }
 .stage-book-shell {
   position: relative;
@@ -1992,6 +2156,15 @@ img {
     align-items: flex-start;
     flex-direction: column;
   }
+  .workspace-source-tabs {
+    overflow-x: auto;
+  }
+  .workspace-source-tabs button {
+    white-space: nowrap;
+  }
+  .workspace-filters {
+    grid-template-columns: 1fr;
+  }
   .stage-cover-status {
     grid-template-columns: 1fr;
     gap: 0.25rem;
@@ -2036,10 +2209,15 @@ img {
     width: 94vw;
     padding: 3rem 1rem;
   }
+  .stage-carousel {
+    --stage-card-width: 280px;
+    --stage-card-gap: 1rem;
+    --stage-shelf-padding: 0.3rem;
+  }
   .stage-shelf {
-    grid-template-columns: 1fr;
-    gap: 2rem;
-    padding-inline: 0.3rem;
+    gap: var(--stage-card-gap);
+    padding-inline: var(--stage-shelf-padding);
+    scroll-padding-inline: var(--stage-shelf-padding);
   }
   .stage-volume {
     height: 370px;
@@ -2132,14 +2310,11 @@ img {
 }
 
 @media (min-width: 761px) and (max-width: 1050px) {
-  .stage-shelf,
   .memory-grid {
     grid-template-columns: repeat(2, 1fr);
   }
-  .stage-volume:last-child {
-    grid-column: 1 / -1;
-    width: calc(50% - 1rem);
-    justify-self: center;
+  .stage-carousel {
+    --stage-card-width: 300px;
   }
 }
 

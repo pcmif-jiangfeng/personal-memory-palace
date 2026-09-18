@@ -8,7 +8,7 @@ export function StageCard({ stage, index }: { stage: StageShelfItem; index: numb
   const coverKey = stage.coverKey ?? stage.previewImageKeys[0] ?? null;
   const coverPath = coverKey ? imageStorage.resolve(coverKey).publicPath : null;
   return (
-    <article className={`stage-volume stage-tone-${index % 3}`}>
+    <article className={`stage-volume stage-tone-${index % 3}`} data-stage-card>
       <div className="stage-preview-stack" aria-hidden="true">
         {stage.previewImageKeys.map((key, previewIndex) => (
           <div className={`stage-preview stage-preview-${previewIndex + 1}`} key={key}>

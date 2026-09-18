@@ -157,7 +157,14 @@ export function listTrashedStages(): Stage[] {
 }
 
 export function findMemoryById(id: string): MemorySummary | null {
-  const row = getDatabase().prepare(
+  return findMemoryByIdInDatabase(getDatabase(), id);
+}
+
+export function findMemoryByIdInDatabase(
+  database: ReturnType<typeof getDatabase>,
+  id: string,
+): MemorySummary | null {
+  const row = database.prepare(
     `${summarySql} WHERE memories.id = ? GROUP BY memories.id`
   ).get(id) as unknown as MemorySummaryRow | undefined;
   return row ? mapMemory(row) : null;
