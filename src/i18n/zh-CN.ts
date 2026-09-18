@@ -7,6 +7,14 @@ export const copy = {
     search: "搜索",
     trash: "回收站",
   },
+  recall: {
+    button: "随机回忆",
+    spinning: "正在翻阅…",
+    emptyTitle: "这里还没有可以遇见的过去。",
+    emptyDescription: "先收藏第一段 Memory，时间齿轮就会从你的经历中随机翻开一页。",
+    createFirst: "创建第一段 Memory",
+    failed: "时间齿轮暂时没有转动起来，请稍后重试。",
+  },
   common: {
     demo: "演示数据",
     imageCount: (count: number) => `${count} 张照片`,

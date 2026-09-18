@@ -145,7 +145,17 @@ export function searchActiveMemories(query: string): MemorySummary[] {
 }
 
 export function findRandomActiveMemory(): MemorySummary | null {
-  const row = getDatabase().prepare(`${summarySql} WHERE memories.trashed_at IS NULL GROUP BY memories.id ORDER BY RANDOM() LIMIT 1`).get() as unknown as MemorySummaryRow | undefined;
+  return findRandomActiveMemoryInDatabase(getDatabase());
+}
+
+export function findRandomActiveMemoryInDatabase(
+  database: ReturnType<typeof getDatabase>,
+): MemorySummary | null {
+  const row = database
+    .prepare(
+      `${summarySql} WHERE memories.trashed_at IS NULL GROUP BY memories.id ORDER BY RANDOM() LIMIT 1`,
+    )
+    .get() as unknown as MemorySummaryRow | undefined;
   return row ? mapMemory(row) : null;
 }
 

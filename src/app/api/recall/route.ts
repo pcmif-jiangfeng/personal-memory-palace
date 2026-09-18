@@ -8,5 +8,5 @@ export const runtime = "nodejs";
 export async function GET() {
   if (!(await isOwner())) return ownerRequiredResponse();
   const memory = findRandomActiveMemory();
-  return NextResponse.json({ memory }, { status: memory ? 200 : 404 });
+  return NextResponse.json({ memory });
 }
