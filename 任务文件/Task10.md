@@ -483,6 +483,1447 @@ Workspace 是**创建/编辑 Memory 时统一选择照片的工作台**。它同
 完成数据、查询和交互测试及完成报告后停止，等待用户人工验收。不得开始 Task 10G。
 
 ---
+# Task 10J — Memory 创建后的展品管理
+
+> 项目：Personal Memory Palace（个人记忆宫殿 / 人生长廊）  
+> 本文档作为 Task 10 的独立子任务使用。  
+> **本次只执行 Task 10J。完成后必须停止并等待人工验收，不得自动开始其他 Task。**
+
+---
+
+## 1. 背景
+
+当前 Memory 在创建时可以选择照片组成一段记忆，但创建完成后，照片集合的后续编辑能力不完整。
+
+这会导致：
+
+- 后来找到更合适的照片时无法继续加入；
+- 已经加入但不再合适的照片无法安全移除；
+- 展品顺序难以重新整理；
+- Memory Cover 难以重新选择；
+- 单个展品的标题与说明无法继续维护。
+
+Personal Memory Palace 的 Memory 不应是“一次创建后冻结”的内容，而应允许 Owner 随着时间继续整理。
+
+核心目标：
+
+> **Memory 创建后，仍然可以像重新布置一个展览一样，对其中的展品进行增加、移除、排序、换封面和信息编辑。**
+
+---
+
+## 2. 核心产品语义
+
+系统中的对象关系应继续遵循：
+
+```text
+Memory = 一场小型展览
+Photo = 一份图片资产
+Memory ↔ Photo = 某张图片在这个 Memory 中作为一件展品
+```
+
+因此必须严格区分：
+
+```text
+从 Memory 中移除一张照片
+```
+
+与：
+
+```text
+物理删除一份 Photo 资产
+```
+
+两者不是同一个操作。
+
+---
+
+## 3. 本 Task 的目标
+
+已创建的 Memory 必须允许 Owner：
+
+1. 添加新的展品照片；
+2. 从当前 Memory 中移除展品照片；
+3. 调整展品展示顺序；
+4. 重新选择 Memory Cover；
+5. 编辑单个展品的标题和说明；
+6. 从 Existing Photo Library 复用已有照片；
+7. 新上传照片后直接加入当前 Memory；
+8. 在不影响其他 Memory 的情况下修改当前 Memory 的展品关系。
+
+---
+
+## 4. 本 Task 不负责的内容
+
+Task 10J 不应：
+
+- 重做全局照片上传系统；
+- 重做 Existing Photo Library；
+- 重做 Task 10C 的物理删除机制；
+- 重做 Stage；
+- 重做 Viewer；
+- 重写整个 Memory 页面；
+- 增加 AI 分类；
+- 增加 EXIF 自动推断；
+- 做与本任务无关的大规模数据库重构。
+
+应优先复用 Task 10C / 10E / 10F / 10H 已建立的能力。
+
+---
+
+# 5. Memory 编辑入口
+
+已创建的 Memory 页面必须有清晰的：
+
+```text
+编辑 Memory
+```
+
+或现有等价入口。
+
+如果项目当前已经存在 Memory Editor：
+
+> 优先扩展现有页面，不创建第二套重复编辑系统。
+
+编辑状态中应同时可以管理：
+
+```text
+Memory 基础信息
++
+Memory 中的展品照片
+```
+
+---
+
+# 6. 增加照片
+
+## 6.1 两种来源
+
+为已有 Memory 添加照片时，必须支持：
+
+```text
+A. 新上传照片
+B. Existing Photo Library
+```
+
+与创建 Memory 时的照片选择逻辑保持一致。
+
+---
+
+## 6.2 新上传照片
+
+正确流程：
+
+```text
+编辑已有 Memory
+↓
+添加照片
+↓
+选择本地图片
+↓
+走现有上传 / 压缩流程
+↓
+上传成功
+↓
+加入当前 Memory
+```
+
+必须复用 Task 10E 的统一上传机制。
+
+禁止为了 Memory 编辑再实现第二套上传流程。
+
+---
+
+## 6.3 Existing Photo Library
+
+允许用户：
+
+```text
+打开 Existing Photo Library
+↓
+选择一张或多张照片
+↓
+加入当前 Memory
+```
+
+复用 Task 10F 已定义的：
+
+- 状态；
+- 搜索；
+- Stage 筛选；
+- 图片复用逻辑。
+
+---
+
+## 6.4 同一 Photo 可以被多个 Memory 复用
+
+例如：
+
+```text
+Photo A
+├── Memory A
+├── Memory B
+└── Memory C
+```
+
+将已有 Photo 加入另一个 Memory 时：
+
+必须：
+
+```text
+复用现有 Photo
++
+创建 Memory ↔ Photo relation
+```
+
+禁止：
+
+```text
+复制物理图片文件
++
+创建重复 Photo 记录
+```
+
+---
+
+# 7. 从 Memory 中移除照片
+
+## 7.1 默认行为
+
+用户点击：
+
+```text
+从当前 Memory 移除
+```
+
+时，只解除：
+
+```text
+当前 Memory ↔ 当前 Photo
+```
+
+的关系。
+
+---
+
+## 7.2 绝对禁止直接物理删除
+
+```text
+Remove from Memory
+≠
+Delete Photo Asset
+```
+
+因此禁止因为从 Memory 中移除照片就：
+
+- 删除 Photo 数据库记录；
+- 删除服务器上的图片文件；
+- 影响其他 Memory 对这张照片的使用。
+
+---
+
+# 8. 移除后的照片去向
+
+这是 Task 10J 的核心状态规则。
+
+---
+
+## 8.1 如果仍被其他 Memory 使用
+
+例如：
+
+```text
+Photo A
+├── Memory A
+└── Memory B
+```
+
+从 Memory A 中移除后：
+
+```text
+Photo A
+└── Memory B
+```
+
+结果：
+
+- Photo A 继续存在；
+- Memory B 完全不受影响；
+- Existing Photo Library 状态仍为“已用于 Memory”。
+
+---
+
+## 8.2 如果从最后一个 Memory 中移除
+
+例如：
+
+```text
+Photo A
+└── Memory A
+```
+
+从 Memory A 移除后：
+
+```text
+Memory refs = 0
+```
+
+系统不得自动物理删除。
+
+必须保持这张照片**原本的归档状态**。
+
+---
+
+## 8.3 原本已在 Existing Photo Library
+
+如果 Photo 原本已经被用户主动归档，或此前已处于 Existing Photo Library：
+
+从最后一个 Memory 中移除后：
+
+```text
+继续保留在 Existing Photo Library
+状态 = 未用于 Memory
+```
+
+---
+
+## 8.4 原本只是 Workspace / 待整理照片
+
+如果照片原本没有主动归档，只是在 Workspace 中后来被加入某个 Memory：
+
+当它从最后一个 Memory 中被移除后：
+
+```text
+回到 / 保持 Workspace / 待整理状态
+```
+
+不得自动把它加入 Existing Photo Library。
+
+---
+
+## 8.5 核心原则
+
+> **从 Memory 移除照片，不应偷偷改变用户原本对这张照片的归档决定。**
+
+即：
+
+```text
+原本归档 → 继续归档
+原本未归档 → 回到待整理
+```
+
+---
+
+# 9. 物理删除继续统一走 Task 10C
+
+如果用户真正希望：
+
+```text
+永久删除 Photo
+```
+
+必须进入 Task 10C 的统一安全删除逻辑。
+
+删除前继续检查至少：
+
+- Memory references；
+- Memory Cover；
+- Stage Cover；
+- 其他业务引用。
+
+只有：
+
+```text
+0 references
+```
+
+时，才允许真正物理删除。
+
+Task 10J 不允许增加任何绕过 Task 10C 的“快捷永久删除”。
+
+---
+
+# 10. 调整展品顺序
+
+## 10.1 已创建 Memory 必须可重新排序
+
+例如：
+
+```text
+原顺序：
+A → B → C → D
+```
+
+用户可以改为：
+
+```text
+C → A → D → B
+```
+
+保存后：
+
+Memory 展示顺序必须同步更新。
+
+---
+
+## 10.2 顺序必须持久化
+
+刷新页面、重新进入 Memory 后：
+
+顺序仍保持为用户最后保存的结果。
+
+---
+
+## 10.3 数据归属
+
+排序信息必须属于：
+
+```text
+Memory ↔ Photo relation
+```
+
+例如：
+
+```text
+position
+sortOrder
+displayOrder
+```
+
+具体字段名按当前项目命名规范决定。
+
+禁止通过：
+
+```text
+Photo.createdAt
+```
+
+等全局 Photo 属性推断某个 Memory 内的展品顺序。
+
+---
+
+## 10.4 UI
+
+优先使用当前项目中成熟、简单的方式，例如：
+
+- Drag & Drop；
+- 上移 / 下移；
+- 左移 / 右移。
+
+必须兼顾：
+
+- Desktop；
+- Mobile；
+- Touch。
+
+不要为了排序引入复杂的大型编辑器。
+
+---
+
+# 11. Memory Cover 重新选择
+
+Memory 创建后：
+
+Owner 必须能够重新设置：
+
+```text
+Memory Cover
+```
+
+---
+
+## 11.1 Cover 候选范围
+
+Cover 必须从：
+
+```text
+当前 Memory 中的照片
+```
+
+选择。
+
+禁止让 Memory Cover 指向已经不属于该 Memory 的 Photo。
+
+---
+
+## 11.2 更换 Cover
+
+例如：
+
+```text
+Memory Photos:
+A B C
+
+Current Cover = A
+```
+
+用户应能够改为：
+
+```text
+Cover = C
+```
+
+保存后刷新仍为 C。
+
+---
+
+# 12. 移除当前 Cover 的边界处理
+
+如果：
+
+```text
+Memory Photos:
+A B C
+
+Cover = A
+```
+
+用户准备从 Memory 中移除 A：
+
+系统必须知道：
+
+> A 当前是 Cover。
+
+---
+
+## 12.1 推荐行为
+
+流程可以为：
+
+```text
+移除 A
+↓
+提示“该照片当前是 Memory 封面”
+↓
+用户确认
+↓
+解除 A 与 Memory 的关系
+↓
+如果还有其他照片：
+临时使用当前排序第一张作为 fallback Cover
+↓
+用户之后可以重新选择
+```
+
+如果当前 Memory 已经没有其他照片：
+
+```text
+Cover = null
+```
+
+---
+
+## 12.2 强制约束
+
+无论采用何种现有 fallback 方案，都必须保证：
+
+```text
+Cover 永远不会引用已从当前 Memory 移除的 Photo
+```
+
+不得产生 dangling reference。
+
+---
+
+# 13. Memory 允许变成无图 Memory
+
+现有产品规则允许：
+
+```text
+Memory 没有照片
+```
+
+因此用户必须可以移除 Memory 中最后一张照片。
+
+结果：
+
+```text
+Memory 继续存在
+Title 继续存在
+Story 继续存在
+Later Notes 继续存在
+Related Memory 继续存在
+Cover = null
+```
+
+不得：
+
+- 自动删除 Memory；
+- 阻止保存；
+- 强制保留至少一张照片；
+- 因为无图状态报错。
+
+---
+
+# 14. 单个展品标题与说明
+
+Task 10J 应允许继续编辑 Task 10H 定义的：
+
+```text
+Exhibit Title
+Exhibit Description
+```
+
+---
+
+## 14.1 元数据必须属于 Memory ↔ Photo relation
+
+禁止将展品标题和说明作为：
+
+```text
+Photo 全局字段
+```
+
+因为同一 Photo 可以被多个 Memory 使用。
+
+---
+
+## 14.2 同一照片在不同 Memory 中可有不同解释
+
+例如：
+
+```text
+Photo A
+├── Memory A
+│   ├── Title：第一次到伦敦
+│   └── Description：……
+│
+└── Memory B
+    ├── Title：和朋友旅行
+    └── Description：……
+```
+
+修改 Memory A 中 Photo A 的说明：
+
+不得影响 Memory B。
+
+---
+
+# 15. 展品编辑 UI
+
+## 15.1 不允许一次展开全部输入框
+
+禁止做成：
+
+```text
+Photo A
+Title
+Description
+
+Photo B
+Title
+Description
+
+Photo C
+Title
+Description
+```
+
+全部长期展开。
+
+这会让 Memory Editor 变成表单墙。
+
+---
+
+## 15.2 推荐结构
+
+例如：
+
+```text
+展品管理
+
+[Photo A] [Photo B] [Photo C]
+
++ 添加照片
+```
+
+用户先选择一张 Photo。
+
+然后才显示：
+
+```text
+设为封面
+编辑展品标题
+编辑展品说明
+从当前 Memory 移除
+```
+
+---
+
+# 16. 明确区分“移除”与“永久删除”
+
+UI 文案必须清楚区分：
+
+```text
+从当前 Memory 移除
+```
+
+和：
+
+```text
+永久删除照片
+```
+
+Task 10J 的照片管理界面默认行为应是：
+
+```text
+从当前 Memory 移除
+```
+
+不要把危险的物理删除混成同一个按钮。
+
+---
+
+# 17. 保存行为
+
+## 17.1 原 Memory 必须原地更新
+
+编辑 Memory 时：
+
+必须保持：
+
+```text
+Memory ID 不变
+```
+
+禁止通过：
+
+```text
+创建一个新 Memory
+↓
+删除旧 Memory
+```
+
+来模拟编辑。
+
+---
+
+## 17.2 现有关联继续正常
+
+编辑后以下内容必须保持：
+
+- Stage；
+- Related Memory；
+- Later Notes；
+- Share Link；
+- Search；
+- Time Gear；
+- 其他既有引用。
+
+---
+
+# 18. 数据一致性
+
+涉及：
+
+```text
+添加图片
+移除图片
+重新排序
+修改 Cover
+修改 Exhibit Metadata
+```
+
+时，应尽量保证事务一致性。
+
+禁止出现：
+
+```text
+relation 已删除
+但 Cover 仍指向该 Photo
+```
+
+或：
+
+```text
+只有一半排序保存成功
+```
+
+等明显不一致状态。
+
+---
+
+# 19. 与 Existing Photo Library 的状态联动
+
+## 添加新 Photo 到 Memory
+
+如果一张 Photo 第一次进入任意 Memory：
+
+根据 Task 10F：
+
+```text
+自动进入 Existing Photo Library
+状态 = 已用于 Memory
+```
+
+---
+
+## 从 Memory 移除
+
+如果还有其他 Memory 引用：
+
+```text
+状态 = 已用于 Memory
+```
+
+如果没有任何 Memory 引用：
+
+### 原本已归档
+
+```text
+继续存在于 Existing Photo Library
+状态 = 未用于 Memory
+```
+
+### 原本未归档
+
+```text
+Workspace / 待整理
+```
+
+---
+
+# 20. 必须处理的边界情况
+
+## Case A — 重复添加同一 Photo
+
+同一 Memory 不允许：
+
+```text
+Photo A
+Photo A
+```
+
+产生两条重复 relation。
+
+如果用户再次选择已经属于当前 Memory 的 Photo：
+
+应：
+
+- 显示“已添加”；或
+- 禁止再次选择。
+
+---
+
+## Case B — 从其他 Memory 复用 Photo
+
+允许。
+
+不得复制物理文件。
+
+---
+
+## Case C — 移除仍被其他 Memory 使用的 Photo
+
+只解除当前 relation。
+
+其他 Memory 不受影响。
+
+---
+
+## Case D — 移除最后一个引用
+
+按原归档状态处理。
+
+---
+
+## Case E — 移除当前 Cover
+
+必须同时解决 Cover 状态。
+
+不得产生悬空引用。
+
+---
+
+## Case F — 移除最后一张照片
+
+Memory 继续合法存在。
+
+---
+
+## Case G — 排序后刷新
+
+排序必须保持。
+
+---
+
+## Case H — 已被合法物理删除的 Photo
+
+如果某 Photo 已通过 Task 10C 合法物理删除：
+
+Memory Editor 不得继续显示该 Photo 的幽灵引用。
+
+---
+
+# 21. 验收标准
+
+## Acceptance 1 — 已有 Memory 添加新上传照片
+
+准备：
+
+```text
+Memory A
+已有 Photo A
+```
+
+操作：
+
+```text
+编辑 Memory
+↓
+上传 Photo B
+↓
+加入当前 Memory
+↓
+保存
+```
+
+结果：
+
+```text
+Memory A
+├── Photo A
+└── Photo B
+```
+
+---
+
+## Acceptance 2 — 从 Existing Photo Library 添加照片
+
+操作：
+
+```text
+编辑 Memory A
+↓
+打开 Existing Photo Library
+↓
+选择 Photo C
+↓
+保存
+```
+
+结果：
+
+```text
+Memory A 引用 Photo C
+```
+
+且不产生重复物理文件。
+
+---
+
+## Acceptance 3 — 从当前 Memory 移除照片
+
+原：
+
+```text
+A B C
+```
+
+移除：
+
+```text
+B
+```
+
+结果：
+
+```text
+A C
+```
+
+Photo B 本身仍存在。
+
+---
+
+## Acceptance 4 — 同一 Photo 被多个 Memory 使用
+
+准备：
+
+```text
+Photo A
+├── Memory A
+└── Memory B
+```
+
+从 Memory A 移除。
+
+结果：
+
+```text
+Photo A
+└── Memory B
+```
+
+Memory B 完全不受影响。
+
+---
+
+## Acceptance 5 — 从最后一个 Memory 移除已归档照片
+
+准备：
+
+```text
+Photo A
+原本已在 Existing Photo Library
+Memory refs = 1
+```
+
+移除后：
+
+```text
+Memory refs = 0
+仍在 Existing Photo Library
+状态 = 未用于 Memory
+```
+
+---
+
+## Acceptance 6 — 从最后一个 Memory 移除未归档照片
+
+准备：
+
+```text
+Photo B
+原本属于 Workspace
+后来被加入 Memory
+```
+
+从最后一个 Memory 移除后：
+
+```text
+回到 / 保持 Workspace
+```
+
+不得自动加入 Existing Photo Library。
+
+---
+
+## Acceptance 7 — 调整顺序
+
+```text
+A B C D
+```
+
+调整为：
+
+```text
+C A D B
+```
+
+保存并刷新后：
+
+```text
+C A D B
+```
+
+---
+
+## Acceptance 8 — 更换 Cover
+
+原：
+
+```text
+Cover = A
+```
+
+改为：
+
+```text
+Cover = C
+```
+
+保存、刷新后仍为 C。
+
+---
+
+## Acceptance 9 — 移除当前 Cover
+
+原：
+
+```text
+Photos = A B C
+Cover = A
+```
+
+移除 A。
+
+结果：
+
+- 不存在 dangling Cover；
+- 有其他图片时使用安全 fallback；
+- 用户之后可重新选择 Cover。
+
+---
+
+## Acceptance 10 — 移除最后一张照片
+
+结果：
+
+```text
+Memory 仍存在
+Cover = null
+Title / Story 保留
+```
+
+页面正常展示无图 Memory。
+
+---
+
+## Acceptance 11 — Exhibit Metadata 独立
+
+同一 Photo 同时位于：
+
+```text
+Memory A
+Memory B
+```
+
+分别设置不同标题和说明。
+
+结果：
+
+互不影响。
+
+---
+
+## Acceptance 12 — Duplicate Protection
+
+尝试把已经属于当前 Memory 的 Photo 再次加入。
+
+结果：
+
+```text
+不会生成重复 relation
+```
+
+---
+
+## Acceptance 13 — Mobile
+
+手机端至少可以完成：
+
+- 添加照片；
+- 移除照片；
+- 更换 Cover；
+- 调整顺序或使用等价排序操作；
+- 编辑单个展品信息。
+
+---
+
+# 22. 自动化测试要求
+
+至少覆盖以下业务规则：
+
+1. Memory 可以新增 Photo relation；
+2. 同一 Photo 可属于多个 Memory；
+3. 同一 Memory 不产生重复 Photo relation；
+4. Remove from Memory 不删除 Photo；
+5. 移除当前 relation 不影响其他 Memory；
+6. 移除最后一个 Memory relation 后归档状态正确；
+7. Cover 被移除后不会留下悬空引用；
+8. Memory 可以合法移除最后一张 Photo；
+9. 无图 Memory 合法；
+10. 排序可持久化；
+11. Exhibit Metadata scoped to Memory-Photo relation；
+12. Photo reuse 不创建重复物理文件。
+
+---
+
+# 23. 性能要求
+
+避免明显 N+1。
+
+重点检查：
+
+```text
+Memory Editor
+Existing Photo Library Selector
+Photo Reference Count
+```
+
+如确有需要：
+
+可以增加合理 Index。
+
+禁止为了当前任务进行大规模无关数据库重构。
+
+---
+
+# 24. 可访问性与移动端要求
+
+新增交互应满足：
+
+- icon-only 按钮有 aria-label；
+- selected 状态不只靠颜色；
+- 移除操作有明确确认；
+- 手机触控区域足够；
+- 排序功能考虑 touch；
+- Keyboard focus 清晰。
+
+---
+
+# 25. 视觉原则
+
+继续遵循：
+
+```text
+Modern Museum
++
+Warm Memory
++
+Future Archive
+```
+
+即使这是照片管理功能，也不要做成：
+
+```text
+文件管理器
+企业 CMS
+DAM 后台
+```
+
+交互感觉应该更接近：
+
+> **重新布置自己的一场人生展览。**
+
+---
+
+# 26. 禁止行为
+
+Task 10J 中禁止：
+
+- 从 Memory 移除照片时直接删除物理文件；
+- 影响其他 Memory 对共享 Photo 的引用；
+- 为复用图片复制物理文件；
+- 把 Exhibit Title / Description 写进 Photo 全局字段；
+- 删除最后一张照片时删除整个 Memory；
+- 让 Cover 指向已经不属于当前 Memory 的 Photo；
+- 为本 Task 重写整个照片系统；
+- 自动实现后续 Task；
+- 完成后自动进入 Task 10H。
+
+---
+
+# 27. Codex 开始前必须检查
+
+开始 Task 10J 前，Codex 应阅读：
+
+1. 项目永久上下文；
+2. AGENTS.md；
+3. Task 10 总文档；
+4. Task 10C；
+5. Task 10E；
+6. Task 10F；
+7. Task 10H 中 Exhibit Metadata 相关规则；
+8. 当前 Memory Editor；
+9. Photo 数据模型；
+10. Memory ↔ Photo 关联模型；
+11. Memory Cover 当前实现；
+12. Existing Photo Library / Workspace 当前实现。
+
+必须：
+
+> **先阅读真实代码，再决定修改方式。**
+
+---
+
+# 28. Codex 完成报告
+
+Task 10J 完成后必须报告：
+
+## 28.1 完成内容
+
+说明：
+
+- 新增了哪些 Memory 展品编辑能力；
+- 添加照片如何工作；
+- 移除照片如何工作；
+- 排序如何保存；
+- Cover 如何处理；
+- 图片归档状态如何恢复；
+- Exhibit Metadata 如何保持 relation-scoped。
+
+---
+
+## 28.2 修改文件
+
+列出主要文件路径。
+
+---
+
+## 28.3 数据库变化
+
+如果有：
+
+- Migration；
+- 新字段；
+- 新 Index；
+
+必须说明。
+
+如果没有：
+
+明确写：
+
+```text
+无数据库迁移
+```
+
+---
+
+## 28.4 自动验证
+
+至少给出：
+
+```text
+pnpm check
+```
+
+结果。
+
+以及相关测试结果。
+
+---
+
+## 28.5 人工验收步骤
+
+根据本文 Acceptance Criteria：
+
+给出用户可以直接操作的步骤。
+
+---
+
+## 28.6 已知限制
+
+如有：
+
+明确说明。
+
+不得隐藏。
+
+---
+
+# 29. 停止规则
+
+完成后：
+
+```text
+STOP
+```
+
+不要自动继续：
+
+```text
+Task 10H
+Task 10I
+任何其他 Task
+```
+
+只有用户明确确认：
+
+> **Task 10J 验收通过**
+
+之后，才能继续后续任务。
+
+---
+
+# 30. 可直接发送给 Codex 的执行提示词
+
+```text
+阅读项目永久上下文、AGENTS.md、Task 10 总文档，以及 Task 10J — Memory 创建后的展品管理。
+
+本次只执行 Task 10J。
+
+不要执行 Task 10H 或任何后续 Task。
+
+开始编码前：
+
+1. 检查当前 Memory 创建和编辑流程；
+2. 检查 Photo 数据模型；
+3. 检查 Memory 与 Photo 的关联模型；
+4. 检查 Memory Cover 当前实现；
+5. 检查 Existing Photo Library / Workspace 的现有状态规则；
+6. 检查 Task 10C 的照片安全删除机制；
+7. 找到实现本任务所需的最小修改范围。
+
+核心要求：
+
+- 已创建 Memory 必须可以继续添加照片；
+- 添加来源必须支持新上传照片和 Existing Photo Library；
+- Existing Photo 必须复用，不能复制物理文件；
+- 已创建 Memory 必须可以移除照片；
+- 从 Memory 中移除照片只解除 Memory ↔ Photo relation；
+- 从 Memory 移除绝不能直接物理删除 Photo；
+- 如果 Photo 仍被其他 Memory 使用，不影响其他 Memory；
+- 如果 Photo 从最后一个 Memory 中移除：
+  - 原本已归档到 Existing Photo Library → 继续保留在 Library，并变为“未用于 Memory”；
+  - 原本未归档、属于 Workspace / 待处理 → 回到或保持 Workspace / 待处理状态；
+- 不得自动改变 Photo 原有归档选择；
+- 物理删除继续统一走 Task 10C；
+- Memory 中照片必须可重新排序并持久化；
+- Memory Cover 必须可重新选择；
+- Cover 必须始终属于当前 Memory；
+- 如果当前 Cover 被移除，必须安全处理 fallback，不能产生悬空引用；
+- Memory 允许移除最后一张照片并成为无图 Memory；
+- Exhibit Title / Exhibit Description 必须属于 Memory ↔ Photo relation，而不是 Photo 全局属性；
+- 同一 Photo 在不同 Memory 中允许拥有不同 Exhibit Metadata；
+- 不允许同一 Photo 在同一 Memory 中重复出现；
+- 保持现有 Memory ID、Share、Related Memory、Later Notes、Stage 等关系不被破坏；
+- 优先复用现有组件和架构；
+- 不做无关重构；
+- 不过度工程；
+- UI 保持 Modern Museum + Warm Memory + Future Archive 风格；
+- Desktop 与 Mobile 均需可用。
+
+完成后：
+
+1. 运行 pnpm check；
+2. 运行相关测试；
+3. 补充必要的业务规则测试；
+4. 按 Task 10J 验收标准逐项自检；
+5. 列出主要修改文件；
+6. 说明是否有数据库迁移；
+7. 给出完整人工验收步骤；
+8. 报告已知限制；
+9. 停止。
+
+不要自动开始下一个 Task。
+
+只有在我明确确认 Task 10J 验收通过之后，才能继续后续任务。
+```
+
+---
+
+# 31. Task 10J 最终完成检查表
+
+- [ ] 已有 Memory 可以添加新上传照片
+- [ ] 已有 Memory 可以从 Existing Photo Library 添加照片
+- [ ] 同一 Photo 可被多个 Memory 复用
+- [ ] 同一 Memory 不产生重复 Photo
+- [ ] 可以从当前 Memory 移除照片
+- [ ] 移除不物理删除 Photo
+- [ ] 移除不影响其他 Memory
+- [ ] 最后一个引用移除后保持原归档状态
+- [ ] 已归档照片变为“未用于 Memory”
+- [ ] 未归档照片回到 / 保持 Workspace
+- [ ] 可以重新排序
+- [ ] 排序可持久化
+- [ ] 可以重新设置 Cover
+- [ ] 移除 Cover 不产生悬空引用
+- [ ] 可以移除最后一张照片
+- [ ] 无图 Memory 正常工作
+- [ ] 可以编辑单个展品 Title / Description
+- [ ] Exhibit Metadata 在不同 Memory 中互相独立
+- [ ] Desktop 验收通过
+- [ ] Mobile 验收通过
+- [ ] `pnpm check` 通过
+- [ ] 相关测试通过
+- [ ] 用户人工验收通过
+
+只有全部通过后：
+
+> **Task 10J 才算完成。**
+
 
 ## 9. Task 10G — 人生长廊 Stage 横向浏览
 
