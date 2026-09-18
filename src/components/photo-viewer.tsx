@@ -21,6 +21,7 @@ import {
 } from "@/components/photo-viewer-geometry";
 import {
   resolvePhotoSwipeDirection,
+  hasExhibitMetadata,
   resolvePhotoViewerIndex,
   type PhotoNavigationDirection,
 } from "@/components/photo-viewer-state";
@@ -52,6 +53,8 @@ export type PhotoViewerItem = {
   id: string;
   src: string;
   alt: string;
+  exhibitTitle: string;
+  exhibitDescription: string;
 };
 
 export function PhotoViewer({
@@ -86,10 +89,12 @@ export function PhotoViewer({
   const lastTrackpadNavigationRef = useRef(0);
   const hintId = useId();
   const initialIndex = resolvePhotoViewerIndex(images, initialImageId);
+  const metadataId = useId();
   const activeIndex = resolvePhotoViewerIndex(images, activeImageId, fallbackIndex);
   const triggerImage = initialIndex >= 0 ? images[initialIndex] : null;
   const activeImage = activeIndex >= 0 ? images[activeIndex] : null;
 
+  const hasActiveMetadata = activeImage ? hasExhibitMetadata(activeImage) : false;
   const readMetrics = useCallback((): PhotoViewerMetrics | null => {
     const stage = stageRef.current;
     const image = imageRef.current;
@@ -404,7 +409,13 @@ export function PhotoViewer({
         />
       </button>
       {isOpen ? (
-        <div className="photo-viewer" role="dialog" aria-modal="true" aria-describedby={hintId}>
+        <div
+          className="photo-viewer"
+          role="dialog"
+          aria-modal="true"
+          aria-label={activeImage?.exhibitTitle || copy.exhibition.viewerDialogLabel}
+          aria-describedby={hasActiveMetadata ? `${metadataId} ${hintId}` : hintId}
+        >
           <button
             ref={closeButtonRef}
             className="photo-viewer-close"
@@ -416,7 +427,7 @@ export function PhotoViewer({
           </button>
           <div
             ref={stageRef}
-            className={`photo-viewer-stage${transform.scale > MIN_PHOTO_SCALE ? " is-draggable" : ""}${isInteracting ? " is-interacting" : ""}`}
+            className={`photo-viewer-stage${hasActiveMetadata ? " has-metadata" : ""}${transform.scale > MIN_PHOTO_SCALE ? " is-draggable" : ""}${isInteracting ? " is-interacting" : ""}`}
             onWheel={handleWheel}
             onDoubleClick={handleDoubleClick}
             onPointerDown={handlePointerDown}
@@ -438,6 +449,12 @@ export function PhotoViewer({
               />
             ) : null}
           </div>
+          {activeImage && hasActiveMetadata ? (
+            <aside id={metadataId} key={activeImage.id} className="photo-viewer-metadata">
+              {activeImage.exhibitTitle ? <h2>{activeImage.exhibitTitle}</h2> : null}
+              {activeImage.exhibitDescription ? <p>{activeImage.exhibitDescription}</p> : null}
+            </aside>
+          ) : null}
           {images.length > 1 ? (
             <>
               <button

@@ -21,6 +21,8 @@ export function MemoryExhibition({
     id: image.id,
     src: accessibleImagePath(imageStorage.resolve(image.storageKey).publicPath),
     alt: image.altText,
+    exhibitTitle: image.exhibitTitle,
+    exhibitDescription: image.exhibitDescription,
   }));
   return (
     <article className="exhibition">
@@ -54,7 +56,7 @@ export function MemoryExhibition({
             <h2>{copy.exhibition.gallery}</h2>
           </div>
           <div className="exhibition-gallery">
-            {memory.images.map((image, index) => (
+            {memory.images.map((image) => (
               <figure key={image.id}>
                 <PhotoViewer
                   images={viewerImages}
@@ -62,10 +64,12 @@ export function MemoryExhibition({
                   imageClassName="exhibition-gallery-image"
                   loading="lazy"
                 />
-                <figcaption>
-                  <strong>{image.exhibitTitle || copy.exhibition.imageNumber(index + 1)}</strong>
-                  {image.exhibitDescription ? <p>{image.exhibitDescription}</p> : null}
-                </figcaption>
+                {image.exhibitTitle || image.exhibitDescription ? (
+                  <figcaption>
+                    {image.exhibitTitle ? <strong>{image.exhibitTitle}</strong> : null}
+                    {image.exhibitDescription ? <p>{image.exhibitDescription}</p> : null}
+                  </figcaption>
+                ) : null}
               </figure>
             ))}
           </div>

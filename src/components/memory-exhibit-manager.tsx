@@ -43,9 +43,13 @@ export function MemoryExhibitManager({
   const router = useRouter();
   const { startUpload } = useUploadTasks();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [selectedPhotoId, setSelectedPhotoId] = useState(
-    exhibits.find((photo) => photo.isCover)?.photoId ?? exhibits[0]?.photoId ?? "",
+  const initialSelected = exhibits.find((photo) => photo.isCover) ?? exhibits[0];
+  const [selectedPhotoId, setSelectedPhotoId] = useState(initialSelected?.photoId ?? "");
+  const [draftTitle, setDraftTitle] = useState(initialSelected?.exhibitTitle ?? "");
+  const [draftDescription, setDraftDescription] = useState(
+    initialSelected?.exhibitDescription ?? "",
   );
+  const [metadataDirty, setMetadataDirty] = useState(false);
   const [librarySelection, setLibrarySelection] = useState<Set<string>>(new Set());
   const [usageFilter, setUsageFilter] = useState<UsageFilter>("all");
   const [memoryQuery, setMemoryQuery] = useState("");
@@ -105,8 +109,17 @@ export function MemoryExhibitManager({
     }
   }
 
+  function loadMetadataDraft(photo: ExhibitPhotoView | undefined) {
+    setDraftTitle(photo?.exhibitTitle ?? "");
+    setDraftDescription(photo?.exhibitDescription ?? "");
+    setMetadataDirty(false);
+  }
+
   function selectExhibit(photo: ExhibitPhotoView) {
+    if (photo.photoId === selected?.photoId) return;
+    if (metadataDirty && !window.confirm(copy.exhibits.discardUnsaved)) return;
     setSelectedPhotoId(photo.photoId);
+    loadMetadataDraft(photo);
     setMessage("");
     setError("");
   }
@@ -133,6 +146,24 @@ export function MemoryExhibitManager({
       await perform({ action: "removePhoto", photoId: selected.photoId }, copy.exhibits.removed)
     ) {
       setSelectedPhotoId(fallback?.photoId ?? "");
+      loadMetadataDraft(fallback);
+    }
+  }
+
+  async function saveMetadata() {
+    if (!selected) return;
+    if (
+      await perform(
+        {
+          action: "exhibitMetadata",
+          photoId: selected.photoId,
+          title: draftTitle,
+          description: draftDescription,
+        },
+        copy.exhibits.metadataSaved,
+      )
+    ) {
+      setMetadataDirty(false);
     }
   }
 
@@ -241,27 +272,21 @@ export function MemoryExhibitManager({
                   </button>
                 </div>
                 <form
-                  key={selected.photoId}
                   className="memory-exhibit-metadata"
                   onSubmit={(event) => {
                     event.preventDefault();
-                    const form = new FormData(event.currentTarget);
-                    void perform(
-                      {
-                        action: "exhibitMetadata",
-                        photoId: selected.photoId,
-                        title: form.get("exhibitTitle"),
-                        description: form.get("exhibitDescription"),
-                      },
-                      copy.exhibits.metadataSaved,
-                    );
+                    void saveMetadata();
                   }}
                 >
                   <label className="form-field">
                     <span>{copy.exhibits.exhibitTitle}</span>
                     <input
                       name="exhibitTitle"
-                      defaultValue={selected.exhibitTitle}
+                      value={draftTitle}
+                      onChange={(event) => {
+                        setDraftTitle(event.target.value);
+                        setMetadataDirty(true);
+                      }}
                       maxLength={120}
                     />
                   </label>
@@ -269,7 +294,11 @@ export function MemoryExhibitManager({
                     <span>{copy.exhibits.exhibitDescription}</span>
                     <textarea
                       name="exhibitDescription"
-                      defaultValue={selected.exhibitDescription}
+                      value={draftDescription}
+                      onChange={(event) => {
+                        setDraftDescription(event.target.value);
+                        setMetadataDirty(true);
+                      }}
                       maxLength={2000}
                       rows={4}
                     />
