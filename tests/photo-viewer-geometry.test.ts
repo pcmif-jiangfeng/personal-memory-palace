@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   clampPhotoPosition,
   clampPhotoScale,
+  fitPhotoWithinViewport,
   zoomPhotoAroundPoint,
 } from "../src/components/photo-viewer-geometry.ts";
 
@@ -31,5 +32,28 @@ test("zooming around an off-center point keeps that photo detail anchored", () =
     scale: 1,
     x: 0,
     y: 0,
+  });
+});
+
+test("fits every common photo ratio fully inside the available viewer area", () => {
+  assert.deepEqual(fitPhotoWithinViewport(1600, 900, 320, 500), {
+    width: 320,
+    height: 180,
+  });
+  assert.deepEqual(fitPhotoWithinViewport(900, 1600, 320, 500), {
+    width: 281.25,
+    height: 500,
+  });
+  assert.deepEqual(fitPhotoWithinViewport(1000, 1000, 320, 500), {
+    width: 320,
+    height: 320,
+  });
+  assert.deepEqual(fitPhotoWithinViewport(4000, 500, 320, 500), {
+    width: 320,
+    height: 40,
+  });
+  assert.deepEqual(fitPhotoWithinViewport(500, 4000, 320, 500), {
+    width: 62.5,
+    height: 500,
   });
 });

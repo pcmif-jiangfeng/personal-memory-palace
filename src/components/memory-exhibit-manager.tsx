@@ -356,17 +356,19 @@ export function MemoryExhibitManager({
           <p className="quiet-empty">{copy.exhibits.full}</p>
         ) : (
           <>
-            <label className="button-secondary memory-exhibit-upload">
-              {copy.exhibits.upload}
-              <input
-                ref={inputRef}
-                type="file"
-                multiple
-                accept="image/jpeg,image/png,image/webp"
-                onChange={(event) => upload(event.target.files)}
-              />
-            </label>
-            <p className="field-help">{copy.exhibits.uploadHint(remainingSlots)}</p>
+            <div className="memory-exhibit-upload-block">
+              <label className="button-secondary memory-exhibit-upload">
+                {copy.exhibits.upload}
+                <input
+                  ref={inputRef}
+                  type="file"
+                  multiple
+                  accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                  onChange={(event) => upload(event.target.files)}
+                />
+              </label>
+              <p className="field-help">{copy.exhibits.uploadHint(remainingSlots)}</p>
+            </div>
 
             <div className="workspace-filters memory-exhibit-filters">
               <label>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   commitOptimizedUpload,
+  listUploadedPhotosByIds,
   prepareOptimizedUpload,
   queryWorkspacePhotoCatalog,
   type PhotoCatalogQuery,
@@ -10,6 +11,8 @@ import { randomUUID } from "node:crypto";
 import { maximumUploadBytes, validateWebOptimizedImage } from "@/storage/image-processor";
 import { imageStorage } from "@/storage/local-image-storage";
 import { isOwner } from "@/auth";
+import { deleteUploadedPhotos } from "@/data/photo-deletion";
+import { parsePhotoBatchDelete } from "@/http/schemas";
 import {
   apiErrorResponse,
   ownerRequiredResponse,
@@ -23,6 +26,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const source = searchParams.get("source") ?? "recent";
   const usage = searchParams.get("usage") ?? "all";
+  const selection = searchParams.get("selection");
   const requestedLimit = searchParams.get("limit");
   const limit = requestedLimit === null ? 40 : Number(requestedLimit);
   if (
@@ -30,7 +34,8 @@ export async function GET(request: Request) {
     (usage !== "all" && usage !== "used" && usage !== "unused") ||
     !Number.isInteger(limit) ||
     limit < 1 ||
-    limit > 60
+    limit > 60 ||
+    (selection !== null && selection !== "ids")
   ) {
     return NextResponse.json({ error: "INVALID_PHOTO_QUERY" }, { status: 400 });
   }
@@ -43,6 +48,17 @@ export async function GET(request: Request) {
     query: searchParams.get("q") || undefined,
   };
   try {
+    if (selection === "ids") {
+      const ids: string[] = [];
+      let cursor: string | undefined;
+      do {
+        const page = queryWorkspacePhotoCatalog({ ...query, limit: 60, cursor });
+        ids.push(...page.items.map((photo) => photo.id));
+        cursor = page.nextCursor ?? undefined;
+      } while (cursor);
+      return NextResponse.json({ ids });
+    }
+
     const page = queryWorkspacePhotoCatalog(query);
     return NextResponse.json({
       items: page.items.map((photo) => ({
@@ -59,6 +75,28 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     return apiErrorResponse(error, "photos:list");
+  }
+}
+
+export async function DELETE(request: Request) {
+  const originError = sameOriginRequiredResponse(request);
+  if (originError) return originError;
+  if (!(await isOwner())) return ownerRequiredResponse();
+  try {
+    const input = await parsePhotoBatchDelete(request);
+    const names = new Map(
+      listUploadedPhotosByIds(input.ids).map((photo) => [photo.id, photo.originalName]),
+    );
+    const result = await deleteUploadedPhotos(input.ids);
+    return NextResponse.json({
+      ...result,
+      failures: result.failures.map((failure) => ({
+        ...failure,
+        name: names.get(failure.photoId) ?? failure.photoId,
+      })),
+    });
+  } catch (error) {
+    return apiErrorResponse(error, "photos:batch-delete");
   }
 }
 

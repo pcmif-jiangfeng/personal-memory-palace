@@ -84,14 +84,29 @@ export function updateMemoryRelationsInDatabase(
   });
 }
 
-function mark(sql: string, id: string, error: DomainErrorCode) {
-  const result = getDatabase().prepare(sql).run(new Date().toISOString(), id);
+function mark(database: DatabaseSync, sql: string, id: string, error: DomainErrorCode) {
+  const result = database.prepare(sql).run(new Date().toISOString(), id);
   if (!result.changes) throw new DomainError(error);
 }
-export function trashMemory(id: string) { mark("UPDATE memories SET trashed_at = ? WHERE id = ? AND trashed_at IS NULL", id, "MEMORY_NOT_FOUND"); }
-export function restoreMemory(id: string) {
-  const result = getDatabase().prepare("UPDATE memories SET trashed_at = NULL WHERE id = ? AND trashed_at IS NOT NULL").run(id);
+export function trashMemoryInDatabase(database: DatabaseSync, id: string) {
+  mark(
+    database,
+    "UPDATE memories SET trashed_at = ? WHERE id = ? AND trashed_at IS NULL",
+    id,
+    "MEMORY_NOT_FOUND",
+  );
+}
+export function trashMemory(id: string) {
+  trashMemoryInDatabase(getDatabase(), id);
+}
+export function restoreMemoryInDatabase(database: DatabaseSync, id: string) {
+  const result = database
+    .prepare("UPDATE memories SET trashed_at = NULL WHERE id = ? AND trashed_at IS NOT NULL")
+    .run(id);
   if (!result.changes) throw new DomainError("MEMORY_NOT_FOUND");
+}
+export function restoreMemory(id: string) {
+  restoreMemoryInDatabase(getDatabase(), id);
 }
 export function trashStageInDatabase(database: DatabaseSync, id: string): void {
   const now = new Date().toISOString();
@@ -111,9 +126,14 @@ export function trashStageInDatabase(database: DatabaseSync, id: string): void {
 export function trashStage(id: string) {
   trashStageInDatabase(getDatabase(), id);
 }
-export function restoreStage(id: string) {
-  const result = getDatabase().prepare("UPDATE stages SET trashed_at = NULL WHERE id = ? AND trashed_at IS NOT NULL").run(id);
+export function restoreStageInDatabase(database: DatabaseSync, id: string) {
+  const result = database
+    .prepare("UPDATE stages SET trashed_at = NULL WHERE id = ? AND trashed_at IS NOT NULL")
+    .run(id);
   if (!result.changes) throw new DomainError("STAGE_NOT_FOUND");
+}
+export function restoreStage(id: string) {
+  restoreStageInDatabase(getDatabase(), id);
 }
 
 function queueUnreferencedPhotos(database: DatabaseSync, photoIds: string[]): void {
@@ -191,4 +211,48 @@ export function permanentlyDeleteStageInDatabase(database: DatabaseSync, id: str
 
 export function permanentlyDeleteStage(id: string) {
   permanentlyDeleteStageInDatabase(getDatabase(), id);
+}
+export type TrashItemType = "memory" | "stage";
+export type TrashAction = "trash" | "restore" | "permanent";
+
+export interface TrashBatchResult {
+  succeededIds: string[];
+  failures: Array<{ id: string; error: string }>;
+}
+
+export function applyTrashBatchInDatabase(
+  database: DatabaseSync,
+  type: TrashItemType,
+  action: TrashAction,
+  ids: string[],
+): TrashBatchResult {
+  const result: TrashBatchResult = { succeededIds: [], failures: [] };
+  const handlers =
+    type === "memory"
+      ? {
+          trash: trashMemoryInDatabase,
+          restore: restoreMemoryInDatabase,
+          permanent: permanentlyDeleteMemoryInDatabase,
+        }
+      : {
+          trash: trashStageInDatabase,
+          restore: restoreStageInDatabase,
+          permanent: permanentlyDeleteStageInDatabase,
+        };
+  for (const id of new Set(ids)) {
+    try {
+      handlers[action](database, id);
+      result.succeededIds.push(id);
+    } catch (error) {
+      result.failures.push({
+        id,
+        error: error instanceof DomainError ? error.code : "INTERNAL_ERROR",
+      });
+    }
+  }
+  return result;
+}
+
+export function applyTrashBatch(type: TrashItemType, action: TrashAction, ids: string[]) {
+  return applyTrashBatchInDatabase(getDatabase(), type, action, ids);
 }

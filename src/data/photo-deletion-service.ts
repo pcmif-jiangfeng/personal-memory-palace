@@ -122,6 +122,36 @@ export async function deleteUploadedPhotoInDatabase(
   return { deleted: true, alreadyDeleted: false };
 }
 
+export interface PhotoBatchDeleteResult {
+  deletedIds: string[];
+  failures: Array<{
+    photoId: string;
+    error: string;
+    details?: Record<string, unknown>;
+  }>;
+}
+
+export async function deleteUploadedPhotosInDatabase(
+  database: DatabaseSync,
+  storage: Pick<ImageStorage, "remove">,
+  photoIds: string[],
+): Promise<PhotoBatchDeleteResult> {
+  const result: PhotoBatchDeleteResult = { deletedIds: [], failures: [] };
+  for (const photoId of new Set(photoIds)) {
+    try {
+      await deleteUploadedPhotoInDatabase(database, storage, photoId);
+      result.deletedIds.push(photoId);
+    } catch (error) {
+      result.failures.push({
+        photoId,
+        error: error instanceof DomainError ? error.code : "INTERNAL_ERROR",
+        ...(error instanceof DomainError && error.details ? { details: error.details } : {}),
+      });
+    }
+  }
+  return result;
+}
+
 export async function recoverPendingPhotoDeletions(
   database: DatabaseSync,
   storage: Pick<ImageStorage, "remove">,
