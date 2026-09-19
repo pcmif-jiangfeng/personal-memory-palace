@@ -13,6 +13,7 @@ import {
   type ReactNode,
 } from "react";
 import { ImageOptimizationError, optimizeImageForUpload } from "@/upload/client-image-optimizer";
+import { createClientRandomId } from "@/upload/client-random-id";
 import {
   isUploadTaskFinished,
   summarizeUploadStatuses,
@@ -215,9 +216,9 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
   const startUpload = useCallback(
     (files: File[], options?: { onPhotoUploaded?: (photoId: string) => void | Promise<void> }) => {
       if (files.length === 0) return;
-      const batchId = crypto.randomUUID();
+      const batchId = createClientRandomId();
       const items = files.map<UploadItem>((file, index) => ({
-        id: crypto.randomUUID(),
+        id: createClientRandomId(),
         name: file.name || `未命名照片 ${index + 1}`,
         status: index < maximumFilesPerBatch ? "waiting" : "failed",
         error: index < maximumFilesPerBatch ? undefined : "单批最多处理 20 张照片。",
