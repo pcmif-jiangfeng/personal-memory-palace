@@ -27,6 +27,48 @@ test("accepts same-origin mutations and rejects missing or foreign origins", asy
   }
 });
 
+test("accepts the public host when the framework request URL uses an internal container host", () => {
+  assert.equal(
+    isSameOriginRequest(
+      new Request("http://container-id:3000/api/auth", {
+        method: "POST",
+        headers: {
+          host: "203.0.113.10",
+          origin: "http://203.0.113.10",
+        },
+      }),
+    ),
+    true,
+  );
+
+  assert.equal(
+    isSameOriginRequest(
+      new Request("http://container-id:3000/api/auth", {
+        method: "POST",
+        headers: {
+          host: "palace.example",
+          origin: "https://palace.example",
+          "x-forwarded-proto": "https",
+        },
+      }),
+    ),
+    true,
+  );
+
+  assert.equal(
+    isSameOriginRequest(
+      new Request("http://container-id:3000/api/auth", {
+        method: "POST",
+        headers: {
+          host: "203.0.113.10",
+          origin: "http://attacker.example",
+        },
+      }),
+    ),
+    false,
+  );
+});
+
 test("every mutation route applies same-origin checks before authorization", () => {
   const apiDirectory = fileURLToPath(new URL("../src/app/api", import.meta.url));
   const routeFiles: string[] = [];
