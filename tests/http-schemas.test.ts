@@ -5,6 +5,8 @@ import {
   parseCreateMemory,
   parseMemoryAction,
   parseOwnerLogin,
+  parsePhotoBatchDelete,
+  parseTrashAction,
   parseShareConfiguration,
 } from "../src/http/schemas.ts";
 
@@ -64,5 +66,29 @@ test("create-memory schema normalizes identifiers and enforces photo membership 
       jsonRequest({ title: "标题", story: "故事", photoIds: [], coverPhotoId: "photo-1" }),
     ),
     "INVALID_PHOTOIDS",
+  );
+});
+test("batch schemas deduplicate identifiers and require permanent-delete confirmation", async () => {
+  assert.deepEqual(
+    await parsePhotoBatchDelete(jsonRequest({ ids: ["photo-1", "photo-1", "photo-2"] })),
+    { ids: ["photo-1", "photo-2"] },
+  );
+  assert.deepEqual(
+    await parseTrashAction(
+      jsonRequest({
+        type: "memory",
+        ids: ["memory-1", "memory-2"],
+        action: "restore",
+      }),
+    ),
+    {
+      type: "memory",
+      ids: ["memory-1", "memory-2"],
+      action: "restore",
+    },
+  );
+  await rejectsWithCode(
+    parseTrashAction(jsonRequest({ type: "stage", ids: ["stage-1"], action: "permanent" })),
+    "CONFIRM_REQUIRED",
   );
 });

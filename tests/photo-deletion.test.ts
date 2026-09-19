@@ -9,6 +9,7 @@ import { initializeDatabase } from "../src/data/database.ts";
 import { permanentlyDeleteMemoryInDatabase } from "../src/data/management-repository.ts";
 import {
   deleteUploadedPhotoInDatabase,
+  deleteUploadedPhotosInDatabase,
   recoverPendingPhotoDeletions,
   recoverPendingUploads,
 } from "../src/data/photo-deletion-service.ts";
@@ -80,6 +81,67 @@ test("deletes only the unreferenced optimized photo and is idempotent", async ()
       ).count,
       0,
     );
+  } finally {
+    database.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("batch deletion partially succeeds and preserves referenced photos", async () => {
+  const { directory, database, now } = createFixture();
+  const removed: string[][] = [];
+  try {
+    database
+      .prepare(
+        `INSERT INTO uploaded_photos
+         (id, original_name, mime_type, optimized_storage_key, original_storage_key,
+          width, height, created_at, used_at)
+         VALUES (?, ?, ?, ?, NULL, 1200, 800, ?, NULL)`,
+      )
+      .run("photo-2", "free.jpg", "image/jpeg", "uploads/owner/optimized/photo-2.webp", now);
+    database
+      .prepare(
+        `INSERT INTO memories
+         (id, stage_id, title, story, visibility, created_at, updated_at)
+         VALUES (?, NULL, ?, 'Story', 'private', ?, ?)`,
+      )
+      .run("memory-1", "毕业旅行", now, now);
+    database
+      .prepare(
+        `INSERT INTO memory_images
+         (id, memory_id, storage_key, alt_text, sort_order, is_cover, created_at)
+         VALUES (?, ?, ?, '', 0, 1, ?)`,
+      )
+      .run("image-1", "memory-1", "uploads/owner/optimized/photo-1.webp", now);
+
+    const result = await deleteUploadedPhotosInDatabase(
+      database,
+      {
+        remove: async (keys) =>
+          void removed.push(keys.filter((key): key is string => Boolean(key))),
+      },
+      ["photo-1", "photo-2"],
+    );
+
+    assert.deepEqual(result.deletedIds, ["photo-2"]);
+    assert.deepEqual(result.failures, [
+      {
+        photoId: "photo-1",
+        error: "PHOTO_IN_USE",
+        details: {
+          references: {
+            memories: [{ id: "memory-1", title: "毕业旅行", isCover: true }],
+            stages: [],
+          },
+        },
+      },
+    ]);
+    assert.ok(database.prepare("SELECT id FROM uploaded_photos WHERE id = ?").get("photo-1"));
+    assert.equal(
+      database.prepare("SELECT id FROM uploaded_photos WHERE id = ?").get("photo-2"),
+      undefined,
+    );
+    assert.deepEqual(removed, [["uploads/owner/optimized/photo-2.webp"]]);
   } finally {
     database.close();
     rmSync(directory, { recursive: true, force: true });

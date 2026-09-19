@@ -3,6 +3,7 @@ import {
   EXHIBIT_DESCRIPTION_MAX_LENGTH,
   EXHIBIT_TITLE_MAX_LENGTH,
   LATER_NOTE_MAX_LENGTH,
+  MAX_BATCH_ITEMS,
   MAX_IDENTIFIER_LENGTH,
   MAX_MEMORY_PHOTOS,
   MAX_PASSWORD_LENGTH,
@@ -212,8 +213,22 @@ export async function parseTrashAction(request: Request) {
     throw new ApiError("INVALID_ACTION", 400);
   if (action === "permanent" && input.confirm !== true) throw new ApiError("CONFIRM_REQUIRED", 400);
   return {
-    type,
+    type: type as "memory" | "stage",
     action: action as "trash" | "restore" | "permanent",
-    id: stringValue(input, "id", { required: true, maxLength: MAX_IDENTIFIER_LENGTH })!,
+    ids:
+      input.ids === undefined
+        ? [stringValue(input, "id", { required: true, maxLength: MAX_IDENTIFIER_LENGTH })!]
+        : stringArray(input, "ids", { required: true, min: 1, max: MAX_BATCH_ITEMS }),
+  };
+}
+
+export async function parsePhotoBatchDelete(request: Request) {
+  const input = await readJsonObject(request);
+  return {
+    ids: stringArray(input, "ids", {
+      required: true,
+      min: 1,
+      max: MAX_BATCH_ITEMS,
+    }),
   };
 }

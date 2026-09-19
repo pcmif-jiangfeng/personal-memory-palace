@@ -19,6 +19,29 @@ export type Point = {
   y: number;
 };
 
+export type PhotoSize = {
+  width: number;
+  height: number;
+};
+
+export function fitPhotoWithinViewport(
+  imageWidth: number,
+  imageHeight: number,
+  viewportWidth: number,
+  viewportHeight: number,
+): PhotoSize {
+  const dimensions = [imageWidth, imageHeight, viewportWidth, viewportHeight];
+  if (dimensions.some((dimension) => !Number.isFinite(dimension) || dimension <= 0)) {
+    return { width: 0, height: 0 };
+  }
+
+  const scale = Math.min(viewportWidth / imageWidth, viewportHeight / imageHeight);
+  return {
+    width: imageWidth * scale,
+    height: imageHeight * scale,
+  };
+}
+
 export function clampPhotoScale(scale: number) {
   return Math.min(MAX_PHOTO_SCALE, Math.max(MIN_PHOTO_SCALE, scale));
 }

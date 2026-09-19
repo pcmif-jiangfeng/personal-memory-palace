@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useId,
   useRef,
   useState,
@@ -14,7 +15,9 @@ import {
   MIN_PHOTO_SCALE,
   clampPhotoPosition,
   clampPhotoScale,
+  fitPhotoWithinViewport,
   zoomPhotoAroundPoint,
+  type PhotoSize,
   type PhotoTransform,
   type PhotoViewerMetrics,
   type Point,
@@ -31,6 +34,7 @@ const QUICK_ZOOM_SCALE = 2.5;
 const TOUCH_SWIPE_DISTANCE = 56;
 const TRACKPAD_SWIPE_DISTANCE = 12;
 const TRACKPAD_NAVIGATION_COOLDOWN = 420;
+const CONTROL_HIDE_DELAY = 2800;
 
 type TrackedPointer = Point & { pointerType: string };
 type DragStart = Point & { originX: number; originY: number };
@@ -39,6 +43,12 @@ type PinchStart = {
   scale: number;
   contentX: number;
   contentY: number;
+};
+type ViewerViewport = {
+  width: number;
+  height: number;
+  offsetLeft: number;
+  offsetTop: number;
 };
 
 function distanceBetween(first: Point, second: Point) {
@@ -49,6 +59,37 @@ function midpointBetween(first: Point, second: Point): Point {
   return { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
 }
 
+function readViewerViewport(): ViewerViewport {
+  const viewport = window.visualViewport;
+  return viewport
+    ? {
+        width: viewport.width,
+        height: viewport.height,
+        offsetLeft: viewport.offsetLeft,
+        offsetTop: viewport.offsetTop,
+      }
+    : { width: window.innerWidth, height: window.innerHeight, offsetLeft: 0, offsetTop: 0 };
+}
+
+function readStageContentSize(stage: HTMLDivElement): PhotoSize {
+  const style = window.getComputedStyle(stage);
+  const horizontalPadding =
+    Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
+  const verticalPadding =
+    Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom);
+  return {
+    width: Math.max(0, stage.clientWidth - horizontalPadding),
+    height: Math.max(0, stage.clientHeight - verticalPadding),
+  };
+}
+function pointFromStageCenter(stage: HTMLDivElement, point: Point): Point {
+  const bounds = stage.getBoundingClientRect();
+  const style = window.getComputedStyle(stage);
+  const content = readStageContentSize(stage);
+  const centerX = bounds.left + Number.parseFloat(style.paddingLeft) + content.width / 2;
+  const centerY = bounds.top + Number.parseFloat(style.paddingTop) + content.height / 2;
+  return { x: point.x - centerX, y: point.y - centerY };
+}
 export type PhotoViewerItem = {
   id: string;
   src: string;
@@ -74,6 +115,11 @@ export function PhotoViewer({
   const [navigationDirection, setNavigationDirection] = useState<PhotoNavigationDirection>(0);
   const [isInteracting, setIsInteracting] = useState(false);
   const [transform, setTransform] = useState<PhotoTransform>(INITIAL_TRANSFORM);
+  const [viewport, setViewport] = useState<ViewerViewport | null>(null);
+  const [fittedSize, setFittedSize] = useState<PhotoSize | null>(null);
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const [controlsActivity, setControlsActivity] = useState(0);
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const transformRef = useRef<PhotoTransform>(INITIAL_TRANSFORM);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -87,6 +133,7 @@ export function PhotoViewer({
   const lastTouchTapRef = useRef<{ time: number; point: Point } | null>(null);
   const lastInputWasTouchRef = useRef(false);
   const lastTrackpadNavigationRef = useRef(0);
+  const orientationRef = useRef<"portrait" | "landscape" | null>(null);
   const hintId = useId();
   const initialIndex = resolvePhotoViewerIndex(images, initialImageId);
   const metadataId = useId();
@@ -95,15 +142,18 @@ export function PhotoViewer({
   const activeImage = activeIndex >= 0 ? images[activeIndex] : null;
 
   const hasActiveMetadata = activeImage ? hasExhibitMetadata(activeImage) : false;
+  const activeTitle = activeImage?.exhibitTitle.trim() ?? "";
+  const activeDescription = activeImage?.exhibitDescription.trim() ?? "";
   const readMetrics = useCallback((): PhotoViewerMetrics | null => {
     const stage = stageRef.current;
     const image = imageRef.current;
     if (!stage || !image) return null;
+    const available = readStageContentSize(stage);
     return {
       imageWidth: image.offsetWidth,
       imageHeight: image.offsetHeight,
-      viewportWidth: stage.clientWidth,
-      viewportHeight: stage.clientHeight,
+      viewportWidth: available.width,
+      viewportHeight: available.height,
     };
   }, []);
 
@@ -126,11 +176,7 @@ export function PhotoViewer({
       const stage = stageRef.current;
       const metrics = readMetrics();
       if (!stage || !metrics) return;
-      const bounds = stage.getBoundingClientRect();
-      const anchor = {
-        x: clientPoint.x - bounds.left - bounds.width / 2,
-        y: clientPoint.y - bounds.top - bounds.height / 2,
-      };
+      const anchor = pointFromStageCenter(stage, clientPoint);
       applyTransform(zoomPhotoAroundPoint(transformRef.current, requestedScale, anchor, metrics));
     },
     [applyTransform, readMetrics],
@@ -149,9 +195,30 @@ export function PhotoViewer({
     transformRef.current = INITIAL_TRANSFORM;
     setTransform(INITIAL_TRANSFORM);
   }, []);
+  const revealControls = useCallback(() => {
+    setControlsVisible(true);
+    setControlsActivity((activity) => activity + 1);
+  }, []);
+
+  const fitActiveImage = useCallback(() => {
+    const stage = stageRef.current;
+    const image = imageRef.current;
+    if (!stage || !image || !image.complete || !image.naturalWidth || !image.naturalHeight) return;
+    const available = readStageContentSize(stage);
+    const nextSize = fitPhotoWithinViewport(
+      image.naturalWidth,
+      image.naturalHeight,
+      available.width,
+      available.height,
+    );
+    if (!nextSize.width || !nextSize.height) return;
+    setFittedSize(nextSize);
+  }, []);
 
   const closeViewer = useCallback(() => {
     setIsOpen(false);
+    setFittedSize(null);
+    setDescriptionExpanded(false);
     resetTransform();
     resetInteraction();
     requestAnimationFrame(() => triggerRef.current?.focus({ preventScroll: true }));
@@ -162,8 +229,11 @@ export function PhotoViewer({
     setFallbackIndex(initialIndex);
     setActiveImageId(triggerImage.id);
     setNavigationDirection(0);
+    setFittedSize(null);
+    setDescriptionExpanded(false);
     resetTransform();
     setIsOpen(true);
+    revealControls();
   };
 
   const showImageAt = useCallback(
@@ -174,10 +244,73 @@ export function PhotoViewer({
       setFallbackIndex(index);
       setActiveImageId(nextImage.id);
       resetTransform();
+      setFittedSize(null);
+      setDescriptionExpanded(false);
+      revealControls();
       resetInteraction();
     },
-    [activeIndex, images, resetInteraction, resetTransform],
+    [activeIndex, images, resetInteraction, resetTransform, revealControls],
   );
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const visualViewport = window.visualViewport;
+    const syncViewport = () => {
+      const nextViewport = readViewerViewport();
+      const orientation = window.matchMedia("(orientation: portrait)").matches
+        ? "portrait"
+        : "landscape";
+      const orientationChanged =
+        orientationRef.current !== null && orientationRef.current !== orientation;
+      orientationRef.current = orientation;
+      setViewport((current) =>
+        current &&
+        current.width === nextViewport.width &&
+        current.height === nextViewport.height &&
+        current.offsetLeft === nextViewport.offsetLeft &&
+        current.offsetTop === nextViewport.offsetTop
+          ? current
+          : nextViewport,
+      );
+      if (orientationChanged) {
+        resetTransform();
+        revealControls();
+      }
+    };
+
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+    visualViewport?.addEventListener("resize", syncViewport);
+    visualViewport?.addEventListener("scroll", syncViewport);
+    return () => {
+      orientationRef.current = null;
+      window.removeEventListener("resize", syncViewport);
+      visualViewport?.removeEventListener("resize", syncViewport);
+      visualViewport?.removeEventListener("scroll", syncViewport);
+    };
+  }, [isOpen, resetTransform, revealControls]);
+
+  useLayoutEffect(() => {
+    if (isOpen) fitActiveImage();
+  }, [activeImageId, fitActiveImage, isOpen, viewport]);
+
+  useLayoutEffect(() => {
+    if (isOpen && fittedSize) applyTransform(transformRef.current);
+  }, [applyTransform, fittedSize, isOpen]);
+
+  useEffect(() => {
+    if (
+      !isOpen ||
+      descriptionExpanded ||
+      isInteracting ||
+      !window.matchMedia("(max-width: 760px)").matches
+    ) {
+      return;
+    }
+    const timer = window.setTimeout(() => setControlsVisible(false), CONTROL_HIDE_DELAY);
+    return () => window.clearTimeout(timer);
+  }, [controlsActivity, descriptionExpanded, isInteracting, isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -191,17 +324,14 @@ export function PhotoViewer({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") closeViewer();
     };
-    const handleResize = () => applyTransform(transformRef.current);
     window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("resize", handleResize);
 
     return () => {
       document.body.style.overflow = previousOverflow;
       document.body.style.overscrollBehavior = previousOverscrollBehavior;
       window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("resize", handleResize);
     };
-  }, [applyTransform, closeViewer, isOpen]);
+  }, [closeViewer, isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -224,11 +354,7 @@ export function PhotoViewer({
     const stage = stageRef.current;
     if (points.length < 2 || !stage) return;
     const midpoint = midpointBetween(points[0], points[1]);
-    const bounds = stage.getBoundingClientRect();
-    const relativeMidpoint = {
-      x: midpoint.x - bounds.left - bounds.width / 2,
-      y: midpoint.y - bounds.top - bounds.height / 2,
-    };
+    const relativeMidpoint = pointFromStageCenter(stage, midpoint);
     const current = transformRef.current;
     pinchStartRef.current = {
       distance: Math.max(1, distanceBetween(points[0], points[1])),
@@ -244,6 +370,7 @@ export function PhotoViewer({
     const point = { x: event.clientX, y: event.clientY };
     pointersRef.current.set(event.pointerId, { ...point, pointerType: event.pointerType });
     lastInputWasTouchRef.current = event.pointerType === "touch";
+    revealControls();
 
     if (pointersRef.current.size === 1) {
       pointerOriginRef.current = point;
@@ -280,11 +407,7 @@ export function PhotoViewer({
       const stage = stageRef.current;
       if (!pinch || !stage) return;
       const midpoint = midpointBetween(points[0], points[1]);
-      const bounds = stage.getBoundingClientRect();
-      const relativeMidpoint = {
-        x: midpoint.x - bounds.left - bounds.width / 2,
-        y: midpoint.y - bounds.top - bounds.height / 2,
-      };
+      const relativeMidpoint = pointFromStageCenter(stage, midpoint);
       const scale = clampPhotoScale(
         pinch.scale * (distanceBetween(points[0], points[1]) / pinch.distance),
       );
@@ -410,11 +533,23 @@ export function PhotoViewer({
       </button>
       {isOpen ? (
         <div
-          className="photo-viewer"
+          className={`photo-viewer${controlsVisible ? "" : " controls-hidden"}`}
           role="dialog"
           aria-modal="true"
-          aria-label={activeImage?.exhibitTitle || copy.exhibition.viewerDialogLabel}
+          aria-label={activeTitle || copy.exhibition.viewerDialogLabel}
           aria-describedby={hasActiveMetadata ? `${metadataId} ${hintId}` : hintId}
+          style={
+            viewport
+              ? {
+                  left: viewport.offsetLeft,
+                  top: viewport.offsetTop,
+                  right: "auto",
+                  width: viewport.width,
+                  height: viewport.height,
+                  bottom: "auto",
+                }
+              : undefined
+          }
         >
           <button
             ref={closeButtonRef}
@@ -427,7 +562,7 @@ export function PhotoViewer({
           </button>
           <div
             ref={stageRef}
-            className={`photo-viewer-stage${hasActiveMetadata ? " has-metadata" : ""}${transform.scale > MIN_PHOTO_SCALE ? " is-draggable" : ""}${isInteracting ? " is-interacting" : ""}`}
+            className={`photo-viewer-stage${hasActiveMetadata ? " has-identity" : ""}${transform.scale > MIN_PHOTO_SCALE ? " is-draggable" : ""}${isInteracting ? " is-interacting" : ""}`}
             onWheel={handleWheel}
             onDoubleClick={handleDoubleClick}
             onPointerDown={handlePointerDown}
@@ -443,16 +578,41 @@ export function PhotoViewer({
                 src={activeImage.src}
                 alt={activeImage.alt || copy.exhibition.viewerImageAlt}
                 draggable={false}
+                onLoad={fitActiveImage}
                 style={{
+                  width: fittedSize?.width,
+                  height: fittedSize?.height,
+                  visibility: fittedSize ? "visible" : "hidden",
                   transform: `translate3d(${transform.x}px, ${transform.y}px, 0) scale(${transform.scale})`,
                 }}
               />
             ) : null}
           </div>
           {activeImage && hasActiveMetadata ? (
-            <aside id={metadataId} key={activeImage.id} className="photo-viewer-metadata">
-              {activeImage.exhibitTitle ? <h2>{activeImage.exhibitTitle}</h2> : null}
-              {activeImage.exhibitDescription ? <p>{activeImage.exhibitDescription}</p> : null}
+            <aside id={metadataId} key={activeImage.id} className="photo-viewer-identity">
+              <div className="photo-viewer-identity-heading">
+                {activeTitle ? <h2>{activeTitle}</h2> : null}
+                {activeDescription ? (
+                  <button
+                    type="button"
+                    aria-expanded={descriptionExpanded}
+                    aria-controls={`${metadataId}-description`}
+                    onClick={() => {
+                      setDescriptionExpanded((expanded) => !expanded);
+                      revealControls();
+                    }}
+                  >
+                    {descriptionExpanded
+                      ? copy.exhibition.hideExhibitDescription
+                      : copy.exhibition.showExhibitDescription}
+                  </button>
+                ) : null}
+              </div>
+              {activeDescription ? (
+                <p id={`${metadataId}-description`} hidden={!descriptionExpanded}>
+                  {activeDescription}
+                </p>
+              ) : null}
             </aside>
           ) : null}
           {images.length > 1 ? (

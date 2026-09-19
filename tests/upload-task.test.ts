@@ -1,11 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calculateTargetDimensions } from "../src/upload/client-image-optimizer.ts";
+import {
+  calculateTargetDimensions,
+  isSupportedImageFile,
+} from "../src/upload/client-image-optimizer.ts";
 import { isUploadTaskFinished, summarizeUploadStatuses } from "../src/upload/upload-task-model.ts";
 
 test("client optimizer keeps aspect ratio without enlarging small images", () => {
   assert.deepEqual(calculateTargetDimensions(6000, 4000), { width: 2560, height: 1707 });
   assert.deepEqual(calculateTargetDimensions(900, 1200), { width: 900, height: 1200 });
+});
+
+test("client optimizer recognizes supported images with non-standard or missing MIME types", () => {
+  assert.equal(isSupportedImageFile({ name: "memory.jpg", type: "image/jpeg" }), true);
+  assert.equal(isSupportedImageFile({ name: "memory.JPG", type: "image/jpg" }), true);
+  assert.equal(isSupportedImageFile({ name: "memory.jpeg", type: "" }), true);
+  assert.equal(isSupportedImageFile({ name: "memory.png", type: "" }), true);
+  assert.equal(isSupportedImageFile({ name: "memory.webp", type: "" }), true);
+  assert.equal(isSupportedImageFile({ name: "memory.heic", type: "" }), false);
+  assert.equal(isSupportedImageFile({ name: "memory.gif", type: "image/gif" }), false);
 });
 
 test("upload summary keeps success, failure and cancellation independent", () => {

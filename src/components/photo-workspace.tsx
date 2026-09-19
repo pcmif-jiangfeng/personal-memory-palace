@@ -1,8 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { copy } from "@/i18n/zh-CN";
 import { useUploadTasks } from "@/components/upload-task-provider";
+import {
+  addPhotoSelection,
+  replacePhotoSelection,
+  togglePhotoSelection,
+} from "@/components/photo-selection";
 
 const PAGE_SIZE = 24;
 
@@ -24,7 +36,14 @@ interface PhotoReferences {
 
 interface DeleteIssue {
   photoId: string;
+  name?: string;
+  error?: string;
   references?: PhotoReferences;
+}
+
+interface BatchDeleteResult {
+  deletedIds: string[];
+  failures: Array<DeleteIssue & { error: string }>;
 }
 
 type PhotoSource = "recent" | "library";
@@ -44,6 +63,16 @@ export function PhotoWorkspace({
   const { startUpload } = useUploadTasks();
   const inputRef = useRef<HTMLInputElement>(null);
   const initialRequest = useRef(true);
+  const selectionModeRef = useRef(false);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchGestureRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    longPressed: boolean;
+  } | null>(null);
+  const suppressClickRef = useRef(false);
+  const lastPointerWasTouchRef = useRef(false);
   const [photos, setPhotos] = useState(initialPhotos);
   const [nextCursor, setNextCursor] = useState(initialNextCursor);
   const [loading, setLoading] = useState(false);
@@ -57,6 +86,10 @@ export function PhotoWorkspace({
   const [archiveFailedPhotoId, setArchiveFailedPhotoId] = useState<string | null>(null);
   const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
   const [deleteIssue, setDeleteIssue] = useState<DeleteIssue | null>(null);
+  const [mobileSelectionMode, setMobileSelectionMode] = useState(false);
+  const [selectingAll, setSelectingAll] = useState(false);
+  const [batchDeleting, setBatchDeleting] = useState(false);
+  const [batchDeleteResult, setBatchDeleteResult] = useState<BatchDeleteResult | null>(null);
 
   const loadPhotos = useCallback(
     async (cursor: string | null, append: boolean, signal?: AbortSignal) => {
@@ -98,11 +131,20 @@ export function PhotoWorkspace({
       return;
     }
     const controller = new AbortController();
+    setSelected(new Set());
+    setBatchDeleteResult(null);
+    selectionModeRef.current = false;
+    setMobileSelectionMode(false);
     setPhotos([]);
     setNextCursor(null);
     void loadPhotos(null, false, controller.signal);
     return () => controller.abort();
   }, [loadPhotos]);
+  useEffect(() => {
+    return () => {
+      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    };
+  }, []);
 
   function upload(files: FileList | null) {
     if (!files?.length) return;
@@ -111,14 +153,162 @@ export function PhotoWorkspace({
   }
 
   function toggle(id: string) {
-    setSelected((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    setSelected((current) => togglePhotoSelection(current, id));
   }
 
+  function selectPhoto(id: string) {
+    setSelected((current) => addPhotoSelection(current, id));
+  }
+
+  function clearLongPress() {
+    if (!longPressTimerRef.current) return;
+    clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = null;
+  }
+
+  function exitMobileSelectionMode() {
+    clearLongPress();
+    touchGestureRef.current = null;
+    selectionModeRef.current = false;
+    setMobileSelectionMode(false);
+    setSelected(new Set());
+  }
+
+  function handlePhotoPointerDown(event: ReactPointerEvent<HTMLButtonElement>, photoId: string) {
+    lastPointerWasTouchRef.current = event.pointerType === "touch";
+    if (event.pointerType !== "touch") return;
+    const tile = event.currentTarget;
+    const gesture = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      longPressed: selectionModeRef.current,
+    };
+    touchGestureRef.current = gesture;
+    if (selectionModeRef.current) {
+      selectPhoto(photoId);
+      tile.setPointerCapture(event.pointerId);
+      return;
+    }
+    clearLongPress();
+    longPressTimerRef.current = setTimeout(() => {
+      if (touchGestureRef.current !== gesture) return;
+      gesture.longPressed = true;
+      suppressClickRef.current = true;
+      selectionModeRef.current = true;
+      setMobileSelectionMode(true);
+      selectPhoto(photoId);
+      tile.setPointerCapture(event.pointerId);
+    }, 450);
+  }
+
+  function handlePhotoPointerMove(event: ReactPointerEvent<HTMLButtonElement>) {
+    const gesture = touchGestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    if (!gesture.longPressed && !selectionModeRef.current) {
+      const distance = Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY);
+      if (distance > 12) clearLongPress();
+      return;
+    }
+    event.preventDefault();
+    const tile = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>("[data-photo-id]");
+    const photoId = tile?.dataset.photoId;
+    if (photoId) selectPhoto(photoId);
+  }
+
+  function finishPhotoPointer(event: ReactPointerEvent<HTMLButtonElement>) {
+    clearLongPress();
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    touchGestureRef.current = null;
+  }
+
+  function handlePhotoClick(event: ReactMouseEvent<HTMLButtonElement>, photoId: string) {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      event.preventDefault();
+      return;
+    }
+    if (event.detail === 0) {
+      toggle(photoId);
+      return;
+    }
+    if (lastPointerWasTouchRef.current) {
+      if (selectionModeRef.current) selectPhoto(photoId);
+      return;
+    }
+    toggle(photoId);
+  }
+
+  async function selectAllFilteredPhotos() {
+    if (selectingAll) return;
+    setSelectingAll(true);
+    const parameters = new URLSearchParams({ source, limit: String(PAGE_SIZE), selection: "ids" });
+    if (source === "library") {
+      parameters.set("usage", usageFilter);
+      if (memoryQuery.trim()) parameters.set("q", memoryQuery.trim());
+      if (stageId) parameters.set("stageId", stageId);
+    }
+    try {
+      const response = await fetch(`/api/photos?${parameters}`);
+      if (!response.ok) throw new Error("REQUEST_FAILED");
+      const result = (await response.json()) as { ids: string[] };
+      setSelected(replacePhotoSelection(result.ids));
+    } catch {
+      setLoadFailed(true);
+    } finally {
+      setSelectingAll(false);
+    }
+  }
+
+  async function batchDeleteSelectedPhotos() {
+    if (batchDeleting || selected.size === 0) return;
+    if (!window.confirm(copy.workspace.batchDeleteConfirm(selected.size))) return;
+    const ids = [...selected];
+    setBatchDeleting(true);
+    setBatchDeleteResult(null);
+    try {
+      const response = await fetch("/api/photos", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      if (!response.ok) throw new Error("REQUEST_FAILED");
+      const payload = (await response.json()) as {
+        deletedIds: string[];
+        failures: Array<
+          DeleteIssue & { error: string; details?: { references?: PhotoReferences } }
+        >;
+      };
+      const result: BatchDeleteResult = {
+        deletedIds: payload.deletedIds,
+        failures: payload.failures.map(({ details, ...failure }) => ({
+          ...failure,
+          references: details?.references,
+        })),
+      };
+      const deleted = new Set(result.deletedIds);
+      setPhotos((current) => current.filter((photo) => !deleted.has(photo.id)));
+      setSelected(new Set());
+      setBatchDeleteResult(result);
+      selectionModeRef.current = false;
+      setMobileSelectionMode(false);
+    } catch {
+      setBatchDeleteResult({
+        deletedIds: [],
+        failures: ids.map((photoId) => ({
+          photoId,
+          name: photos.find((photo) => photo.id === photoId)?.name ?? photoId,
+          error: "REQUEST_FAILED",
+        })),
+      });
+    } finally {
+      setBatchDeleting(false);
+    }
+  }
   async function archivePhoto(photo: WorkspacePhotoView) {
     if (archivingPhotoId) return;
     setArchivingPhotoId(photo.id);
@@ -186,7 +376,7 @@ export function PhotoWorkspace({
             ref={inputRef}
             type="file"
             multiple
-            accept="image/jpeg,image/png,image/webp"
+            accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
             onChange={(event) => upload(event.target.files)}
           />
         </label>
@@ -245,14 +435,82 @@ export function PhotoWorkspace({
         </div>
       ) : null}
 
-      <div className="selection-bar">
-        <strong>{copy.workspace.selected(selected.size)}</strong>
-        {selected.size > 0 ? (
-          <a className="button-primary" href={createHref}>
-            {copy.workspace.create}
-          </a>
-        ) : null}
-      </div>
+      {selected.size > 0 || mobileSelectionMode ? (
+        <div className="selection-bar" aria-label={copy.workspace.batchActions}>
+          <strong>{copy.workspace.selected(selected.size)}</strong>
+          <div className="selection-actions">
+            <button
+              type="button"
+              className="button-secondary"
+              disabled={selectingAll}
+              onClick={() => void selectAllFilteredPhotos()}
+            >
+              {selectingAll ? copy.workspace.selectingAll : copy.workspace.selectAll}
+            </button>
+            <button type="button" className="text-button" onClick={() => setSelected(new Set())}>
+              {copy.workspace.clearSelection}
+            </button>
+            {selected.size > 0 ? (
+              <a className="button-primary" href={createHref}>
+                {copy.workspace.create}
+              </a>
+            ) : null}
+            <button
+              type="button"
+              className="text-button danger"
+              disabled={batchDeleting || selected.size === 0}
+              onClick={() => void batchDeleteSelectedPhotos()}
+            >
+              {batchDeleting ? copy.workspace.batchDeleting : copy.workspace.batchDelete}
+            </button>
+            {mobileSelectionMode ? (
+              <button
+                type="button"
+                className="button-secondary mobile-selection-done"
+                onClick={exitMobileSelectionMode}
+              >
+                {copy.workspace.finishSelection}
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {batchDeleteResult ? (
+        <section className="batch-delete-result" role="status">
+          <strong>
+            {copy.workspace.batchDeleteSummary(
+              batchDeleteResult.deletedIds.length,
+              batchDeleteResult.failures.length,
+            )}
+          </strong>
+          {batchDeleteResult.failures.length > 0 ? (
+            <ul>
+              {batchDeleteResult.failures.map((failure) => (
+                <li key={failure.photoId}>
+                  <span>{failure.name ?? failure.photoId}</span>
+                  {failure.references ? (
+                    <ul>
+                      {failure.references.memories.map((memory) => (
+                        <li key={`memory-${failure.photoId}-${memory.id}`}>
+                          {copy.workspace.memoryReference(memory.title, memory.isCover)}
+                        </li>
+                      ))}
+                      {failure.references.stages.map((stage) => (
+                        <li key={`stage-${failure.photoId}-${stage.id}`}>
+                          {copy.workspace.stageReference(stage.title)}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <small>{copy.workspace.deleteFailed}</small>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+      ) : null}
 
       {photos.length === 0 && !loading ? (
         <div className="empty-state">
@@ -260,16 +518,33 @@ export function PhotoWorkspace({
         </div>
       ) : (
         <>
-          <div className="photo-grid">
+          <div className={`photo-grid${mobileSelectionMode ? " is-mobile-selection" : ""}`}>
             {photos.map((photo) => (
               <article
                 key={photo.id}
                 className={`photo-tile${selected.has(photo.id) ? " is-selected" : ""}`}
+                data-photo-id={photo.id}
               >
+                <label className="photo-tile-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(photo.id)}
+                    onChange={() => toggle(photo.id)}
+                    aria-label={copy.workspace.selectPhotoLabel(photo.name)}
+                  />
+                  <span aria-hidden="true" />
+                </label>
                 <button
                   type="button"
                   className="photo-tile-select"
-                  onClick={() => toggle(photo.id)}
+                  onClick={(event) => handlePhotoClick(event, photo.id)}
+                  onPointerDown={(event) => handlePhotoPointerDown(event, photo.id)}
+                  onPointerMove={handlePhotoPointerMove}
+                  onPointerUp={finishPhotoPointer}
+                  onPointerCancel={finishPhotoPointer}
+                  onContextMenu={(event) => {
+                    if (lastPointerWasTouchRef.current) event.preventDefault();
+                  }}
                   aria-pressed={selected.has(photo.id)}
                 >
                   <div className="photo-tile-image">

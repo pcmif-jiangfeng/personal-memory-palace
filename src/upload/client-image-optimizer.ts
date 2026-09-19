@@ -2,7 +2,18 @@ export const clientImageMaximumDimension = 2560;
 export const clientImageWebpQuality = 0.82;
 export const maximumOptimizedUploadBytes = 20 * 1024 * 1024;
 
-const acceptedSourceTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+const acceptedSourceTypes = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
+const acceptedSourceExtensions = new Set(["jpg", "jpeg", "png", "webp"]);
+
+export function isSupportedImageFile(file: Pick<File, "name" | "type">): boolean {
+  const normalizedType = file.type.trim().toLowerCase();
+  if (normalizedType) {
+    return acceptedSourceTypes.has(normalizedType);
+  }
+
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  return extension !== undefined && acceptedSourceExtensions.has(extension);
+}
 
 export class ImageOptimizationError extends Error {
   readonly code: string;
@@ -48,7 +59,7 @@ async function loadWithImageElement(file: File, signal: AbortSignal): Promise<HT
 
 export async function optimizeImageForUpload(file: File, signal: AbortSignal): Promise<Blob> {
   if (file.size === 0) throw new ImageOptimizationError("EMPTY_FILE");
-  if (!acceptedSourceTypes.has(file.type)) {
+  if (!isSupportedImageFile(file)) {
     throw new ImageOptimizationError("UNSUPPORTED_TYPE");
   }
   throwIfAborted(signal);
