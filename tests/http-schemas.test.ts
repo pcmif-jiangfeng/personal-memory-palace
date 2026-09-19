@@ -30,7 +30,20 @@ test("request schemas reject malformed shapes instead of trusting TypeScript ass
     parseShareConfiguration(jsonRequest({ memoryId: "memory", enabled: true, mode: "public" })),
     "INVALID_MODE",
   );
+  await rejectsWithCode(
+    parseShareConfiguration(
+      jsonRequest({ memoryId: "memory", enabled: true, mode: "link", rotate: "yes" }),
+    ),
+    "INVALID_ROTATE",
+  );
   await rejectsWithCode(parseMemoryAction(jsonRequest({ action: "delete" })), "INVALID_ACTION");
+});
+
+test("share configuration accepts an explicit token rotation request", async () => {
+  const input = await parseShareConfiguration(
+    jsonRequest({ memoryId: "memory", enabled: true, mode: "link", rotate: true }),
+  );
+  assert.equal(input.rotate, true);
 });
 
 test("create-memory schema normalizes identifiers and enforces photo membership inputs", async () => {

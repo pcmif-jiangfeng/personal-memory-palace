@@ -15,12 +15,18 @@ import {
   updateMemoryExhibitMetadata,
 } from "@/data/memory-exhibit-repository";
 import { isOwner } from "@/auth";
-import { apiErrorResponse, ownerRequiredResponse } from "@/http/api-error";
+import {
+  apiErrorResponse,
+  ownerRequiredResponse,
+  sameOriginRequiredResponse,
+} from "@/http/api-error";
 import { parseMemoryAction } from "@/http/schemas";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const originError = sameOriginRequiredResponse(request);
+  if (originError) return originError;
   if (!(await isOwner())) return ownerRequiredResponse();
   const { id } = await params;
   try {

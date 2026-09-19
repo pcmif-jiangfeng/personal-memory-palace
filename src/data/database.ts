@@ -22,10 +22,42 @@ export function initializeDatabase(databasePath = getDatabasePath(), seedDemo = 
   database.exec(schemaSql);
   ensureMemoryExhibitSchema(database);
   ensurePhotoLibrarySchema(database);
+  ensureFileOperationSchema(database);
+  ensureMemoryRelationSchema(database);
   if (seedDemo) {
     database.exec(demoSeedSql);
   }
   return database;
+}
+
+function ensureFileOperationSchema(database: DatabaseSync): void {
+  const columns = database.prepare("PRAGMA table_info(photo_deletion_jobs)").all() as Array<{
+    name: string;
+  }>;
+  if (!columns.some((column) => column.name === "original_storage_key")) {
+    database.exec("ALTER TABLE photo_deletion_jobs ADD COLUMN original_storage_key TEXT");
+  }
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS pending_uploads (
+      id TEXT PRIMARY KEY,
+      storage_key TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL,
+      last_error TEXT
+    )
+  `);
+}
+
+function ensureMemoryRelationSchema(database: DatabaseSync): void {
+  database.exec(`
+    DELETE FROM memory_relations
+    WHERE rowid NOT IN (
+      SELECT MIN(rowid)
+      FROM memory_relations
+      GROUP BY min(memory_id, related_memory_id), max(memory_id, related_memory_id)
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS memory_relations_undirected
+    ON memory_relations(min(memory_id, related_memory_id), max(memory_id, related_memory_id));
+  `);
 }
 
 function ensureMemoryExhibitSchema(database: DatabaseSync): void {
@@ -79,6 +111,4 @@ export function getDatabase(): DatabaseSync {
   database ??= initializeDatabase();
   return database;
 }
-
-
 

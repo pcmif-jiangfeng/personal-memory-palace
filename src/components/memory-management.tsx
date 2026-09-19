@@ -17,12 +17,14 @@ export function MemoryManagement({
   stages,
   exhibits,
   libraryPhotos,
+  libraryNextCursor,
 }: {
   memory: MemoryDetails;
   candidates: MemorySummary[];
   stages: Stage[];
   exhibits: ExhibitPhotoView[];
   libraryPhotos: ExhibitLibraryPhotoView[];
+  libraryNextCursor: string | null;
 }) {
   const router = useRouter();
   const [title, setTitle] = useState(memory.title);
@@ -123,6 +125,7 @@ export function MemoryManagement({
         memoryId={memory.id}
         exhibits={exhibits}
         libraryPhotos={libraryPhotos}
+        initialNextCursor={libraryNextCursor}
         stages={stages.map((stage) => ({ id: stage.id, title: stage.title }))}
       />
 

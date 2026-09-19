@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { expiredOwnerCookie, isOwnerPasswordValid, ownerCookie } from "@/auth";
-import { apiErrorResponse } from "@/http/api-error";
+import { apiErrorResponse, sameOriginRequiredResponse } from "@/http/api-error";
 import { parseOwnerLogin } from "@/http/schemas";
 import { clearRateLimit, clientRateLimitKey, consumeRateLimit } from "@/security/rate-limit";
 
@@ -9,6 +9,8 @@ export const runtime = "nodejs";
 const loginLimit = { limit: 8, windowMs: 15 * 60 * 1000 };
 
 export async function POST(request: Request) {
+  const originError = sameOriginRequiredResponse(request);
+  if (originError) return originError;
   const limitKey = clientRateLimitKey(request, "owner-login");
   const limit = consumeRateLimit(limitKey, loginLimit);
   if (!limit.allowed) {
@@ -32,7 +34,9 @@ export async function POST(request: Request) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  const originError = sameOriginRequiredResponse(request);
+  if (originError) return originError;
   const response = NextResponse.json({ ok: true });
   response.cookies.set(expiredOwnerCookie());
   return response;

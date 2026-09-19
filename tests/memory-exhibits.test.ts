@@ -13,7 +13,7 @@ import {
   updateMemoryExhibitMetadataInDatabase,
 } from "../src/data/memory-exhibit-repository.ts";
 import { listWorkspacePhotoCatalogInDatabase } from "../src/data/photo-repository.ts";
-import { ApiError } from "../src/http/errors.ts";
+import { DomainError } from "../src/domain/errors.ts";
 
 const now = "2026-09-18T00:00:00.000Z";
 
@@ -108,10 +108,7 @@ test("adds stored photos to an existing Memory without duplicating files or rela
     );
     assert.throws(
       () => addMemoryPhotosInDatabase(database, "memory-a", ["photo-a"]),
-      (error: unknown) =>
-        error instanceof ApiError &&
-        error.code === "PHOTO_ALREADY_IN_MEMORY" &&
-        error.status === 409,
+      (error: unknown) => error instanceof DomainError && error.code === "PHOTO_ALREADY_IN_MEMORY",
     );
   });
 });
@@ -178,7 +175,7 @@ test("reorders photos, changes the cover and repairs the cover after removal", (
 
     assert.throws(
       () => reorderMemoryPhotosInDatabase(database, "memory-a", ["photo-a"]),
-      (error: unknown) => error instanceof ApiError && error.code === "INVALID_PHOTO_ORDER",
+      (error: unknown) => error instanceof DomainError && error.code === "INVALID_PHOTO_ORDER",
     );
     assert.deepEqual(
       imageRows(database, "memory-a").map((row) => row.photo_id),

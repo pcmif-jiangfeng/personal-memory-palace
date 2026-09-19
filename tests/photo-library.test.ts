@@ -7,8 +7,9 @@ import { initializeDatabase } from "../src/data/database.ts";
 import {
   archiveUploadedPhotoInDatabase,
   listWorkspacePhotoCatalogInDatabase,
+  queryWorkspacePhotoCatalogInDatabase,
 } from "../src/data/photo-repository.ts";
-import { ApiError } from "../src/http/errors.ts";
+import { DomainError } from "../src/domain/errors.ts";
 import { createMemoryInDatabase } from "../src/data/memory-write-repository.ts";
 
 test("keeps recent and library membership separate from current Memory references", () => {
@@ -74,6 +75,37 @@ test("keeps recent and library membership separate from current Memory reference
     assert.deepEqual(new Set(used?.memoryTitles), new Set(["校园黄昏", "远方旅途"]));
     assert.deepEqual(new Set(used?.stageIds), new Set(["stage-a", "stage-b"]));
 
+    assert.deepEqual(
+      queryWorkspacePhotoCatalogInDatabase(database, { source: "recent" }).items.map(
+        (photo) => photo.id,
+      ),
+      ["recent"],
+    );
+    assert.deepEqual(
+      queryWorkspacePhotoCatalogInDatabase(database, {
+        source: "library",
+        usage: "used",
+        stageId: "stage-a",
+        query: "校园",
+      }).items.map((photo) => photo.id),
+      ["used"],
+    );
+    assert.deepEqual(
+      queryWorkspacePhotoCatalogInDatabase(database, {
+        source: "library",
+        usage: "unused",
+      }).items.map((photo) => photo.id),
+      ["archived"],
+    );
+    assert.throws(
+      () =>
+        queryWorkspacePhotoCatalogInDatabase(database, {
+          source: "recent",
+          cursor: "not-a-cursor",
+        }),
+      (error: unknown) => error instanceof DomainError && error.code === "INVALID_CURSOR",
+    );
+
     assert.deepEqual(archiveUploadedPhotoInDatabase(database, "recent"), { archived: true });
     assert.equal(
       listWorkspacePhotoCatalogInDatabase(database).find((photo) => photo.id === "recent")
@@ -82,9 +114,51 @@ test("keeps recent and library membership separate from current Memory reference
     );
     assert.throws(
       () => archiveUploadedPhotoInDatabase(database, "missing"),
-      (error: unknown) =>
-        error instanceof ApiError && error.code === "PHOTO_NOT_FOUND" && error.status === 404,
+      (error: unknown) => error instanceof DomainError && error.code === "PHOTO_NOT_FOUND",
     );
+  } finally {
+    database.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("bounds a 10,000-photo catalog and advances its cursor without duplicates", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "memory-palace-pagination-"));
+  const database = initializeDatabase(path.join(directory, "owner.sqlite"), false);
+  const insertPhoto = database.prepare(`
+    INSERT INTO uploaded_photos
+      (id, original_name, mime_type, optimized_storage_key, original_storage_key,
+       width, height, created_at, used_at, library_archived_at)
+    VALUES (?, ?, 'image/jpeg', ?, NULL, 1200, 800, ?, NULL, NULL)
+  `);
+
+  try {
+    database.exec("BEGIN");
+    for (let index = 0; index < 10_000; index += 1) {
+      const id = `photo-${String(index).padStart(5, "0")}`;
+      insertPhoto.run(
+        id,
+        `${id}.jpg`,
+        `optimized/${id}.webp`,
+        new Date(Date.UTC(2026, 0, 1, 0, index)).toISOString(),
+      );
+    }
+    database.exec("COMMIT");
+    const first = queryWorkspacePhotoCatalogInDatabase(database, {
+      source: "recent",
+      limit: 40,
+    });
+    const second = queryWorkspacePhotoCatalogInDatabase(database, {
+      source: "recent",
+      limit: 40,
+      cursor: first.nextCursor ?? undefined,
+    });
+
+    assert.equal(first.items.length, 40);
+    assert.ok(first.nextCursor);
+    assert.equal(second.items.length, 40);
+    assert.ok(second.nextCursor);
+    assert.equal(new Set([...first.items, ...second.items].map((photo) => photo.id)).size, 80);
   } finally {
     database.close();
     rmSync(directory, { recursive: true, force: true });

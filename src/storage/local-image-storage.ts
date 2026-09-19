@@ -74,8 +74,9 @@ export class LocalImageStorage implements ImageStorage {
     }
   }
 
-  async saveOptimized(input: SaveOptimizedImageInput): Promise<SavedImage> {
-    const optimizedStorageKey = `uploads/${getDataset()}/optimized/${randomUUID()}.webp`;
+  async saveOptimized(input: SaveOptimizedImageInput, storageKey?: string): Promise<SavedImage> {
+    const optimizedStorageKey =
+      storageKey ?? `uploads/${getDataset()}/optimized/${randomUUID()}.webp`;
     try {
       await writeAtomically(resolveStoredImagePath(optimizedStorageKey), input.data);
       return {

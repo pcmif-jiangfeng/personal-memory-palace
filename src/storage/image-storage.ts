@@ -26,6 +26,6 @@ export interface SaveOptimizedImageInput {
 export interface ImageStorage {
   resolve(key: string): StoredImage;
   save(input: SaveImageInput): Promise<SavedImage>;
-  saveOptimized(input: SaveOptimizedImageInput): Promise<SavedImage>;
+  saveOptimized(input: SaveOptimizedImageInput, storageKey?: string): Promise<SavedImage>;
   remove(keys: Array<string | null>): Promise<void>;
 }

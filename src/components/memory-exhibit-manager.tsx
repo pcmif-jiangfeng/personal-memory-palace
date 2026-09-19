@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUploadTasks } from "@/components/upload-task-provider";
 import { copy } from "@/i18n/zh-CN";
@@ -33,16 +33,19 @@ export function MemoryExhibitManager({
   memoryId,
   exhibits,
   libraryPhotos,
+  initialNextCursor,
   stages,
 }: {
   memoryId: string;
   exhibits: ExhibitPhotoView[];
   libraryPhotos: ExhibitLibraryPhotoView[];
+  initialNextCursor: string | null;
   stages: Array<{ id: string; title: string }>;
 }) {
   const router = useRouter();
   const { startUpload } = useUploadTasks();
   const inputRef = useRef<HTMLInputElement>(null);
+  const initialLibraryRequest = useRef(true);
   const initialSelected = exhibits.find((photo) => photo.isCover) ?? exhibits[0];
   const [selectedPhotoId, setSelectedPhotoId] = useState(initialSelected?.photoId ?? "");
   const [draftTitle, setDraftTitle] = useState(initialSelected?.exhibitTitle ?? "");
@@ -51,10 +54,12 @@ export function MemoryExhibitManager({
   );
   const [metadataDirty, setMetadataDirty] = useState(false);
   const [librarySelection, setLibrarySelection] = useState<Set<string>>(new Set());
+  const [availableLibraryPhotos, setAvailableLibraryPhotos] = useState(libraryPhotos);
+  const [nextCursor, setNextCursor] = useState(initialNextCursor);
+  const [loadingLibrary, setLoadingLibrary] = useState(false);
   const [usageFilter, setUsageFilter] = useState<UsageFilter>("all");
   const [memoryQuery, setMemoryQuery] = useState("");
   const [stageId, setStageId] = useState("");
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -65,22 +70,54 @@ export function MemoryExhibitManager({
   );
   const selected = exhibits.find((photo) => photo.photoId === selectedPhotoId) ?? exhibits[0];
   const remainingSlots = Math.max(0, MAX_PHOTOS - exhibits.length);
-  const normalizedQuery = memoryQuery.trim().toLocaleLowerCase();
-  const filteredLibrary = libraryPhotos
-    .filter((photo) => photo.libraryMember && !currentPhotoIds.has(photo.id))
-    .filter((photo) => {
-      const used = photo.activeMemoryCount > 0;
-      const matchesUsage =
-        usageFilter === "all" ||
-        (usageFilter === "used" && used) ||
-        (usageFilter === "unused" && !used);
-      const matchesMemory =
-        !normalizedQuery ||
-        photo.memoryTitles.some((title) => title.toLocaleLowerCase().includes(normalizedQuery));
-      const matchesStage = !stageId || photo.stageIds.includes(stageId);
-      return matchesUsage && matchesMemory && matchesStage;
-    });
-  const visibleLibrary = filteredLibrary.slice(0, visibleCount);
+  const filteredLibrary = availableLibraryPhotos.filter((photo) => !currentPhotoIds.has(photo.id));
+
+  const loadLibrary = useCallback(
+    async (cursor: string | null, append: boolean, signal?: AbortSignal) => {
+      setLoadingLibrary(true);
+      setError("");
+      const parameters = new URLSearchParams({
+        source: "library",
+        usage: usageFilter,
+        limit: String(PAGE_SIZE),
+      });
+      if (memoryQuery.trim()) parameters.set("q", memoryQuery.trim());
+      if (stageId) parameters.set("stageId", stageId);
+      if (cursor) parameters.set("cursor", cursor);
+      try {
+        const response = await fetch(`/api/photos?${parameters}`, { signal });
+        if (!response.ok) {
+          setError(copy.exhibits.failed);
+          return;
+        }
+        const page = (await response.json()) as {
+          items: ExhibitLibraryPhotoView[];
+          nextCursor: string | null;
+        };
+        setAvailableLibraryPhotos((current) => (append ? [...current, ...page.items] : page.items));
+        setNextCursor(page.nextCursor);
+      } catch (requestError) {
+        if (!(requestError instanceof DOMException && requestError.name === "AbortError")) {
+          setError(copy.exhibits.failed);
+        }
+      } finally {
+        if (!signal?.aborted) setLoadingLibrary(false);
+      }
+    },
+    [memoryQuery, stageId, usageFilter],
+  );
+
+  useEffect(() => {
+    if (initialLibraryRequest.current) {
+      initialLibraryRequest.current = false;
+      return;
+    }
+    const controller = new AbortController();
+    setAvailableLibraryPhotos([]);
+    setNextCursor(null);
+    void loadLibrary(null, false, controller.signal);
+    return () => controller.abort();
+  }, [loadLibrary]);
 
   async function request(body: unknown): Promise<void> {
     const response = await fetch(`/api/memories/${encodeURIComponent(memoryId)}`, {
@@ -336,10 +373,7 @@ export function MemoryExhibitManager({
                 <span>{copy.workspace.usageFilter}</span>
                 <select
                   value={usageFilter}
-                  onChange={(event) => {
-                    setUsageFilter(event.target.value as UsageFilter);
-                    setVisibleCount(PAGE_SIZE);
-                  }}
+                  onChange={(event) => setUsageFilter(event.target.value as UsageFilter)}
                 >
                   <option value="all">{copy.workspace.usageAll}</option>
                   <option value="used">{copy.workspace.usageUsed}</option>
@@ -350,22 +384,13 @@ export function MemoryExhibitManager({
                 <span>{copy.workspace.memorySearch}</span>
                 <input
                   value={memoryQuery}
-                  onChange={(event) => {
-                    setMemoryQuery(event.target.value);
-                    setVisibleCount(PAGE_SIZE);
-                  }}
+                  onChange={(event) => setMemoryQuery(event.target.value)}
                   placeholder={copy.workspace.memorySearchPlaceholder}
                 />
               </label>
               <label>
                 <span>{copy.workspace.stageFilter}</span>
-                <select
-                  value={stageId}
-                  onChange={(event) => {
-                    setStageId(event.target.value);
-                    setVisibleCount(PAGE_SIZE);
-                  }}
-                >
+                <select value={stageId} onChange={(event) => setStageId(event.target.value)}>
                   <option value="">{copy.workspace.stageAll}</option>
                   {stages.map((stage) => (
                     <option key={stage.id} value={stage.id}>
@@ -376,12 +401,12 @@ export function MemoryExhibitManager({
               </label>
             </div>
 
-            {filteredLibrary.length === 0 ? (
+            {filteredLibrary.length === 0 && !loadingLibrary ? (
               <p className="quiet-empty">{copy.exhibits.libraryEmpty}</p>
             ) : (
               <>
                 <div className="memory-exhibit-library">
-                  {visibleLibrary.map((photo) => (
+                  {filteredLibrary.map((photo) => (
                     <button
                       type="button"
                       key={photo.id}
@@ -394,13 +419,14 @@ export function MemoryExhibitManager({
                     </button>
                   ))}
                 </div>
-                {visibleLibrary.length < filteredLibrary.length ? (
+                {nextCursor ? (
                   <button
                     type="button"
                     className="button-secondary"
-                    onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
+                    disabled={loadingLibrary}
+                    onClick={() => void loadLibrary(nextCursor, true)}
                   >
-                    {copy.workspace.loadMore}
+                    {loadingLibrary ? "加载中…" : copy.workspace.loadMore}
                   </button>
                 ) : null}
                 <button

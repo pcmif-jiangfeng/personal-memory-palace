@@ -111,9 +111,12 @@ Memory
 - Owner 使用单一私密密码登录；
 - 写入 API 与管理入口均要求 Owner 身份；
 - Owner 可以为单个 Memory 开启或关闭分享；
+- Owner 可以重新生成分享链接；旧链接及其分享访问 Cookie 会立即失效；
 - 分享支持“有链接即可访问”和“链接 + 密码”两种模式；
 - Visitor 看到相同的博物馆式 Memory 展览界面，但保持只读；
 - 未被分享的内容不会进入 Visitor 视图。
+
+无密码分享链接本身就是访问凭据，应像密码一样谨慎转发。关闭或重新生成链接可以阻止后续访问，但不能撤回访客此前已保存到本地的图片副本。
 
 ### 生产可靠性
 
@@ -228,6 +231,7 @@ data/images/uploads/<dataset>/
 | `pnpm test` | 运行全部测试 |
 | `pnpm db:init` | 初始化当前数据集数据库 |
 | `pnpm db:demo:reset` | 重建 Demo 数据库 |
+| `pnpm files:recover` | 重试中断的上传清理和照片删除任务 |
 | `pnpm backup:manual` | 创建手动一致性备份 |
 | `pnpm backup:restore-test` | 在隔离目录中验证备份可恢复性 |
 

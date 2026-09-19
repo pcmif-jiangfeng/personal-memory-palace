@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { getDatabase } from "./database.ts";
 import { withTransaction } from "./transaction.ts";
-import { ApiError } from "../http/errors.ts";
+import { DomainError } from "../domain/errors.ts";
 import {
   EXHIBIT_DESCRIPTION_MAX_LENGTH,
   EXHIBIT_TITLE_MAX_LENGTH,
@@ -20,7 +20,7 @@ function requireActiveMemory(database: DatabaseSync, memoryId: string): void {
       .prepare("SELECT id FROM memories WHERE id = ? AND trashed_at IS NULL")
       .get(memoryId)
   ) {
-    throw new ApiError("MEMORY_NOT_FOUND", 404);
+    throw new DomainError("MEMORY_NOT_FOUND");
   }
 }
 
@@ -42,7 +42,7 @@ function findMemoryPhoto(
        WHERE memory_images.memory_id = ? AND uploaded_photos.id = ?`,
     )
     .get(memoryId, photoId) as PhotoKeyRow | undefined;
-  if (!photo) throw new ApiError("MEMORY_PHOTO_NOT_FOUND", 404);
+  if (!photo) throw new DomainError("MEMORY_PHOTO_NOT_FOUND");
   return photo;
 }
 
@@ -53,7 +53,7 @@ export function addMemoryPhotosInDatabase(
 ): void {
   const ids = [...new Set(photoIds)];
   if (ids.length === 0 || ids.length > MAX_MEMORY_PHOTOS) {
-    throw new ApiError("INVALID_PHOTOS", 400);
+    throw new DomainError("INVALID_PHOTOS");
   }
 
   withTransaction(database, () => {
@@ -65,7 +65,7 @@ export function addMemoryPhotosInDatabase(
          FROM uploaded_photos WHERE id IN (${placeholders})`,
       )
       .all(...ids) as unknown as PhotoKeyRow[];
-    if (photos.length !== ids.length) throw new ApiError("INVALID_PHOTOS", 400);
+    if (photos.length !== ids.length) throw new DomainError("INVALID_PHOTOS");
     const photosById = new Map(photos.map((photo) => [photo.id, photo]));
     const orderedPhotos = ids.map((id) => photosById.get(id)!);
 
@@ -74,10 +74,10 @@ export function addMemoryPhotosInDatabase(
       .all(memoryId) as unknown as Array<{ storage_key: string }>;
     const currentKeys = new Set(current.map((item) => item.storage_key));
     if (orderedPhotos.some((photo) => currentKeys.has(photo.storage_key))) {
-      throw new ApiError("PHOTO_ALREADY_IN_MEMORY", 409);
+      throw new DomainError("PHOTO_ALREADY_IN_MEMORY");
     }
     if (current.length + orderedPhotos.length > MAX_MEMORY_PHOTOS) {
-      throw new ApiError("TOO_MANY_MEMORY_PHOTOS", 400);
+      throw new DomainError("TOO_MANY_MEMORY_PHOTOS");
     }
 
     const lastOrder = database
@@ -169,7 +169,7 @@ export function reorderMemoryPhotosInDatabase(
       .all(memoryId) as unknown as Array<{ id: string }>;
     const currentIds = new Set(current.map((item) => item.id));
     if (ids.length !== current.length || ids.some((id) => !currentIds.has(id))) {
-      throw new ApiError("INVALID_PHOTO_ORDER", 400);
+      throw new DomainError("INVALID_PHOTO_ORDER");
     }
     const update = database.prepare(
       `UPDATE memory_images SET sort_order = ?
@@ -210,10 +210,10 @@ export function updateMemoryExhibitMetadataInDatabase(
   const title = input.title.trim();
   const description = input.description.trim();
   if (title.length > EXHIBIT_TITLE_MAX_LENGTH) {
-    throw new ApiError("EXHIBIT_TITLE_TOO_LONG", 400);
+    throw new DomainError("EXHIBIT_TITLE_TOO_LONG");
   }
   if (description.length > EXHIBIT_DESCRIPTION_MAX_LENGTH) {
-    throw new ApiError("EXHIBIT_DESCRIPTION_TOO_LONG", 400);
+    throw new DomainError("EXHIBIT_DESCRIPTION_TOO_LONG");
   }
   withTransaction(database, () => {
     requireActiveMemory(database, memoryId);

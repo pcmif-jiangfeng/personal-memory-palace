@@ -5,7 +5,7 @@ import {
   getShareAccessCookieValue,
   shareAccessCookieName,
 } from "@/data/share-repository";
-import { apiErrorResponse } from "@/http/api-error";
+import { apiErrorResponse, sameOriginRequiredResponse } from "@/http/api-error";
 import { parseShareAccess } from "@/http/schemas";
 import { clearRateLimit, clientRateLimitKey, consumeRateLimit } from "@/security/rate-limit";
 
@@ -14,6 +14,8 @@ export const runtime = "nodejs";
 const accessLimit = { limit: 10, windowMs: 15 * 60 * 1000 };
 
 export async function POST(request: Request) {
+  const originError = sameOriginRequiredResponse(request);
+  if (originError) return originError;
   const limitKey = clientRateLimitKey(request, "share-access");
   const limit = consumeRateLimit(limitKey, accessLimit);
   if (!limit.allowed) {

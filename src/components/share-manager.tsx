@@ -6,12 +6,12 @@ export function ShareManager({ memoryId }: { memoryId: string }) {
   const [url, setUrl] = useState("");
   const [enabled, setEnabled] = useState(false);
   const [message, setMessage] = useState("");
-  async function save(event: React.FormEvent) {
+  async function save(event: React.FormEvent, rotate = false) {
     event.preventDefault();
     const response = await fetch("/api/shares", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ memoryId, enabled, mode, password }),
+      body: JSON.stringify({ memoryId, enabled, mode, password, rotate }),
     });
     const result = await response.json();
     if (response.ok) {
@@ -51,6 +51,15 @@ export function ShareManager({ memoryId }: { memoryId: string }) {
         </>
       ) : null}
       <button className="button-secondary">保存分享设置</button>
+      {enabled && url ? (
+        <button
+          className="button-secondary"
+          type="button"
+          onClick={(event) => void save(event, true)}
+        >
+          重新生成分享链接
+        </button>
+      ) : null}
       {url ? (
         <input
           className="share-url"

@@ -18,5 +18,7 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/scripts/backup.mjs ./maintenance/backup.mjs
 COPY --from=builder /app/scripts/restore-backup.mjs ./maintenance/restore-backup.mjs
+COPY --from=builder /app/scripts/recover-file-operations.ts ./maintenance/recover-file-operations.ts
+COPY --from=builder /app/src ./src
 EXPOSE 3000
 CMD ["node", "server.js"]

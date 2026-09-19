@@ -30,7 +30,7 @@ test("creates an integrity-checked backup and restores it into an isolated data 
 
     const backupResult = spawnSync(
       process.execPath,
-      ["scripts/backup.mjs", dataDirectory, backupRoot],
+      ["scripts/backup.mjs", dataDirectory, backupRoot, "--quiesced"],
       {
         cwd: process.cwd(),
         encoding: "utf8",

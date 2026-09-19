@@ -2,12 +2,18 @@ import { NextResponse } from "next/server";
 import { updateStage } from "@/data/stage-repository";
 import { trashStage } from "@/data/management-repository";
 import { isOwner } from "@/auth";
-import { apiErrorResponse, ownerRequiredResponse } from "@/http/api-error";
+import {
+  apiErrorResponse,
+  ownerRequiredResponse,
+  sameOriginRequiredResponse,
+} from "@/http/api-error";
 import { parseStageInput } from "@/http/schemas";
 
 export const runtime = "nodejs";
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const originError = sameOriginRequiredResponse(request);
+  if (originError) return originError;
   if (!(await isOwner())) return ownerRequiredResponse();
   try {
     const { id } = await params;
@@ -18,7 +24,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   }
 }
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const originError = sameOriginRequiredResponse(request);
+  if (originError) return originError;
   if (!(await isOwner())) return ownerRequiredResponse();
   try {
     trashStage((await params).id);

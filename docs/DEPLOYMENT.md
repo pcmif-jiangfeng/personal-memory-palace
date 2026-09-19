@@ -41,6 +41,12 @@ Backup root:     /app/backups/
 
 Owner 会话和密码分享访问值由独立 Session Secret 签名。Owner 密码和 Session Secret 都不能进入 Git、镜像或日志。
 
+## 2.1 可信代理边界
+
+应用端口不得直接暴露到公网。生产环境应只允许反向代理访问应用端口，并由代理覆盖而不是追加客户端传入的 `X-Forwarded-For`。应用限流仅在这一前提下使用该请求头识别来源 IP；单实例内存限流会在进程重启时清空，扩展为多实例前必须改用共享限流存储。
+
+无密码分享链接属于 bearer credential。疑似泄露时应在 Owner 界面重新生成链接；旧链接和旧分享 Cookie 会立即失效，但访客此前已下载的图片无法远程撤回。
+
 ## 3. 首次部署（腾讯云网页终端）
 
 ### 3.1 创建目录并拉取代码
@@ -139,6 +145,21 @@ docker run -d \
 
 删除的是容器，不是宿主机 `/opt/personal-memory-palace/data`，因此真实数据应继续存在。
 
+如果上传或永久删除期间进程异常退出，可在应用停止写入时重试待处理的文件操作：
+
+```bash
+docker stop personal-memory-palace
+docker run --rm \
+  --entrypoint node \
+  --env-file /opt/personal-memory-palace/config/app.env \
+  -v /opt/personal-memory-palace/data:/app/data \
+  personal-memory-palace:current \
+  --experimental-strip-types /app/maintenance/recover-file-operations.ts
+docker start personal-memory-palace
+```
+
+命令会清理中断上传留下的文件，并重试永久删除所排队的原图与优化图；只要仍有失败项，就会返回非零退出码并保留任务供下次重试。
+
 ### 5.3 Image rebuild 后 recreate
 
 ```bash
@@ -177,7 +198,7 @@ docker run --rm \
   -v /opt/personal-memory-palace/data:/app/data:ro \
   -v /opt/personal-memory-palace/backups:/app/backups \
   personal-memory-palace:current \
-  /app/maintenance/backup.mjs /app/data /app/backups
+  /app/maintenance/backup.mjs /app/data /app/backups --quiesced
 
 docker start personal-memory-palace
 find /opt/personal-memory-palace/backups -maxdepth 2 -type f -print
