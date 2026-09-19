@@ -2461,9 +2461,6 @@ img {
   width: 1.7rem;
   height: 1.7rem;
   place-items: center;
-  border-radius: 0.45rem;
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 1px 8px rgba(35, 29, 24, 0.18);
   cursor: pointer;
 }
 .photo-tile-checkbox input {

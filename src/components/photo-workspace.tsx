@@ -439,22 +439,14 @@ export function PhotoWorkspace({
         <div className="selection-bar" aria-label={copy.workspace.batchActions}>
           <strong>{copy.workspace.selected(selected.size)}</strong>
           <div className="selection-actions">
-            <button
-              type="button"
-              className="button-secondary"
-              disabled={selectingAll}
-              onClick={() => void selectAllFilteredPhotos()}
-            >
-              {selectingAll ? copy.workspace.selectingAll : copy.workspace.selectAll}
-            </button>
-            <button type="button" className="text-button" onClick={() => setSelected(new Set())}>
-              {copy.workspace.clearSelection}
-            </button>
             {selected.size > 0 ? (
               <a className="button-primary" href={createHref}>
                 {copy.workspace.create}
               </a>
             ) : null}
+            <button type="button" className="text-button" onClick={() => setSelected(new Set())}>
+              {copy.workspace.clearSelection}
+            </button>
             <button
               type="button"
               className="text-button danger"
@@ -462,6 +454,14 @@ export function PhotoWorkspace({
               onClick={() => void batchDeleteSelectedPhotos()}
             >
               {batchDeleting ? copy.workspace.batchDeleting : copy.workspace.batchDelete}
+            </button>
+            <button
+              type="button"
+              className="button-secondary"
+              disabled={selectingAll}
+              onClick={() => void selectAllFilteredPhotos()}
+            >
+              {selectingAll ? copy.workspace.selectingAll : copy.workspace.selectAll}
             </button>
             {mobileSelectionMode ? (
               <button
@@ -532,7 +532,6 @@ export function PhotoWorkspace({
                     onChange={() => toggle(photo.id)}
                     aria-label={copy.workspace.selectPhotoLabel(photo.name)}
                   />
-                  <span aria-hidden="true" />
                 </label>
                 <button
                   type="button"
