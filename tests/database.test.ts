@@ -5,7 +5,10 @@ import path from "node:path";
 import test from "node:test";
 import { DatabaseSync } from "node:sqlite";
 import { initializeDatabase } from "../src/data/database.ts";
-import { updateMemoryDetailsInDatabase } from "../src/data/management-repository.ts";
+import {
+  updateMemoryDetailsInDatabase,
+  updateMemoryRelationsInDatabase,
+} from "../src/data/management-repository.ts";
 
 test("initializes the core schema and isolated demo data", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "memory-palace-"));
@@ -45,6 +48,7 @@ test("initializes the core schema and isolated demo data", () => {
       "memories",
       "memory_images",
       "memory_relations",
+      "pending_uploads",
       "photo_deletion_jobs",
       "share_configs",
       "stage_covers",
@@ -57,6 +61,47 @@ test("initializes the core schema and isolated demo data", () => {
     assert.ok(journeyPhotoCount.count >= 3);
     assert.equal(laterNoteCount.count, 1);
   } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("updates canonical Memory relations from either endpoint", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "memory-palace-relations-"));
+  const database = initializeDatabase(path.join(directory, "owner.sqlite"), false);
+  const now = "2026-09-19T00:00:00.000Z";
+
+  try {
+    const insert = database.prepare(`
+      INSERT INTO memories
+        (id, stage_id, title, story, visibility, created_at, updated_at)
+      VALUES (?, NULL, ?, 'Story', 'private', ?, ?)
+    `);
+    for (const id of ["memory-a", "memory-b", "memory-c"]) {
+      insert.run(id, id, now, now);
+    }
+
+    updateMemoryRelationsInDatabase(database, "memory-a", ["memory-b"]);
+    updateMemoryRelationsInDatabase(database, "memory-b", ["memory-a"]);
+    let rows = database
+      .prepare("SELECT memory_id, related_memory_id FROM memory_relations")
+      .all()
+      .map((row) => ({
+        memory_id: String((row as { memory_id: string }).memory_id),
+        related_memory_id: String((row as { related_memory_id: string }).related_memory_id),
+      }));
+    assert.deepEqual(rows, [{ memory_id: "memory-a", related_memory_id: "memory-b" }]);
+
+    updateMemoryRelationsInDatabase(database, "memory-b", ["memory-c"]);
+    rows = database
+      .prepare("SELECT memory_id, related_memory_id FROM memory_relations")
+      .all()
+      .map((row) => ({
+        memory_id: String((row as { memory_id: string }).memory_id),
+        related_memory_id: String((row as { related_memory_id: string }).related_memory_id),
+      }));
+    assert.deepEqual(rows, [{ memory_id: "memory-b", related_memory_id: "memory-c" }]);
+  } finally {
+    database.close();
     rmSync(directory, { recursive: true, force: true });
   }
 });

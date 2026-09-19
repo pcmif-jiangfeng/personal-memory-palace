@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { getDatabase } from "./database.ts";
 import { findMemoryByIdInDatabase } from "./memory-repository.ts";
 import { withTransaction } from "./transaction.ts";
+import { DomainError } from "../domain/errors.ts";
 import type { MemorySummary } from "../domain/models.ts";
 import {
   MAX_MEMORY_PHOTOS,
@@ -33,14 +34,14 @@ export function createMemoryInDatabase(
   const story = input.story.trim();
   const photoIds = [...new Set(input.photoIds)];
   const relatedIds = [...new Set(input.relatedMemoryIds ?? [])];
-  if (!title) throw new Error("TITLE_REQUIRED");
-  if (title.length > MEMORY_TITLE_MAX_LENGTH) throw new Error("TITLE_TOO_LONG");
-  if (!story) throw new Error("STORY_REQUIRED");
-  if (story.length > MEMORY_STORY_MAX_LENGTH) throw new Error("STORY_TOO_LONG");
-  if (photoIds.length === 0) throw new Error("PHOTOS_REQUIRED");
-  if (photoIds.length > MAX_MEMORY_PHOTOS) throw new Error("INVALID_PHOTOS");
-  if (relatedIds.length > MAX_RELATED_MEMORIES) throw new Error("INVALID_RELATIONS");
-  if (!photoIds.includes(input.coverPhotoId)) throw new Error("INVALID_COVER");
+  if (!title) throw new DomainError("TITLE_REQUIRED");
+  if (title.length > MEMORY_TITLE_MAX_LENGTH) throw new DomainError("TITLE_TOO_LONG");
+  if (!story) throw new DomainError("STORY_REQUIRED");
+  if (story.length > MEMORY_STORY_MAX_LENGTH) throw new DomainError("STORY_TOO_LONG");
+  if (photoIds.length === 0) throw new DomainError("PHOTOS_REQUIRED");
+  if (photoIds.length > MAX_MEMORY_PHOTOS) throw new DomainError("INVALID_PHOTOS");
+  if (relatedIds.length > MAX_RELATED_MEMORIES) throw new DomainError("INVALID_RELATIONS");
+  if (!photoIds.includes(input.coverPhotoId)) throw new DomainError("INVALID_COVER");
 
   const placeholders = photoIds.map(() => "?").join(",");
   const id = randomUUID();
@@ -53,14 +54,14 @@ export function createMemoryInDatabase(
          WHERE id IN (${placeholders})`,
       )
       .all(...photoIds) as unknown as PhotoKeyRow[];
-    if (photos.length !== photoIds.length) throw new Error("INVALID_PHOTOS");
+    if (photos.length !== photoIds.length) throw new DomainError("INVALID_PHOTOS");
     const photoById = new Map(photos.map((photo) => [photo.id, photo]));
 
     if (input.stageId) {
       const stage = database
         .prepare("SELECT id FROM stages WHERE id = ? AND trashed_at IS NULL")
         .get(input.stageId);
-      if (!stage) throw new Error("INVALID_STAGE");
+      if (!stage) throw new DomainError("INVALID_STAGE");
     }
     if (relatedIds.length > 0) {
       const relatedPlaceholders = relatedIds.map(() => "?").join(",");
@@ -69,7 +70,7 @@ export function createMemoryInDatabase(
           `SELECT id FROM memories WHERE id IN (${relatedPlaceholders}) AND trashed_at IS NULL`,
         )
         .all(...relatedIds);
-      if (rows.length !== relatedIds.length) throw new Error("INVALID_RELATIONS");
+      if (rows.length !== relatedIds.length) throw new DomainError("INVALID_RELATIONS");
     }
 
     database.prepare(`INSERT INTO memories
@@ -85,7 +86,7 @@ export function createMemoryInDatabase(
     });
     const insertRelation = database.prepare(`INSERT INTO memory_relations
       (memory_id, related_memory_id, created_at) VALUES (?, ?, ?)`);
-    relatedIds.forEach((relatedId) => insertRelation.run(id, relatedId, now));
+    relatedIds.forEach((relatedId) => insertRelation.run(...[id, relatedId].sort(), now));
     database
       .prepare(
         `UPDATE uploaded_photos

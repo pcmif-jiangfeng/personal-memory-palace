@@ -1,7 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { copy } from "@/i18n/zh-CN";
 import { useUploadTasks } from "@/components/upload-task-provider";
 
@@ -33,53 +32,77 @@ type UsageFilter = "all" | "used" | "unused";
 
 export function PhotoWorkspace({
   initialPhotos,
+  initialSource,
+  initialNextCursor,
   stages,
 }: {
   initialPhotos: WorkspacePhotoView[];
+  initialSource: PhotoSource;
+  initialNextCursor: string | null;
   stages: Array<{ id: string; title: string }>;
 }) {
-  const router = useRouter();
   const { startUpload } = useUploadTasks();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [hiddenPhotoIds, setHiddenPhotoIds] = useState<Set<string>>(new Set());
-  const [archivedPhotoIds, setArchivedPhotoIds] = useState<Set<string>>(new Set());
+  const initialRequest = useRef(true);
+  const [photos, setPhotos] = useState(initialPhotos);
+  const [nextCursor, setNextCursor] = useState(initialNextCursor);
+  const [loading, setLoading] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [source, setSource] = useState<PhotoSource>(() =>
-    initialPhotos.some((photo) => !photo.libraryMember) ? "recent" : "library",
-  );
+  const [source, setSource] = useState<PhotoSource>(initialSource);
   const [usageFilter, setUsageFilter] = useState<UsageFilter>("all");
   const [memoryQuery, setMemoryQuery] = useState("");
   const [stageId, setStageId] = useState("");
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [archivingPhotoId, setArchivingPhotoId] = useState<string | null>(null);
   const [archiveFailedPhotoId, setArchiveFailedPhotoId] = useState<string | null>(null);
   const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
   const [deleteIssue, setDeleteIssue] = useState<DeleteIssue | null>(null);
 
-  const photos = initialPhotos
-    .filter((photo) => !hiddenPhotoIds.has(photo.id))
-    .map((photo) => (archivedPhotoIds.has(photo.id) ? { ...photo, libraryMember: true } : photo));
-  const recentPhotos = photos.filter((photo) => !photo.libraryMember);
-  const libraryPhotos = photos.filter((photo) => photo.libraryMember);
-  const normalizedQuery = memoryQuery.trim().toLocaleLowerCase();
-  const filteredPhotos = (source === "recent" ? recentPhotos : libraryPhotos).filter((photo) => {
-    if (source === "recent") return true;
-    const currentlyUsed = photo.activeMemoryCount > 0;
-    const matchesUsage =
-      usageFilter === "all" ||
-      (usageFilter === "used" && currentlyUsed) ||
-      (usageFilter === "unused" && !currentlyUsed);
-    const matchesMemory =
-      !normalizedQuery ||
-      photo.memoryTitles.some((title) => title.toLocaleLowerCase().includes(normalizedQuery));
-    const matchesStage = !stageId || photo.stageIds.includes(stageId);
-    return matchesUsage && matchesMemory && matchesStage;
-  });
-  const visiblePhotos = filteredPhotos.slice(0, visibleCount);
+  const loadPhotos = useCallback(
+    async (cursor: string | null, append: boolean, signal?: AbortSignal) => {
+      setLoading(true);
+      setLoadFailed(false);
+      const parameters = new URLSearchParams({ source, limit: String(PAGE_SIZE) });
+      if (source === "library") {
+        parameters.set("usage", usageFilter);
+        if (memoryQuery.trim()) parameters.set("q", memoryQuery.trim());
+        if (stageId) parameters.set("stageId", stageId);
+      }
+      if (cursor) parameters.set("cursor", cursor);
+      try {
+        const response = await fetch(`/api/photos?${parameters}`, { signal });
+        if (!response.ok) {
+          setLoadFailed(true);
+          return;
+        }
+        const page = (await response.json()) as {
+          items: WorkspacePhotoView[];
+          nextCursor: string | null;
+        };
+        setPhotos((current) => (append ? [...current, ...page.items] : page.items));
+        setNextCursor(page.nextCursor);
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setLoadFailed(true);
+        }
+      } finally {
+        if (!signal?.aborted) setLoading(false);
+      }
+    },
+    [memoryQuery, source, stageId, usageFilter],
+  );
 
-  function resetVisibleCount() {
-    setVisibleCount(PAGE_SIZE);
-  }
+  useEffect(() => {
+    if (initialRequest.current) {
+      initialRequest.current = false;
+      return;
+    }
+    const controller = new AbortController();
+    setPhotos([]);
+    setNextCursor(null);
+    void loadPhotos(null, false, controller.signal);
+    return () => controller.abort();
+  }, [loadPhotos]);
 
   function upload(files: FileList | null) {
     if (!files?.length) return;
@@ -108,8 +131,11 @@ export function PhotoWorkspace({
         setArchiveFailedPhotoId(photo.id);
         return;
       }
-      setArchivedPhotoIds((current) => new Set(current).add(photo.id));
-      router.refresh();
+      setPhotos((current) =>
+        source === "recent"
+          ? current.filter((item) => item.id !== photo.id)
+          : current.map((item) => (item.id === photo.id ? { ...item, libraryMember: true } : item)),
+      );
     } catch {
       setArchiveFailedPhotoId(photo.id);
     } finally {
@@ -137,13 +163,12 @@ export function PhotoWorkspace({
         setDeleteIssue({ photoId: photo.id });
         return;
       }
-      setHiddenPhotoIds((current) => new Set(current).add(photo.id));
+      setPhotos((current) => current.filter((item) => item.id !== photo.id));
       setSelected((current) => {
         const next = new Set(current);
         next.delete(photo.id);
         return next;
       });
-      router.refresh();
     } catch {
       setDeleteIssue({ photoId: photo.id });
     } finally {
@@ -172,22 +197,16 @@ export function PhotoWorkspace({
         <button
           type="button"
           className={source === "recent" ? "is-active" : ""}
-          onClick={() => {
-            setSource("recent");
-            resetVisibleCount();
-          }}
+          onClick={() => setSource("recent")}
         >
-          {copy.workspace.recentPhotos} <span>{recentPhotos.length}</span>
+          {copy.workspace.recentPhotos}
         </button>
         <button
           type="button"
           className={source === "library" ? "is-active" : ""}
-          onClick={() => {
-            setSource("library");
-            resetVisibleCount();
-          }}
+          onClick={() => setSource("library")}
         >
-          {copy.workspace.library} <span>{libraryPhotos.length}</span>
+          {copy.workspace.library}
         </button>
       </div>
 
@@ -197,10 +216,7 @@ export function PhotoWorkspace({
             <span>{copy.workspace.usageFilter}</span>
             <select
               value={usageFilter}
-              onChange={(event) => {
-                setUsageFilter(event.target.value as UsageFilter);
-                resetVisibleCount();
-              }}
+              onChange={(event) => setUsageFilter(event.target.value as UsageFilter)}
             >
               <option value="all">{copy.workspace.usageAll}</option>
               <option value="used">{copy.workspace.usageUsed}</option>
@@ -211,22 +227,13 @@ export function PhotoWorkspace({
             <span>{copy.workspace.memorySearch}</span>
             <input
               value={memoryQuery}
-              onChange={(event) => {
-                setMemoryQuery(event.target.value);
-                resetVisibleCount();
-              }}
+              onChange={(event) => setMemoryQuery(event.target.value)}
               placeholder={copy.workspace.memorySearchPlaceholder}
             />
           </label>
           <label>
             <span>{copy.workspace.stageFilter}</span>
-            <select
-              value={stageId}
-              onChange={(event) => {
-                setStageId(event.target.value);
-                resetVisibleCount();
-              }}
-            >
+            <select value={stageId} onChange={(event) => setStageId(event.target.value)}>
               <option value="">{copy.workspace.stageAll}</option>
               {stages.map((stage) => (
                 <option key={stage.id} value={stage.id}>
@@ -247,14 +254,14 @@ export function PhotoWorkspace({
         ) : null}
       </div>
 
-      {filteredPhotos.length === 0 ? (
+      {photos.length === 0 && !loading ? (
         <div className="empty-state">
           {source === "recent" ? copy.workspace.recentEmpty : copy.workspace.libraryEmpty}
         </div>
       ) : (
         <>
           <div className="photo-grid">
-            {visiblePhotos.map((photo) => (
+            {photos.map((photo) => (
               <article
                 key={photo.id}
                 className={`photo-tile${selected.has(photo.id) ? " is-selected" : ""}`}
@@ -331,20 +338,21 @@ export function PhotoWorkspace({
               </article>
             ))}
           </div>
-          {visiblePhotos.length < filteredPhotos.length ? (
+          {nextCursor ? (
             <div className="workspace-load-more">
               <button
                 type="button"
                 className="button-secondary"
-                onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
+                disabled={loading}
+                onClick={() => void loadPhotos(nextCursor, true)}
               >
-                {copy.workspace.loadMore}
+                {loading ? "加载中…" : copy.workspace.loadMore}
               </button>
-              <span>{copy.workspace.shownCount(visiblePhotos.length, filteredPhotos.length)}</span>
             </div>
           ) : null}
         </>
       )}
+      {loadFailed ? <p role="alert">{copy.workspace.loadFailed}</p> : null}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { MemoryCard } from "@/components/memory-card";
 import { findMemoryDetails, listActiveMemories, listActiveStages } from "@/data/memory-repository";
-import { listWorkspacePhotoCatalog } from "@/data/photo-repository";
+import { listUploadedPhotosByIds, queryWorkspacePhotoCatalog } from "@/data/photo-repository";
 import { copy } from "@/i18n/zh-CN";
 import { imageStorage } from "@/storage/local-image-storage";
 import { MemoryManagement } from "@/components/memory-management";
@@ -31,8 +31,8 @@ export default async function MemoryExhibitionPage({
     exhibitDescription: image.exhibitDescription,
   }));
   const stages = listActiveStages();
-  const catalog = listWorkspacePhotoCatalog();
-  const catalogById = new Map(catalog.map((photo) => [photo.id, photo]));
+  const exhibitPhotos = listUploadedPhotosByIds(memory.images.map((image) => image.photoId));
+  const catalogById = new Map(exhibitPhotos.map((photo) => [photo.id, photo]));
   const exhibits = memory.images.map((image) => ({
     photoId: image.photoId,
     name: catalogById.get(image.photoId)?.originalName ?? copy.exhibits.unnamed,
@@ -41,7 +41,8 @@ export default async function MemoryExhibitionPage({
     exhibitTitle: image.exhibitTitle,
     exhibitDescription: image.exhibitDescription,
   }));
-  const libraryPhotos = catalog.map((photo) => ({
+  const libraryPage = queryWorkspacePhotoCatalog({ source: "library", limit: 24 });
+  const libraryPhotos = libraryPage.items.map((photo) => ({
     id: photo.id,
     name: photo.originalName,
     src: imageStorage.resolve(photo.optimizedStorageKey).publicPath,
@@ -149,18 +150,17 @@ export default async function MemoryExhibitionPage({
           )}
         </div>
       </footer>
-      {(await isOwner()) ? (
-        <section className="section-shell exhibition-management">
-          <MemoryManagement
-            memory={memory}
-            candidates={listActiveMemories()}
-            stages={stages}
-            exhibits={exhibits}
-            libraryPhotos={libraryPhotos}
-          />
-          <ShareManager memoryId={memory.id} />
-        </section>
-      ) : null}
+      <section className="section-shell exhibition-management">
+        <MemoryManagement
+          memory={memory}
+          candidates={listActiveMemories()}
+          stages={stages}
+          exhibits={exhibits}
+          libraryPhotos={libraryPhotos}
+          libraryNextCursor={libraryPage.nextCursor}
+        />
+        <ShareManager memoryId={memory.id} />
+      </section>
     </article>
   );
 }

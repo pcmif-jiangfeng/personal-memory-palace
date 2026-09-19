@@ -4,7 +4,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { initializeDatabase } from "../src/data/database.ts";
-import { isSharedImageAccessibleInDatabase } from "../src/data/share-repository.ts";
+import {
+  configureShareInDatabase,
+  isSharedImageAccessibleInDatabase,
+} from "../src/data/share-repository.ts";
 import { withTransaction } from "../src/data/transaction.ts";
 import { consumeRateLimit, resetRateLimitsForTests } from "../src/security/rate-limit.ts";
 
@@ -71,6 +74,40 @@ test("shared media authorization is scoped to the shared memory and active share
     assert.equal(
       isSharedImageAccessibleInDatabase(database, "share-token", "uploads/shared.webp"),
       false,
+    );
+  } finally {
+    database.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("rotating a share token immediately invalidates the previous URL", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "memory-palace-share-rotation-"));
+  const database = initializeDatabase(path.join(directory, "owner.sqlite"), false);
+  const now = new Date().toISOString();
+
+  try {
+    database
+      .prepare(
+        `INSERT INTO memories
+         (id, stage_id, title, story, visibility, created_at, updated_at)
+         VALUES (?, NULL, ?, ?, 'private', ?, ?)`,
+      )
+      .run("memory-1", "共享记忆", "故事", now, now);
+
+    const original = configureShareInDatabase(database, "memory-1", "link");
+    const rotated = configureShareInDatabase(database, "memory-1", "link", undefined, true);
+
+    assert.notEqual(rotated, original);
+    assert.equal(
+      database.prepare("SELECT COUNT(*) AS count FROM share_configs WHERE id = ?").get(original)
+        ?.count,
+      0,
+    );
+    assert.equal(
+      database.prepare("SELECT COUNT(*) AS count FROM share_configs WHERE id = ?").get(rotated)
+        ?.count,
+      1,
     );
   } finally {
     database.close();

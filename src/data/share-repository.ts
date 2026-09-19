@@ -4,6 +4,7 @@ import { getSessionSecret } from "../config.ts";
 import { getDatabase } from "./database.ts";
 import { findMemoryDetails } from "./memory-repository.ts";
 import { withTransaction } from "./transaction.ts";
+import { DomainError } from "../domain/errors.ts";
 
 export type ShareMode = "link" | "password";
 
@@ -45,29 +46,43 @@ function verifyPassword(value: string, storedHash: string): boolean {
 function setMemoryVisibilityInDatabase(database: DatabaseSync, memoryId: string, shared: boolean) {
   const result = database.prepare("UPDATE memories SET visibility = ?, updated_at = ? WHERE id = ? AND trashed_at IS NULL")
     .run(shared ? "shared" : "private", new Date().toISOString(), memoryId);
-  if (!result.changes) throw new Error("MEMORY_NOT_FOUND");
+  if (!result.changes) throw new DomainError("MEMORY_NOT_FOUND");
 }
 
 export function setMemoryVisibility(memoryId: string, shared: boolean) {
   setMemoryVisibilityInDatabase(getDatabase(), memoryId, shared);
 }
 
-export function configureShare(memoryId: string, mode: ShareMode, password?: string) {
-  if (mode === "password" && !password?.trim()) throw new Error("PASSWORD_REQUIRED");
-  const database = getDatabase();
+export function configureShareInDatabase(
+  database: DatabaseSync,
+  memoryId: string,
+  mode: ShareMode,
+  password?: string,
+  rotate = false,
+) {
+  if (mode === "password" && !password?.trim()) throw new DomainError("PASSWORD_REQUIRED");
   const memory = database.prepare("SELECT id FROM memories WHERE id = ? AND trashed_at IS NULL").get(memoryId);
-  if (!memory) throw new Error("MEMORY_NOT_FOUND");
+  if (!memory) throw new DomainError("MEMORY_NOT_FOUND");
   return withTransaction(database, () => {
     setMemoryVisibilityInDatabase(database, memoryId, true);
     const existing = database.prepare("SELECT id FROM share_configs WHERE memory_id = ?").get(memoryId) as { id: string } | undefined;
-    const token = existing?.id ?? randomBytes(18).toString("base64url");
+    const token = !existing || rotate ? randomBytes(18).toString("base64url") : existing.id;
     const now = new Date().toISOString();
-    if (existing) database.prepare("UPDATE share_configs SET enabled = 1, access_mode = ?, password_hash = ?, updated_at = ? WHERE memory_id = ?")
-      .run(mode, mode === "password" ? hashPassword(password!) : null, now, memoryId);
+    if (existing) database.prepare("UPDATE share_configs SET id = ?, enabled = 1, access_mode = ?, password_hash = ?, updated_at = ? WHERE memory_id = ?")
+      .run(token, mode, mode === "password" ? hashPassword(password!) : null, now, memoryId);
     else database.prepare("INSERT INTO share_configs (id, memory_id, enabled, access_mode, password_hash, created_at, updated_at) VALUES (?, ?, 1, ?, ?, ?, ?)")
       .run(token, memoryId, mode, mode === "password" ? hashPassword(password!) : null, now, now);
     return token;
   });
+}
+
+export function configureShare(
+  memoryId: string,
+  mode: ShareMode,
+  password?: string,
+  rotate = false,
+) {
+  return configureShareInDatabase(getDatabase(), memoryId, mode, password, rotate);
 }
 
 export function disableShare(memoryId: string) {

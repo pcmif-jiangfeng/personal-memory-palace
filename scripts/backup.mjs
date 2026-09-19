@@ -34,7 +34,11 @@ export async function createBackup({
   backupRoot,
   now = new Date(),
   applicationVersion = process.env.MEMORY_PALACE_APP_VERSION || "unknown",
+  quiesced = false,
 }) {
+  if (!quiesced) {
+    throw new Error("Backup requires explicit --quiesced confirmation after writes are stopped");
+  }
   const databasePath = path.join(dataDirectory, "palace.sqlite");
   const uploadSource = path.join(dataDirectory, "images", "uploads", "owner");
   if (!(await exists(databasePath))) throw new Error(`Database not found: ${databasePath}`);
@@ -79,7 +83,7 @@ export async function createBackup({
       `upload_file_count=${uploadFileCount}`,
       `source_database=${databasePath}`,
       `source_uploads=${uploadSource}`,
-      "application_writes_stopped=true",
+      `application_writes_stopped=${quiesced}`,
       "",
     ].join("\n");
     await writeFile(path.join(temporary, "manifest.txt"), manifest, "utf8");
@@ -97,7 +101,7 @@ if (import.meta.url === invokedPath) {
     process.argv[2] || process.env.MEMORY_PALACE_DATA_DIR || "data",
   );
   const backupRoot = path.resolve(process.argv[3] || "backups");
-  createBackup({ dataDirectory, backupRoot })
+  createBackup({ dataDirectory, backupRoot, quiesced: process.argv.includes("--quiesced") })
     .then((destination) => console.log(`Backup created: ${destination}`))
     .catch((error) => {
       console.error(error.message);

@@ -4,6 +4,7 @@ import { findStageById } from "./memory-repository";
 import { withTransaction } from "./transaction";
 import type { Stage } from "@/domain/models";
 import { STAGE_DESCRIPTION_MAX_LENGTH, STAGE_TITLE_MAX_LENGTH } from "@/domain/rules";
+import { DomainError } from "@/domain/errors";
 
 export interface StageInput {
   title: string;
@@ -16,7 +17,7 @@ function resolveCoverKey(database: ReturnType<typeof getDatabase>, photoId?: str
   const row = database.prepare(
     "SELECT optimized_storage_key AS storageKey FROM uploaded_photos WHERE id = ?"
   ).get(photoId) as { storageKey: string } | undefined;
-  if (!row) throw new Error("INVALID_COVER_PHOTO");
+  if (!row) throw new DomainError("INVALID_COVER_PHOTO");
   return row.storageKey;
 }
 
@@ -30,9 +31,9 @@ function saveCover(database: ReturnType<typeof getDatabase>, stageId: string, st
 export function createStage(input: StageInput): Stage {
   const title = input.title.trim();
   const description = input.description?.trim() ?? "";
-  if (!title) throw new Error("TITLE_REQUIRED");
-  if (title.length > STAGE_TITLE_MAX_LENGTH) throw new Error("TITLE_TOO_LONG");
-  if (description.length > STAGE_DESCRIPTION_MAX_LENGTH) throw new Error("DESCRIPTION_TOO_LONG");
+  if (!title) throw new DomainError("TITLE_REQUIRED");
+  if (title.length > STAGE_TITLE_MAX_LENGTH) throw new DomainError("TITLE_TOO_LONG");
+  if (description.length > STAGE_DESCRIPTION_MAX_LENGTH) throw new DomainError("DESCRIPTION_TOO_LONG");
   const id = randomUUID();
   const now = new Date().toISOString();
   const database = getDatabase();
@@ -48,15 +49,15 @@ export function createStage(input: StageInput): Stage {
 export function updateStage(id: string, input: StageInput): Stage {
   const title = input.title.trim();
   const description = input.description?.trim() ?? "";
-  if (!title) throw new Error("TITLE_REQUIRED");
-  if (title.length > STAGE_TITLE_MAX_LENGTH) throw new Error("TITLE_TOO_LONG");
-  if (description.length > STAGE_DESCRIPTION_MAX_LENGTH) throw new Error("DESCRIPTION_TOO_LONG");
+  if (!title) throw new DomainError("TITLE_REQUIRED");
+  if (title.length > STAGE_TITLE_MAX_LENGTH) throw new DomainError("TITLE_TOO_LONG");
+  if (description.length > STAGE_DESCRIPTION_MAX_LENGTH) throw new DomainError("DESCRIPTION_TOO_LONG");
   const database = getDatabase();
   withTransaction(database, () => {
     const result = database.prepare(`UPDATE stages SET title = ?, description = ?, updated_at = ?
       WHERE id = ? AND trashed_at IS NULL`
     ).run(title, description, new Date().toISOString(), id);
-    if (result.changes === 0) throw new Error("STAGE_NOT_FOUND");
+    if (result.changes === 0) throw new DomainError("STAGE_NOT_FOUND");
     saveCover(database, id, resolveCoverKey(database, input.coverPhotoId));
   });
   return findStageById(id)!;

@@ -54,6 +54,14 @@ CREATE TABLE IF NOT EXISTS uploaded_photos (
 CREATE TABLE IF NOT EXISTS photo_deletion_jobs (
   photo_id TEXT PRIMARY KEY,
   optimized_storage_key TEXT NOT NULL UNIQUE,
+  original_storage_key TEXT,
+  created_at TEXT NOT NULL,
+  last_error TEXT
+);
+
+CREATE TABLE IF NOT EXISTS pending_uploads (
+  id TEXT PRIMARY KEY,
+  storage_key TEXT NOT NULL UNIQUE,
   created_at TEXT NOT NULL,
   last_error TEXT
 );

@@ -101,11 +101,15 @@ export async function parseShareConfiguration(request: Request) {
   const mode = input.mode ?? "link";
   if (typeof enabled !== "boolean") throw new ApiError("INVALID_ENABLED", 400);
   if (mode !== "link" && mode !== "password") throw new ApiError("INVALID_MODE", 400);
+  if (input.rotate !== undefined && typeof input.rotate !== "boolean") {
+    throw new ApiError("INVALID_ROTATE", 400);
+  }
   return {
     memoryId: stringValue(input, "memoryId", { required: true, maxLength: MAX_IDENTIFIER_LENGTH })!,
     enabled,
     mode: mode as "link" | "password",
     password: stringValue(input, "password", { maxLength: MAX_PASSWORD_LENGTH, trim: false }),
+    rotate: input.rotate === true,
   };
 }
 

@@ -61,6 +61,7 @@ export const copy = {
     archiving: "归档中…",
     archiveFailed: "归档失败，请重试。",
     loadMore: "继续加载",
+    loadFailed: "照片加载失败，请重试。",
     shownCount: (shown: number, total: number) => `已显示 ${shown} / ${total}`,
     originalKept: "已保留原图",
     deletePhoto: "删除",

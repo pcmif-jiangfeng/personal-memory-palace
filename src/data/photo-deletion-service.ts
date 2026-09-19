@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import { withTransaction } from "./transaction.ts";
-import { ApiError } from "../http/errors.ts";
+import { DomainError } from "../domain/errors.ts";
 import type { ImageStorage } from "../storage/image-storage.ts";
 
 export interface PhotoMemoryReference {
@@ -21,6 +21,16 @@ export interface PhotoReferences {
 
 interface PhotoRow {
   optimizedStorageKey: string;
+  originalStorageKey: string | null;
+}
+
+interface PendingDeletionRow extends PhotoRow {
+  photoId: string;
+}
+
+interface PendingUploadRow {
+  id: string;
+  storageKey: string;
 }
 
 function findPhotoReferences(database: DatabaseSync, storageKey: string): PhotoReferences {
@@ -54,30 +64,34 @@ function prepareDeletion(database: DatabaseSync, photoId: string): PhotoRow | nu
   return withTransaction(database, () => {
     const pending = database
       .prepare(
-        "SELECT optimized_storage_key AS optimizedStorageKey FROM photo_deletion_jobs WHERE photo_id = ?",
+        `SELECT optimized_storage_key AS optimizedStorageKey,
+                original_storage_key AS originalStorageKey
+         FROM photo_deletion_jobs WHERE photo_id = ?`,
       )
       .get(photoId) as PhotoRow | undefined;
     if (pending) return pending;
 
     const photo = database
       .prepare(
-        "SELECT optimized_storage_key AS optimizedStorageKey FROM uploaded_photos WHERE id = ?",
+        `SELECT optimized_storage_key AS optimizedStorageKey,
+                original_storage_key AS originalStorageKey
+         FROM uploaded_photos WHERE id = ?`,
       )
       .get(photoId) as PhotoRow | undefined;
     if (!photo) return null;
 
     const references = findPhotoReferences(database, photo.optimizedStorageKey);
     if (references.memories.length > 0 || references.stages.length > 0) {
-      throw new ApiError("PHOTO_IN_USE", 409, { references });
+      throw new DomainError("PHOTO_IN_USE", { references });
     }
 
     database
       .prepare(
         `INSERT INTO photo_deletion_jobs
-         (photo_id, optimized_storage_key, created_at, last_error)
-         VALUES (?, ?, ?, NULL)`,
+         (photo_id, optimized_storage_key, original_storage_key, created_at, last_error)
+         VALUES (?, ?, ?, ?, NULL)`,
       )
-      .run(photoId, photo.optimizedStorageKey, new Date().toISOString());
+      .run(photoId, photo.optimizedStorageKey, photo.originalStorageKey, new Date().toISOString());
     database.prepare("DELETE FROM uploaded_photos WHERE id = ?").run(photoId);
     return photo;
   });
@@ -92,18 +106,70 @@ export async function deleteUploadedPhotoInDatabase(
   if (!plan) return { deleted: false, alreadyDeleted: true };
 
   try {
-    await storage.remove([plan.optimizedStorageKey]);
+    await storage.remove([plan.optimizedStorageKey, plan.originalStorageKey]);
   } catch (error) {
     database
       .prepare("UPDATE photo_deletion_jobs SET last_error = ? WHERE photo_id = ?")
       .run(error instanceof Error ? error.name : "UnknownError", photoId);
-    throw new ApiError("PHOTO_DELETE_FAILED", 500, { retryable: true });
+    throw new DomainError("PHOTO_DELETE_FAILED", { retryable: true });
   }
 
   try {
     database.prepare("DELETE FROM photo_deletion_jobs WHERE photo_id = ?").run(photoId);
   } catch {
-    throw new ApiError("PHOTO_DELETE_INCOMPLETE", 500, { retryable: true });
+    throw new DomainError("PHOTO_DELETE_INCOMPLETE", { retryable: true });
   }
   return { deleted: true, alreadyDeleted: false };
+}
+
+export async function recoverPendingPhotoDeletions(
+  database: DatabaseSync,
+  storage: Pick<ImageStorage, "remove">,
+): Promise<{ recovered: number; failed: number }> {
+  const pending = database
+    .prepare(
+      `SELECT photo_id AS photoId, optimized_storage_key AS optimizedStorageKey,
+              original_storage_key AS originalStorageKey
+       FROM photo_deletion_jobs ORDER BY created_at, photo_id`,
+    )
+    .all() as unknown as PendingDeletionRow[];
+  let recovered = 0;
+  let failed = 0;
+  for (const job of pending) {
+    try {
+      await storage.remove([job.optimizedStorageKey, job.originalStorageKey]);
+      database.prepare("DELETE FROM photo_deletion_jobs WHERE photo_id = ?").run(job.photoId);
+      recovered += 1;
+    } catch (error) {
+      database
+        .prepare("UPDATE photo_deletion_jobs SET last_error = ? WHERE photo_id = ?")
+        .run(error instanceof Error ? error.name : "UnknownError", job.photoId);
+      failed += 1;
+    }
+  }
+  return { recovered, failed };
+}
+
+export async function recoverPendingUploads(
+  database: DatabaseSync,
+  storage: Pick<ImageStorage, "remove">,
+): Promise<{ recovered: number; failed: number }> {
+  const pending = database
+    .prepare("SELECT id, storage_key AS storageKey FROM pending_uploads ORDER BY created_at, id")
+    .all() as unknown as PendingUploadRow[];
+  let recovered = 0;
+  let failed = 0;
+  for (const job of pending) {
+    try {
+      await storage.remove([job.storageKey]);
+      database.prepare("DELETE FROM pending_uploads WHERE id = ?").run(job.id);
+      recovered += 1;
+    } catch (error) {
+      database
+        .prepare("UPDATE pending_uploads SET last_error = ? WHERE id = ?")
+        .run(error instanceof Error ? error.name : "UnknownError", job.id);
+      failed += 1;
+    }
+  }
+  return { recovered, failed };
 }

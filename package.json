@@ -15,6 +15,7 @@
     "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm format:check",
     "db:init": "node --experimental-strip-types scripts/init-db.ts",
     "db:demo:reset": "node --experimental-strip-types scripts/init-db.ts --reset",
+    "files:recover": "node --experimental-strip-types scripts/recover-file-operations.ts",
     "backup:manual": "node scripts/backup.mjs",
     "backup:restore-test": "node scripts/restore-backup.mjs",
     "test": "node --experimental-strip-types --test tests/*.test.ts"
