@@ -46,6 +46,7 @@ export default async function MemoryExhibitionPage({
     id: photo.id,
     name: photo.originalName,
     src: imageStorage.resolve(photo.optimizedStorageKey).publicPath,
+    hasOriginal: Boolean(photo.originalStorageKey),
     libraryMember: photo.libraryMember,
     activeMemoryCount: photo.activeMemoryCount,
     memoryTitles: photo.memoryTitles,

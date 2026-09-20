@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  useCallback,
   useEffect,
   useRef,
   useState,
@@ -10,6 +9,7 @@ import {
 } from "react";
 import { copy } from "@/i18n/zh-CN";
 import { useUploadTasks } from "@/components/upload-task-provider";
+import { usePhotoCatalog } from "@/components/use-photo-catalog";
 import {
   addPhotoSelection,
   replacePhotoSelection,
@@ -20,7 +20,6 @@ import {
   deletePhoto as requestPhotoDeletion,
   deletePhotos,
   listPhotoIds,
-  listPhotos,
   referencesFromPhotoError,
 } from "@/client/photo-api";
 import type {
@@ -48,7 +47,7 @@ export function PhotoWorkspace({
 }) {
   const { startUpload } = useUploadTasks();
   const inputRef = useRef<HTMLInputElement>(null);
-  const initialRequest = useRef(true);
+  const initialSelectionReset = useRef(true);
   const selectionModeRef = useRef(false);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchGestureRef = useRef<{
@@ -59,15 +58,26 @@ export function PhotoWorkspace({
   } | null>(null);
   const suppressClickRef = useRef(false);
   const lastPointerWasTouchRef = useRef(false);
-  const [photos, setPhotos] = useState(initialPhotos);
-  const [nextCursor, setNextCursor] = useState(initialNextCursor);
-  const [loading, setLoading] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
+  const {
+    catalogQuery,
+    loadFailed,
+    loading,
+    loadMore,
+    memoryQuery,
+    nextCursor,
+    photos,
+    queryKey,
+    reportLoadFailure,
+    setMemoryQuery,
+    setPhotos,
+    setSource,
+    setStageId,
+    setUsageFilter,
+    source,
+    stageId,
+    usageFilter,
+  } = usePhotoCatalog({ initialPhotos, initialSource, initialNextCursor, pageSize: PAGE_SIZE });
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [source, setSource] = useState<PhotoSource>(initialSource);
-  const [usageFilter, setUsageFilter] = useState<PhotoUsageFilter>("all");
-  const [memoryQuery, setMemoryQuery] = useState("");
-  const [stageId, setStageId] = useState("");
   const [archivingPhotoId, setArchivingPhotoId] = useState<string | null>(null);
   const [archiveFailedPhotoId, setArchiveFailedPhotoId] = useState<string | null>(null);
   const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
@@ -77,50 +87,16 @@ export function PhotoWorkspace({
   const [batchDeleting, setBatchDeleting] = useState(false);
   const [batchDeleteResult, setBatchDeleteResult] = useState<PhotoBatchDeleteResult | null>(null);
 
-  const loadPhotos = useCallback(
-    async (cursor: string | null, append: boolean, signal?: AbortSignal) => {
-      setLoading(true);
-      setLoadFailed(false);
-      try {
-        const page = await listPhotos(
-          {
-            source,
-            usage: usageFilter,
-            query: memoryQuery,
-            stageId,
-            cursor,
-            limit: PAGE_SIZE,
-          },
-          signal,
-        );
-        setPhotos((current) => (append ? [...current, ...page.items] : page.items));
-        setNextCursor(page.nextCursor);
-      } catch (error) {
-        if (!(error instanceof DOMException && error.name === "AbortError")) {
-          setLoadFailed(true);
-        }
-      } finally {
-        if (!signal?.aborted) setLoading(false);
-      }
-    },
-    [memoryQuery, source, stageId, usageFilter],
-  );
-
   useEffect(() => {
-    if (initialRequest.current) {
-      initialRequest.current = false;
+    if (initialSelectionReset.current) {
+      initialSelectionReset.current = false;
       return;
     }
-    const controller = new AbortController();
     setSelected(new Set());
     setBatchDeleteResult(null);
     selectionModeRef.current = false;
     setMobileSelectionMode(false);
-    setPhotos([]);
-    setNextCursor(null);
-    void loadPhotos(null, false, controller.signal);
-    return () => controller.abort();
-  }, [loadPhotos]);
+  }, [queryKey]);
   useEffect(() => {
     return () => {
       if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
@@ -228,16 +204,10 @@ export function PhotoWorkspace({
     if (selectingAll) return;
     setSelectingAll(true);
     try {
-      const ids = await listPhotoIds({
-        source,
-        usage: usageFilter,
-        query: memoryQuery,
-        stageId,
-        limit: PAGE_SIZE,
-      });
+      const ids = await listPhotoIds(catalogQuery);
       setSelected(replacePhotoSelection(ids));
     } catch {
-      setLoadFailed(true);
+      reportLoadFailure();
     } finally {
       setSelectingAll(false);
     }
@@ -559,7 +529,7 @@ export function PhotoWorkspace({
                 type="button"
                 className="button-secondary"
                 disabled={loading}
-                onClick={() => void loadPhotos(nextCursor, true)}
+                onClick={loadMore}
               >
                 {loading ? "加载中…" : copy.workspace.loadMore}
               </button>

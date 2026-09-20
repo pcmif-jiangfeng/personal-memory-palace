@@ -3,13 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import type { WorkspacePhotoView } from "@/contracts/photo";
 import type { MemoryDetails, MemorySummary, Stage } from "@/domain/models";
 import { copy } from "@/i18n/zh-CN";
-import {
-  MemoryExhibitManager,
-  type ExhibitLibraryPhotoView,
-  type ExhibitPhotoView,
-} from "@/components/memory-exhibit-manager";
+import { MemoryExhibitManager, type ExhibitPhotoView } from "@/components/memory-exhibit-manager";
 
 export function MemoryManagement({
   memory,
@@ -23,7 +20,7 @@ export function MemoryManagement({
   candidates: MemorySummary[];
   stages: Stage[];
   exhibits: ExhibitPhotoView[];
-  libraryPhotos: ExhibitLibraryPhotoView[];
+  libraryPhotos: WorkspacePhotoView[];
   libraryNextCursor: string | null;
 }) {
   const router = useRouter();

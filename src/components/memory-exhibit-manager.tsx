@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUploadTasks } from "@/components/upload-task-provider";
+import { usePhotoCatalog } from "@/components/use-photo-catalog";
+import type { PhotoUsageFilter, WorkspacePhotoView } from "@/contracts/photo";
 import { copy } from "@/i18n/zh-CN";
 
 const PAGE_SIZE = 24;
@@ -17,18 +19,6 @@ export interface ExhibitPhotoView {
   exhibitDescription: string;
 }
 
-export interface ExhibitLibraryPhotoView {
-  id: string;
-  name: string;
-  src: string;
-  libraryMember: boolean;
-  activeMemoryCount: number;
-  memoryTitles: string[];
-  stageIds: string[];
-}
-
-type UsageFilter = "all" | "used" | "unused";
-
 export function MemoryExhibitManager({
   memoryId,
   exhibits,
@@ -38,14 +28,14 @@ export function MemoryExhibitManager({
 }: {
   memoryId: string;
   exhibits: ExhibitPhotoView[];
-  libraryPhotos: ExhibitLibraryPhotoView[];
+  libraryPhotos: WorkspacePhotoView[];
   initialNextCursor: string | null;
   stages: Array<{ id: string; title: string }>;
 }) {
   const router = useRouter();
   const { startUpload } = useUploadTasks();
   const inputRef = useRef<HTMLInputElement>(null);
-  const initialLibraryRequest = useRef(true);
+
   const initialSelected = exhibits.find((photo) => photo.isCover) ?? exhibits[0];
   const [selectedPhotoId, setSelectedPhotoId] = useState(initialSelected?.photoId ?? "");
   const [draftTitle, setDraftTitle] = useState(initialSelected?.exhibitTitle ?? "");
@@ -54,12 +44,24 @@ export function MemoryExhibitManager({
   );
   const [metadataDirty, setMetadataDirty] = useState(false);
   const [librarySelection, setLibrarySelection] = useState<Set<string>>(new Set());
-  const [availableLibraryPhotos, setAvailableLibraryPhotos] = useState(libraryPhotos);
-  const [nextCursor, setNextCursor] = useState(initialNextCursor);
-  const [loadingLibrary, setLoadingLibrary] = useState(false);
-  const [usageFilter, setUsageFilter] = useState<UsageFilter>("all");
-  const [memoryQuery, setMemoryQuery] = useState("");
-  const [stageId, setStageId] = useState("");
+  const {
+    loadFailed: libraryLoadFailed,
+    loading: loadingLibrary,
+    loadMore: loadMoreLibraryPhotos,
+    memoryQuery,
+    nextCursor,
+    photos: availableLibraryPhotos,
+    setMemoryQuery,
+    setStageId,
+    setUsageFilter,
+    stageId,
+    usageFilter,
+  } = usePhotoCatalog({
+    initialPhotos: libraryPhotos,
+    initialSource: "library",
+    initialNextCursor,
+    pageSize: PAGE_SIZE,
+  });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -71,53 +73,6 @@ export function MemoryExhibitManager({
   const selected = exhibits.find((photo) => photo.photoId === selectedPhotoId) ?? exhibits[0];
   const remainingSlots = Math.max(0, MAX_PHOTOS - exhibits.length);
   const filteredLibrary = availableLibraryPhotos.filter((photo) => !currentPhotoIds.has(photo.id));
-
-  const loadLibrary = useCallback(
-    async (cursor: string | null, append: boolean, signal?: AbortSignal) => {
-      setLoadingLibrary(true);
-      setError("");
-      const parameters = new URLSearchParams({
-        source: "library",
-        usage: usageFilter,
-        limit: String(PAGE_SIZE),
-      });
-      if (memoryQuery.trim()) parameters.set("q", memoryQuery.trim());
-      if (stageId) parameters.set("stageId", stageId);
-      if (cursor) parameters.set("cursor", cursor);
-      try {
-        const response = await fetch(`/api/photos?${parameters}`, { signal });
-        if (!response.ok) {
-          setError(copy.exhibits.failed);
-          return;
-        }
-        const page = (await response.json()) as {
-          items: ExhibitLibraryPhotoView[];
-          nextCursor: string | null;
-        };
-        setAvailableLibraryPhotos((current) => (append ? [...current, ...page.items] : page.items));
-        setNextCursor(page.nextCursor);
-      } catch (requestError) {
-        if (!(requestError instanceof DOMException && requestError.name === "AbortError")) {
-          setError(copy.exhibits.failed);
-        }
-      } finally {
-        if (!signal?.aborted) setLoadingLibrary(false);
-      }
-    },
-    [memoryQuery, stageId, usageFilter],
-  );
-
-  useEffect(() => {
-    if (initialLibraryRequest.current) {
-      initialLibraryRequest.current = false;
-      return;
-    }
-    const controller = new AbortController();
-    setAvailableLibraryPhotos([]);
-    setNextCursor(null);
-    void loadLibrary(null, false, controller.signal);
-    return () => controller.abort();
-  }, [loadLibrary]);
 
   async function request(body: unknown): Promise<void> {
     const response = await fetch(`/api/memories/${encodeURIComponent(memoryId)}`, {
@@ -375,7 +330,7 @@ export function MemoryExhibitManager({
                 <span>{copy.workspace.usageFilter}</span>
                 <select
                   value={usageFilter}
-                  onChange={(event) => setUsageFilter(event.target.value as UsageFilter)}
+                  onChange={(event) => setUsageFilter(event.target.value as PhotoUsageFilter)}
                 >
                   <option value="all">{copy.workspace.usageAll}</option>
                   <option value="used">{copy.workspace.usageUsed}</option>
@@ -426,7 +381,7 @@ export function MemoryExhibitManager({
                     type="button"
                     className="button-secondary"
                     disabled={loadingLibrary}
-                    onClick={() => void loadLibrary(nextCursor, true)}
+                    onClick={loadMoreLibraryPhotos}
                   >
                     {loadingLibrary ? "加载中…" : copy.workspace.loadMore}
                   </button>
@@ -450,9 +405,9 @@ export function MemoryExhibitManager({
           {message}
         </p>
       ) : null}
-      {error ? (
+      {error || libraryLoadFailed ? (
         <p className="form-error memory-management-message" role="alert">
-          {error}
+          {error || copy.exhibits.failed}
         </p>
       ) : null}
     </details>
