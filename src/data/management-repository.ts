@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { getDatabase } from "./database.ts";
+import { readString } from "./row-readers.ts";
 import { withTransaction } from "./transaction.ts";
 import {
   LATER_NOTE_MAX_LENGTH,
@@ -14,6 +15,10 @@ export interface UpdateMemoryDetailsInput {
   title: string;
   story: string;
   stageId?: string | null;
+}
+
+function readIdRow(row: Record<string, unknown>): string {
+  return readString(row, "id");
 }
 
 export function updateMemoryDetailsInDatabase(
@@ -173,18 +178,18 @@ function queueUnreferencedPhotos(database: DatabaseSync, photoIds: string[]): vo
 
 export function permanentlyDeleteMemoryInDatabase(database: DatabaseSync, id: string): void {
   withTransaction(database, () => {
-    const photos = database.prepare(`
+    const photoIds = database.prepare(`
       SELECT uploaded_photos.id
       FROM memory_images
       JOIN uploaded_photos
         ON uploaded_photos.optimized_storage_key = memory_images.storage_key
       WHERE memory_images.memory_id = ?
-    `).all(id) as unknown as Array<{ id: string }>;
+    `).all(id).map(readIdRow);
     const result = database
       .prepare("DELETE FROM memories WHERE id = ? AND trashed_at IS NOT NULL")
       .run(id);
     if (!result.changes) throw new DomainError("MEMORY_NOT_FOUND");
-    queueUnreferencedPhotos(database, photos.map((photo) => photo.id));
+    queueUnreferencedPhotos(database, photoIds);
   });
 }
 
@@ -194,18 +199,18 @@ export function permanentlyDeleteMemory(id: string) {
 
 export function permanentlyDeleteStageInDatabase(database: DatabaseSync, id: string): void {
   withTransaction(database, () => {
-    const photos = database.prepare(`
+    const photoIds = database.prepare(`
       SELECT uploaded_photos.id
       FROM stage_covers
       JOIN uploaded_photos
         ON uploaded_photos.optimized_storage_key = stage_covers.storage_key
       WHERE stage_covers.stage_id = ?
-    `).all(id) as unknown as Array<{ id: string }>;
+    `).all(id).map(readIdRow);
     const result = database
       .prepare("DELETE FROM stages WHERE id = ? AND trashed_at IS NOT NULL")
       .run(id);
     if (!result.changes) throw new DomainError("STAGE_NOT_FOUND");
-    queueUnreferencedPhotos(database, photos.map((photo) => photo.id));
+    queueUnreferencedPhotos(database, photoIds);
   });
 }
 

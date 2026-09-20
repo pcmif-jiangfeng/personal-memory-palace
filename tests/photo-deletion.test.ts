@@ -370,6 +370,49 @@ test("permanent Memory deletion queues only photos with no remaining references"
   }
 });
 
+test("rejects an invalid photo id before permanently deleting its Memory", () => {
+  const { directory, database, now } = createFixture();
+  const invalidPhotoId = Buffer.from("invalid-photo");
+  try {
+    database
+      .prepare(
+        `INSERT INTO uploaded_photos
+         (id, original_name, mime_type, optimized_storage_key, original_storage_key,
+          width, height, created_at, used_at)
+         VALUES (?, 'invalid.jpg', 'image/jpeg', ?, NULL, 1200, 800, ?, NULL)`,
+      )
+      .run(invalidPhotoId, "uploads/owner/optimized/invalid.webp", now);
+    database
+      .prepare(
+        `INSERT INTO memories
+         (id, stage_id, title, story, visibility, created_at, updated_at, trashed_at)
+         VALUES ('invalid-memory', NULL, 'Memory', 'Story', 'private', ?, ?, ?)`,
+      )
+      .run(now, now, now);
+    database
+      .prepare(
+        `INSERT INTO memory_images
+         (id, memory_id, storage_key, alt_text, sort_order, is_cover, created_at)
+         VALUES ('invalid-image', 'invalid-memory', ?, '', 0, 1, ?)`,
+      )
+      .run("uploads/owner/optimized/invalid.webp", now);
+
+    assert.throws(
+      () => permanentlyDeleteMemoryInDatabase(database, "invalid-memory"),
+      /Invalid database column id; expected string/,
+    );
+    assert.ok(database.prepare("SELECT id FROM memories WHERE id = 'invalid-memory'").get());
+    assert.ok(
+      database
+        .prepare("SELECT id FROM uploaded_photos WHERE optimized_storage_key = ?")
+        .get("uploads/owner/optimized/invalid.webp"),
+    );
+  } finally {
+    database.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("file recovery command runs against an isolated data directory", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "memory-palace-file-recovery-command-"));
   const script = fileURLToPath(new URL("../scripts/recover-file-operations.ts", import.meta.url));
