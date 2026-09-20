@@ -1,48 +1,21 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  type PointerEvent as ReactPointerEvent,
-  type WheelEvent as ReactWheelEvent,
-} from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { copy } from "@/i18n/zh-CN";
-import { MIN_PHOTO_SCALE, clampPhotoScale, type Point } from "@/components/photo-viewer-geometry";
-import { resolvePhotoSwipeDirection, hasExhibitMetadata } from "@/components/photo-viewer-state";
+import { viewerOrientationChanged, type ViewerOrientation } from "@/components/photo-gesture-state";
+import { hasExhibitMetadata } from "@/components/photo-viewer-state";
+import { usePhotoGestures } from "@/components/use-photo-gestures";
 import { usePhotoNavigation } from "@/components/use-photo-navigation";
 import { usePhotoTransform } from "@/components/use-photo-transform";
 import { useViewerControls } from "@/components/use-viewer-controls";
+import { MIN_PHOTO_SCALE } from "@/components/photo-viewer-geometry";
 
-const QUICK_ZOOM_SCALE = 2.5;
-const TOUCH_SWIPE_DISTANCE = 56;
-const TRACKPAD_SWIPE_DISTANCE = 12;
-const TRACKPAD_NAVIGATION_COOLDOWN = 420;
-
-type TrackedPointer = Point & { pointerType: string };
-type DragStart = Point & { originX: number; originY: number };
-type PinchStart = {
-  distance: number;
-  scale: number;
-  contentX: number;
-  contentY: number;
-};
 type ViewerViewport = {
   width: number;
   height: number;
   offsetLeft: number;
   offsetTop: number;
 };
-
-function distanceBetween(first: Point, second: Point) {
-  return Math.hypot(second.x - first.x, second.y - first.y);
-}
-
-function midpointBetween(first: Point, second: Point): Point {
-  return { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
-}
 
 function readViewerViewport(): ViewerViewport {
   const viewport = window.visualViewport;
@@ -81,15 +54,7 @@ export function PhotoViewer({
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const pointersRef = useRef(new Map<number, TrackedPointer>());
-  const dragStartRef = useRef<DragStart | null>(null);
-  const pinchStartRef = useRef<PinchStart | null>(null);
-  const pointerOriginRef = useRef<Point | null>(null);
-  const gestureMovedRef = useRef(false);
-  const lastTouchTapRef = useRef<{ time: number; point: Point } | null>(null);
-  const lastInputWasTouchRef = useRef(false);
-  const lastTrackpadNavigationRef = useRef(0);
-  const orientationRef = useRef<"portrait" | "landscape" | null>(null);
+  const orientationRef = useRef<ViewerOrientation | null>(null);
   const hintId = useId();
   const metadataId = useId();
   const {
@@ -123,45 +88,55 @@ export function PhotoViewer({
   const activeTitle = activeImage?.exhibitTitle.trim() ?? "";
   const activeDescription = activeImage?.exhibitDescription.trim() ?? "";
 
-  const resetInteraction = useCallback(() => {
-    pointersRef.current.clear();
-    dragStartRef.current = null;
-    pinchStartRef.current = null;
-    pointerOriginRef.current = null;
-    gestureMovedRef.current = false;
-    setIsInteracting(false);
-  }, []);
+  const resetPhotoView = useCallback(() => {
+    resetTransform();
+    clearFittedSize();
+    setDescriptionExpanded(false);
+  }, [clearFittedSize, resetTransform]);
+  const preparePhotoChange = useCallback(() => {
+    resetPhotoView();
+    revealControls();
+  }, [resetPhotoView, revealControls]);
+  const {
+    finishPointer,
+    handleDoubleClick,
+    handlePointerDown,
+    handlePointerMove,
+    handleWheel,
+    resetInteraction,
+  } = usePhotoGestures({
+    activeIndex,
+    applyTransform,
+    onPhotoChange: preparePhotoChange,
+    pointFromStageCenter,
+    revealControls,
+    setIsInteracting,
+    showPhotoAt,
+    transformRef,
+    zoomAt,
+  });
 
   const closeViewer = useCallback(() => {
     setIsOpen(false);
-    clearFittedSize();
-    setDescriptionExpanded(false);
-    resetTransform();
+    resetPhotoView();
     resetInteraction();
     requestAnimationFrame(() => triggerRef.current?.focus({ preventScroll: true }));
-  }, [clearFittedSize, resetInteraction, resetTransform]);
+  }, [resetInteraction, resetPhotoView]);
 
   const openViewer = () => {
     if (!resetToInitialPhoto()) return;
-    clearFittedSize();
-    setDescriptionExpanded(false);
-    resetTransform();
+    preparePhotoChange();
     setIsOpen(true);
-    revealControls();
   };
 
   const showImageAt = useCallback(
     (index: number) => {
       if (!showPhotoAt(index)) return;
-      resetTransform();
-      clearFittedSize();
-      setDescriptionExpanded(false);
-      revealControls();
+      preparePhotoChange();
       resetInteraction();
     },
-    [clearFittedSize, resetInteraction, resetTransform, revealControls, showPhotoAt],
+    [preparePhotoChange, resetInteraction, showPhotoAt],
   );
-
   useEffect(() => {
     if (!isOpen) return;
 
@@ -171,8 +146,7 @@ export function PhotoViewer({
       const orientation = window.matchMedia("(orientation: portrait)").matches
         ? "portrait"
         : "landscape";
-      const orientationChanged =
-        orientationRef.current !== null && orientationRef.current !== orientation;
+      const orientationChanged = viewerOrientationChanged(orientationRef.current, orientation);
       orientationRef.current = orientation;
       setViewport((current) =>
         current &&
@@ -237,170 +211,6 @@ export function PhotoViewer({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [activeIndex, images.length, isOpen, showImageAt]);
-
-  const beginPinch = useCallback(() => {
-    const points = [...pointersRef.current.values()];
-    if (points.length < 2) return;
-    const midpoint = midpointBetween(points[0], points[1]);
-    const relativeMidpoint = pointFromStageCenter(midpoint);
-    if (!relativeMidpoint) return;
-    const current = transformRef.current;
-    pinchStartRef.current = {
-      distance: Math.max(1, distanceBetween(points[0], points[1])),
-      scale: current.scale,
-      contentX: (relativeMidpoint.x - current.x) / current.scale,
-      contentY: (relativeMidpoint.y - current.y) / current.scale,
-    };
-  }, [pointFromStageCenter, transformRef]);
-
-  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.pointerType === "mouse" && event.button !== 0) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    const point = { x: event.clientX, y: event.clientY };
-    pointersRef.current.set(event.pointerId, { ...point, pointerType: event.pointerType });
-    lastInputWasTouchRef.current = event.pointerType === "touch";
-    revealControls();
-
-    if (pointersRef.current.size === 1) {
-      pointerOriginRef.current = point;
-      gestureMovedRef.current = false;
-      if (transformRef.current.scale > MIN_PHOTO_SCALE) {
-        dragStartRef.current = {
-          ...point,
-          originX: transformRef.current.x,
-          originY: transformRef.current.y,
-        };
-        setIsInteracting(true);
-      }
-    } else if (pointersRef.current.size === 2) {
-      gestureMovedRef.current = true;
-      dragStartRef.current = null;
-      setIsInteracting(true);
-      beginPinch();
-    }
-  };
-
-  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const tracked = pointersRef.current.get(event.pointerId);
-    if (!tracked) return;
-    const point = { x: event.clientX, y: event.clientY };
-    pointersRef.current.set(event.pointerId, { ...point, pointerType: tracked.pointerType });
-
-    if (pointerOriginRef.current && distanceBetween(pointerOriginRef.current, point) > 5) {
-      gestureMovedRef.current = true;
-    }
-
-    const points = [...pointersRef.current.values()];
-    if (points.length >= 2) {
-      const pinch = pinchStartRef.current;
-      if (!pinch) return;
-      const midpoint = midpointBetween(points[0], points[1]);
-      const relativeMidpoint = pointFromStageCenter(midpoint);
-      if (!relativeMidpoint) return;
-      const scale = clampPhotoScale(
-        pinch.scale * (distanceBetween(points[0], points[1]) / pinch.distance),
-      );
-      applyTransform({
-        scale,
-        x: relativeMidpoint.x - pinch.contentX * scale,
-        y: relativeMidpoint.y - pinch.contentY * scale,
-      });
-      return;
-    }
-
-    const drag = dragStartRef.current;
-    if (drag && transformRef.current.scale > MIN_PHOTO_SCALE) {
-      applyTransform({
-        ...transformRef.current,
-        x: drag.originX + point.x - drag.x,
-        y: drag.originY + point.y - drag.y,
-      });
-    }
-  };
-
-  const handleTouchTap = (point: Point) => {
-    const now = Date.now();
-    const previous = lastTouchTapRef.current;
-    if (previous && now - previous.time < 320 && distanceBetween(previous.point, point) < 28) {
-      lastTouchTapRef.current = null;
-      zoomAt(
-        point,
-        transformRef.current.scale > MIN_PHOTO_SCALE ? MIN_PHOTO_SCALE : QUICK_ZOOM_SCALE,
-      );
-      return;
-    }
-    lastTouchTapRef.current = { time: now, point };
-  };
-
-  const finishPointer = (event: ReactPointerEvent<HTMLDivElement>, allowTap: boolean) => {
-    const tracked = pointersRef.current.get(event.pointerId);
-    const pointerOrigin = pointerOriginRef.current;
-    pointersRef.current.delete(event.pointerId);
-    try {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    } catch {
-      // Pointer capture may already be released by the browser.
-    }
-
-    const completedTouchGesture =
-      allowTap && tracked?.pointerType === "touch" && pointersRef.current.size === 0;
-    const swipeDirection =
-      completedTouchGesture && pointerOrigin && transformRef.current.scale === MIN_PHOTO_SCALE
-        ? resolvePhotoSwipeDirection(
-            event.clientX - pointerOrigin.x,
-            event.clientY - pointerOrigin.y,
-            TOUCH_SWIPE_DISTANCE,
-          )
-        : 0;
-
-    if (swipeDirection !== 0) {
-      lastTouchTapRef.current = null;
-      showImageAt(activeIndex + swipeDirection);
-    } else if (completedTouchGesture && !gestureMovedRef.current) {
-      handleTouchTap({ x: event.clientX, y: event.clientY });
-    }
-
-    pinchStartRef.current = null;
-    const remaining = [...pointersRef.current.values()];
-    if (remaining.length === 1 && transformRef.current.scale > MIN_PHOTO_SCALE) {
-      dragStartRef.current = {
-        x: remaining[0].x,
-        y: remaining[0].y,
-        originX: transformRef.current.x,
-        originY: transformRef.current.y,
-      };
-    } else {
-      dragStartRef.current = null;
-      pointerOriginRef.current = null;
-      setIsInteracting(false);
-    }
-  };
-
-  const handleWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const swipeDirection =
-      !event.ctrlKey && transformRef.current.scale === MIN_PHOTO_SCALE
-        ? resolvePhotoSwipeDirection(-event.deltaX, event.deltaY, TRACKPAD_SWIPE_DISTANCE)
-        : 0;
-    if (swipeDirection !== 0) {
-      const now = Date.now();
-      if (now - lastTrackpadNavigationRef.current >= TRACKPAD_NAVIGATION_COOLDOWN) {
-        lastTrackpadNavigationRef.current = now;
-        showImageAt(activeIndex + swipeDirection);
-      }
-      return;
-    }
-    const scaleFactor = Math.exp(-event.deltaY * 0.002);
-    zoomAt({ x: event.clientX, y: event.clientY }, transformRef.current.scale * scaleFactor);
-  };
-
-  const handleDoubleClick = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (lastInputWasTouchRef.current) return;
-    zoomAt(
-      { x: event.clientX, y: event.clientY },
-      transformRef.current.scale > MIN_PHOTO_SCALE ? MIN_PHOTO_SCALE : QUICK_ZOOM_SCALE,
-    );
-  };
 
   if (!triggerImage) return null;
 
