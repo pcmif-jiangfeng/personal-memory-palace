@@ -22,19 +22,15 @@ import {
   type PhotoViewerMetrics,
   type Point,
 } from "@/components/photo-viewer-geometry";
-import {
-  resolvePhotoSwipeDirection,
-  hasExhibitMetadata,
-  resolvePhotoViewerIndex,
-  type PhotoNavigationDirection,
-} from "@/components/photo-viewer-state";
+import { resolvePhotoSwipeDirection, hasExhibitMetadata } from "@/components/photo-viewer-state";
+import { usePhotoNavigation } from "@/components/use-photo-navigation";
+import { useViewerControls } from "@/components/use-viewer-controls";
 
 const INITIAL_TRANSFORM: PhotoTransform = { scale: MIN_PHOTO_SCALE, x: 0, y: 0 };
 const QUICK_ZOOM_SCALE = 2.5;
 const TOUCH_SWIPE_DISTANCE = 56;
 const TRACKPAD_SWIPE_DISTANCE = 12;
 const TRACKPAD_NAVIGATION_COOLDOWN = 420;
-const CONTROL_HIDE_DELAY = 2800;
 
 type TrackedPointer = Point & { pointerType: string };
 type DragStart = Point & { originX: number; originY: number };
@@ -110,15 +106,10 @@ export function PhotoViewer({
   loading?: "eager" | "lazy";
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [activeImageId, setActiveImageId] = useState(initialImageId);
-  const [fallbackIndex, setFallbackIndex] = useState(0);
-  const [navigationDirection, setNavigationDirection] = useState<PhotoNavigationDirection>(0);
   const [isInteracting, setIsInteracting] = useState(false);
   const [transform, setTransform] = useState<PhotoTransform>(INITIAL_TRANSFORM);
   const [viewport, setViewport] = useState<ViewerViewport | null>(null);
   const [fittedSize, setFittedSize] = useState<PhotoSize | null>(null);
-  const [controlsVisible, setControlsVisible] = useState(true);
-  const [controlsActivity, setControlsActivity] = useState(0);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const transformRef = useRef<PhotoTransform>(INITIAL_TRANSFORM);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -135,11 +126,20 @@ export function PhotoViewer({
   const lastTrackpadNavigationRef = useRef(0);
   const orientationRef = useRef<"portrait" | "landscape" | null>(null);
   const hintId = useId();
-  const initialIndex = resolvePhotoViewerIndex(images, initialImageId);
   const metadataId = useId();
-  const activeIndex = resolvePhotoViewerIndex(images, activeImageId, fallbackIndex);
-  const triggerImage = initialIndex >= 0 ? images[initialIndex] : null;
-  const activeImage = activeIndex >= 0 ? images[activeIndex] : null;
+  const {
+    activeIndex,
+    activePhoto: activeImage,
+    navigationDirection,
+    resetToInitialPhoto,
+    showPhotoAt,
+    triggerPhoto: triggerImage,
+  } = usePhotoNavigation(images, initialImageId);
+  const { controlsVisible, revealControls } = useViewerControls({
+    isOpen,
+    isInteracting,
+    autoHidePaused: descriptionExpanded,
+  });
 
   const hasActiveMetadata = activeImage ? hasExhibitMetadata(activeImage) : false;
   const activeTitle = activeImage?.exhibitTitle.trim() ?? "";
@@ -195,10 +195,6 @@ export function PhotoViewer({
     transformRef.current = INITIAL_TRANSFORM;
     setTransform(INITIAL_TRANSFORM);
   }, []);
-  const revealControls = useCallback(() => {
-    setControlsVisible(true);
-    setControlsActivity((activity) => activity + 1);
-  }, []);
 
   const fitActiveImage = useCallback(() => {
     const stage = stageRef.current;
@@ -225,10 +221,7 @@ export function PhotoViewer({
   }, [resetInteraction, resetTransform]);
 
   const openViewer = () => {
-    if (!triggerImage) return;
-    setFallbackIndex(initialIndex);
-    setActiveImageId(triggerImage.id);
-    setNavigationDirection(0);
+    if (!resetToInitialPhoto()) return;
     setFittedSize(null);
     setDescriptionExpanded(false);
     resetTransform();
@@ -238,18 +231,14 @@ export function PhotoViewer({
 
   const showImageAt = useCallback(
     (index: number) => {
-      const nextImage = images[index];
-      if (!nextImage) return;
-      setNavigationDirection(index > activeIndex ? 1 : index < activeIndex ? -1 : 0);
-      setFallbackIndex(index);
-      setActiveImageId(nextImage.id);
+      if (!showPhotoAt(index)) return;
       resetTransform();
       setFittedSize(null);
       setDescriptionExpanded(false);
       revealControls();
       resetInteraction();
     },
-    [activeIndex, images, resetInteraction, resetTransform, revealControls],
+    [resetInteraction, resetTransform, revealControls, showPhotoAt],
   );
 
   useEffect(() => {
@@ -293,24 +282,11 @@ export function PhotoViewer({
 
   useLayoutEffect(() => {
     if (isOpen) fitActiveImage();
-  }, [activeImageId, fitActiveImage, isOpen, viewport]);
+  }, [activeImage?.id, fitActiveImage, isOpen, viewport]);
 
   useLayoutEffect(() => {
     if (isOpen && fittedSize) applyTransform(transformRef.current);
   }, [applyTransform, fittedSize, isOpen]);
-
-  useEffect(() => {
-    if (
-      !isOpen ||
-      descriptionExpanded ||
-      isInteracting ||
-      !window.matchMedia("(max-width: 760px)").matches
-    ) {
-      return;
-    }
-    const timer = window.setTimeout(() => setControlsVisible(false), CONTROL_HIDE_DELAY);
-    return () => window.clearTimeout(timer);
-  }, [controlsActivity, descriptionExpanded, isInteracting, isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
