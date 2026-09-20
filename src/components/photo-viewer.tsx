@@ -3,7 +3,6 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useId,
   useRef,
   useState,
@@ -11,22 +10,12 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from "react";
 import { copy } from "@/i18n/zh-CN";
-import {
-  MIN_PHOTO_SCALE,
-  clampPhotoPosition,
-  clampPhotoScale,
-  fitPhotoWithinViewport,
-  zoomPhotoAroundPoint,
-  type PhotoSize,
-  type PhotoTransform,
-  type PhotoViewerMetrics,
-  type Point,
-} from "@/components/photo-viewer-geometry";
+import { MIN_PHOTO_SCALE, clampPhotoScale, type Point } from "@/components/photo-viewer-geometry";
 import { resolvePhotoSwipeDirection, hasExhibitMetadata } from "@/components/photo-viewer-state";
 import { usePhotoNavigation } from "@/components/use-photo-navigation";
+import { usePhotoTransform } from "@/components/use-photo-transform";
 import { useViewerControls } from "@/components/use-viewer-controls";
 
-const INITIAL_TRANSFORM: PhotoTransform = { scale: MIN_PHOTO_SCALE, x: 0, y: 0 };
 const QUICK_ZOOM_SCALE = 2.5;
 const TOUCH_SWIPE_DISTANCE = 56;
 const TRACKPAD_SWIPE_DISTANCE = 12;
@@ -67,25 +56,6 @@ function readViewerViewport(): ViewerViewport {
     : { width: window.innerWidth, height: window.innerHeight, offsetLeft: 0, offsetTop: 0 };
 }
 
-function readStageContentSize(stage: HTMLDivElement): PhotoSize {
-  const style = window.getComputedStyle(stage);
-  const horizontalPadding =
-    Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
-  const verticalPadding =
-    Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom);
-  return {
-    width: Math.max(0, stage.clientWidth - horizontalPadding),
-    height: Math.max(0, stage.clientHeight - verticalPadding),
-  };
-}
-function pointFromStageCenter(stage: HTMLDivElement, point: Point): Point {
-  const bounds = stage.getBoundingClientRect();
-  const style = window.getComputedStyle(stage);
-  const content = readStageContentSize(stage);
-  const centerX = bounds.left + Number.parseFloat(style.paddingLeft) + content.width / 2;
-  const centerY = bounds.top + Number.parseFloat(style.paddingTop) + content.height / 2;
-  return { x: point.x - centerX, y: point.y - centerY };
-}
 export type PhotoViewerItem = {
   id: string;
   src: string;
@@ -107,15 +77,10 @@ export function PhotoViewer({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isInteracting, setIsInteracting] = useState(false);
-  const [transform, setTransform] = useState<PhotoTransform>(INITIAL_TRANSFORM);
   const [viewport, setViewport] = useState<ViewerViewport | null>(null);
-  const [fittedSize, setFittedSize] = useState<PhotoSize | null>(null);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
-  const transformRef = useRef<PhotoTransform>(INITIAL_TRANSFORM);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const stageRef = useRef<HTMLDivElement>(null);
-  const imageRef = useRef<HTMLImageElement>(null);
   const pointersRef = useRef(new Map<number, TrackedPointer>());
   const dragStartRef = useRef<DragStart | null>(null);
   const pinchStartRef = useRef<PinchStart | null>(null);
@@ -135,6 +100,19 @@ export function PhotoViewer({
     showPhotoAt,
     triggerPhoto: triggerImage,
   } = usePhotoNavigation(images, initialImageId);
+  const {
+    applyTransform,
+    clearFittedSize,
+    fitActiveImage,
+    fittedSize,
+    imageRef,
+    pointFromStageCenter,
+    resetTransform,
+    stageRef,
+    transform,
+    transformRef,
+    zoomAt,
+  } = usePhotoTransform({ activePhotoId: activeImage?.id, isOpen, viewport });
   const { controlsVisible, revealControls } = useViewerControls({
     isOpen,
     isInteracting,
@@ -144,43 +122,6 @@ export function PhotoViewer({
   const hasActiveMetadata = activeImage ? hasExhibitMetadata(activeImage) : false;
   const activeTitle = activeImage?.exhibitTitle.trim() ?? "";
   const activeDescription = activeImage?.exhibitDescription.trim() ?? "";
-  const readMetrics = useCallback((): PhotoViewerMetrics | null => {
-    const stage = stageRef.current;
-    const image = imageRef.current;
-    if (!stage || !image) return null;
-    const available = readStageContentSize(stage);
-    return {
-      imageWidth: image.offsetWidth,
-      imageHeight: image.offsetHeight,
-      viewportWidth: available.width,
-      viewportHeight: available.height,
-    };
-  }, []);
-
-  const applyTransform = useCallback(
-    (candidate: PhotoTransform) => {
-      const scale = clampPhotoScale(candidate.scale);
-      const metrics = readMetrics();
-      const position = metrics
-        ? clampPhotoPosition({ x: candidate.x, y: candidate.y }, scale, metrics)
-        : { x: candidate.x, y: candidate.y };
-      const next = scale === MIN_PHOTO_SCALE ? INITIAL_TRANSFORM : { scale, ...position };
-      transformRef.current = next;
-      setTransform(next);
-    },
-    [readMetrics],
-  );
-
-  const zoomAt = useCallback(
-    (clientPoint: Point, requestedScale: number) => {
-      const stage = stageRef.current;
-      const metrics = readMetrics();
-      if (!stage || !metrics) return;
-      const anchor = pointFromStageCenter(stage, clientPoint);
-      applyTransform(zoomPhotoAroundPoint(transformRef.current, requestedScale, anchor, metrics));
-    },
-    [applyTransform, readMetrics],
-  );
 
   const resetInteraction = useCallback(() => {
     pointersRef.current.clear();
@@ -191,38 +132,18 @@ export function PhotoViewer({
     setIsInteracting(false);
   }, []);
 
-  const resetTransform = useCallback(() => {
-    transformRef.current = INITIAL_TRANSFORM;
-    setTransform(INITIAL_TRANSFORM);
-  }, []);
-
-  const fitActiveImage = useCallback(() => {
-    const stage = stageRef.current;
-    const image = imageRef.current;
-    if (!stage || !image || !image.complete || !image.naturalWidth || !image.naturalHeight) return;
-    const available = readStageContentSize(stage);
-    const nextSize = fitPhotoWithinViewport(
-      image.naturalWidth,
-      image.naturalHeight,
-      available.width,
-      available.height,
-    );
-    if (!nextSize.width || !nextSize.height) return;
-    setFittedSize(nextSize);
-  }, []);
-
   const closeViewer = useCallback(() => {
     setIsOpen(false);
-    setFittedSize(null);
+    clearFittedSize();
     setDescriptionExpanded(false);
     resetTransform();
     resetInteraction();
     requestAnimationFrame(() => triggerRef.current?.focus({ preventScroll: true }));
-  }, [resetInteraction, resetTransform]);
+  }, [clearFittedSize, resetInteraction, resetTransform]);
 
   const openViewer = () => {
     if (!resetToInitialPhoto()) return;
-    setFittedSize(null);
+    clearFittedSize();
     setDescriptionExpanded(false);
     resetTransform();
     setIsOpen(true);
@@ -233,12 +154,12 @@ export function PhotoViewer({
     (index: number) => {
       if (!showPhotoAt(index)) return;
       resetTransform();
-      setFittedSize(null);
+      clearFittedSize();
       setDescriptionExpanded(false);
       revealControls();
       resetInteraction();
     },
-    [resetInteraction, resetTransform, revealControls, showPhotoAt],
+    [clearFittedSize, resetInteraction, resetTransform, revealControls, showPhotoAt],
   );
 
   useEffect(() => {
@@ -280,14 +201,6 @@ export function PhotoViewer({
     };
   }, [isOpen, resetTransform, revealControls]);
 
-  useLayoutEffect(() => {
-    if (isOpen) fitActiveImage();
-  }, [activeImage?.id, fitActiveImage, isOpen, viewport]);
-
-  useLayoutEffect(() => {
-    if (isOpen && fittedSize) applyTransform(transformRef.current);
-  }, [applyTransform, fittedSize, isOpen]);
-
   useEffect(() => {
     if (!isOpen) return;
 
@@ -327,10 +240,10 @@ export function PhotoViewer({
 
   const beginPinch = useCallback(() => {
     const points = [...pointersRef.current.values()];
-    const stage = stageRef.current;
-    if (points.length < 2 || !stage) return;
+    if (points.length < 2) return;
     const midpoint = midpointBetween(points[0], points[1]);
-    const relativeMidpoint = pointFromStageCenter(stage, midpoint);
+    const relativeMidpoint = pointFromStageCenter(midpoint);
+    if (!relativeMidpoint) return;
     const current = transformRef.current;
     pinchStartRef.current = {
       distance: Math.max(1, distanceBetween(points[0], points[1])),
@@ -338,7 +251,7 @@ export function PhotoViewer({
       contentX: (relativeMidpoint.x - current.x) / current.scale,
       contentY: (relativeMidpoint.y - current.y) / current.scale,
     };
-  }, []);
+  }, [pointFromStageCenter, transformRef]);
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
@@ -380,10 +293,10 @@ export function PhotoViewer({
     const points = [...pointersRef.current.values()];
     if (points.length >= 2) {
       const pinch = pinchStartRef.current;
-      const stage = stageRef.current;
-      if (!pinch || !stage) return;
+      if (!pinch) return;
       const midpoint = midpointBetween(points[0], points[1]);
-      const relativeMidpoint = pointFromStageCenter(stage, midpoint);
+      const relativeMidpoint = pointFromStageCenter(midpoint);
+      if (!relativeMidpoint) return;
       const scale = clampPhotoScale(
         pinch.scale * (distanceBetween(points[0], points[1]) / pinch.distance),
       );
