@@ -113,6 +113,26 @@ test("adds stored photos to an existing Memory without duplicating files or rela
   });
 });
 
+test("rejects an invalid photo storage key before adding a Memory relation", () => {
+  withDatabase("exhibit-invalid-row", (database) => {
+    insertMemory(database, "memory-a");
+    database
+      .prepare(
+        `INSERT INTO uploaded_photos
+         (id, original_name, mime_type, optimized_storage_key, original_storage_key,
+          width, height, created_at, used_at, library_archived_at)
+         VALUES (?, ?, 'image/jpeg', ?, NULL, 1200, 800, ?, NULL, NULL)`,
+      )
+      .run("invalid-photo", "invalid-photo.jpg", Buffer.from("optimized/invalid-photo.webp"), now);
+
+    assert.throws(
+      () => addMemoryPhotosInDatabase(database, "memory-a", ["invalid-photo"]),
+      /Invalid database column storage_key; expected string/,
+    );
+    assert.equal(imageRows(database, "memory-a").length, 0);
+  });
+});
+
 test("removes only the selected relation and restores the correct photo-library state", () => {
   withDatabase("exhibit-remove", (database) => {
     insertMemory(database, "memory-a");

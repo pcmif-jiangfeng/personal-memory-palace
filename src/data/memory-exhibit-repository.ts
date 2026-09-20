@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { getDatabase } from "./database.ts";
+import { readString } from "./row-readers.ts";
 import { withTransaction } from "./transaction.ts";
 import { DomainError } from "../domain/errors.ts";
 import {
@@ -12,6 +13,21 @@ import {
 interface PhotoKeyRow {
   id: string;
   storage_key: string;
+}
+
+function readPhotoKeyRow(row: Record<string, unknown>): PhotoKeyRow {
+  return {
+    id: readString(row, "id"),
+    storage_key: readString(row, "storage_key"),
+  };
+}
+
+function readId(row: Record<string, unknown>): string {
+  return readString(row, "id");
+}
+
+function readStorageKey(row: Record<string, unknown>): string {
+  return readString(row, "storage_key");
 }
 
 function requireActiveMemory(database: DatabaseSync, memoryId: string): void {
@@ -64,15 +80,17 @@ export function addMemoryPhotosInDatabase(
         `SELECT id, optimized_storage_key AS storage_key
          FROM uploaded_photos WHERE id IN (${placeholders})`,
       )
-      .all(...ids) as unknown as PhotoKeyRow[];
+      .all(...ids)
+      .map(readPhotoKeyRow);
     if (photos.length !== ids.length) throw new DomainError("INVALID_PHOTOS");
     const photosById = new Map(photos.map((photo) => [photo.id, photo]));
     const orderedPhotos = ids.map((id) => photosById.get(id)!);
 
     const current = database
       .prepare("SELECT storage_key FROM memory_images WHERE memory_id = ?")
-      .all(memoryId) as unknown as Array<{ storage_key: string }>;
-    const currentKeys = new Set(current.map((item) => item.storage_key));
+      .all(memoryId)
+      .map(readStorageKey);
+    const currentKeys = new Set(current);
     if (orderedPhotos.some((photo) => currentKeys.has(photo.storage_key))) {
       throw new DomainError("PHOTO_ALREADY_IN_MEMORY");
     }
@@ -166,8 +184,9 @@ export function reorderMemoryPhotosInDatabase(
            ON uploaded_photos.optimized_storage_key = memory_images.storage_key
          WHERE memory_images.memory_id = ?`,
       )
-      .all(memoryId) as unknown as Array<{ id: string }>;
-    const currentIds = new Set(current.map((item) => item.id));
+      .all(memoryId)
+      .map(readId);
+    const currentIds = new Set(current);
     if (ids.length !== current.length || ids.some((id) => !currentIds.has(id))) {
       throw new DomainError("INVALID_PHOTO_ORDER");
     }
