@@ -50,6 +50,7 @@ test("initializes the core schema and isolated demo data", () => {
       "memory_relations",
       "pending_uploads",
       "photo_deletion_jobs",
+      "schema_migrations",
       "share_configs",
       "stage_covers",
       "stages",
@@ -156,11 +157,15 @@ test("adds photo library membership to an existing owner database without losing
     const photo = database
       .prepare("SELECT id, library_archived_at FROM uploaded_photos WHERE id = ?")
       .get("legacy-photo") as { id: string; library_archived_at: string | null };
-    database.close();
-
     assert.ok(columns.includes("library_archived_at"));
     assert.equal(photo.id, "legacy-photo");
     assert.equal(photo.library_archived_at, null);
+    const versions = database
+      .prepare("SELECT version FROM schema_migrations ORDER BY version")
+      .all()
+      .map((row) => (row as { version: number }).version);
+    assert.deepEqual(versions, [1, 2, 3, 4]);
+    database.close();
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -202,6 +207,7 @@ test("backfills library membership for a legacy photo already referenced by a Me
       `,
       )
       .run(createdAt);
+    original.exec("DROP TABLE schema_migrations");
     original.close();
 
     const migrated = initializeDatabase(databasePath, false);
@@ -338,6 +344,25 @@ test("updates Memory title, Original Story and optional Stage without touching i
     );
   } finally {
     database?.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("records each database migration once", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "memory-palace-migration-log-"));
+  const databasePath = path.join(directory, "owner.sqlite");
+
+  try {
+    initializeDatabase(databasePath, false).close();
+    const database = initializeDatabase(databasePath, false);
+    const versions = database
+      .prepare("SELECT version FROM schema_migrations ORDER BY version")
+      .all()
+      .map((row) => (row as { version: number }).version);
+    database.close();
+
+    assert.deepEqual(versions, [1, 2, 3, 4]);
+  } finally {
     rmSync(directory, { recursive: true, force: true });
   }
 });
