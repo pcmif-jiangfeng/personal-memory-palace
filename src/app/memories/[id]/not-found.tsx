@@ -6,7 +6,7 @@ export default function MemoryNotFound() {
     <section className="section-shell skeleton-page">
       <h1>{copy.common.notFound}</h1>
       <Link className="text-link" href="/">
-        返回人生长廊
+        {copy.common.backToGallery}
       </Link>
     </section>
   );

@@ -383,7 +383,7 @@ export function MemoryExhibitManager({
                     disabled={loadingLibrary}
                     onClick={loadMoreLibraryPhotos}
                   >
-                    {loadingLibrary ? "加载中…" : copy.workspace.loadMore}
+                    {loadingLibrary ? copy.common.loading : copy.workspace.loadMore}
                   </button>
                 ) : null}
                 <button

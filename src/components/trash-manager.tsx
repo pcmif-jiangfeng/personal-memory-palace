@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { MemorySummary, Stage } from "@/domain/models";
+import { copy } from "@/i18n/zh-CN";
 
 type TrashType = "memory" | "stage";
 type TrashAction = "restore" | "permanent";
@@ -34,10 +35,7 @@ function TrashSelectionSection({
   async function act(action: TrashAction) {
     if (busy || selected.size === 0) return;
     const ids = [...selected];
-    if (
-      action === "permanent" &&
-      !window.confirm(`即将永久删除 ${ids.length} 个 ${title}。永久删除后无法恢复，确定继续吗？`)
-    ) {
+    if (action === "permanent" && !window.confirm(copy.trash.confirmPermanent(ids.length, title))) {
       return;
     }
     setBusy(true);
@@ -54,10 +52,10 @@ function TrashSelectionSection({
       };
       if (!response.ok) throw new Error("REQUEST_FAILED");
       setSelected(new Set(result.failures?.map((failure) => failure.id) ?? []));
-      if (result.failures?.length) setError("部分项目未能处理，请重试。");
+      if (result.failures?.length) setError(copy.trash.partialFailure);
       router.refresh();
     } catch {
-      setError("批量操作未完成，请重试。");
+      setError(copy.trash.failed);
     } finally {
       setBusy(false);
     }
@@ -67,7 +65,7 @@ function TrashSelectionSection({
     <section className="trash-section">
       <div className="trash-section-heading">
         <h2>{title}</h2>
-        {items.length ? <span>已选择 {selected.size} 项</span> : null}
+        {items.length ? <span>{copy.trash.selected(selected.size)}</span> : null}
       </div>
       {items.length ? (
         <>
@@ -77,7 +75,7 @@ function TrashSelectionSection({
               className="button-secondary"
               onClick={() => setSelected(new Set(items.map((item) => item.id)))}
             >
-              全选 {title}
+              {copy.trash.selectAll(title)}
             </button>
             <button
               type="button"
@@ -85,7 +83,7 @@ function TrashSelectionSection({
               disabled={selected.size === 0}
               onClick={() => setSelected(new Set())}
             >
-              取消选择
+              {copy.trash.clear}
             </button>
             <button
               type="button"
@@ -93,7 +91,7 @@ function TrashSelectionSection({
               disabled={busy || selected.size === 0}
               onClick={() => void act("restore")}
             >
-              批量恢复
+              {copy.trash.restore}
             </button>
             <button
               type="button"
@@ -101,7 +99,7 @@ function TrashSelectionSection({
               disabled={busy || selected.size === 0}
               onClick={() => void act("permanent")}
             >
-              批量永久删除
+              {copy.trash.deletePermanently}
             </button>
           </div>
           {items.map((item) => (
@@ -116,7 +114,7 @@ function TrashSelectionSection({
           ))}
         </>
       ) : (
-        <p className="quiet-empty">没有待处理的 {title}。</p>
+        <p className="quiet-empty">{copy.trash.empty(title)}</p>
       )}
       {error ? (
         <p className="form-error" role="alert">

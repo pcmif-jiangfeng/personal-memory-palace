@@ -18,23 +18,21 @@ export default async function SearchPage({
     <section className="section-shell skeleton-page">
       <PageIntro title={copy.search.title} description={copy.search.description} />
       <form className="search-form" action="/search">
-        <input name="q" defaultValue={q} placeholder="搜索标题或 Story" />
-        <button className="button-primary">搜索</button>
+        <input name="q" defaultValue={q} placeholder={copy.search.placeholder} />
+        <button className="button-primary">{copy.search.submit}</button>
       </form>
       {q ? (
         <>
-          <p className="search-result-label">
-            “{q}” 找到 {memories.length} 段记忆
-          </p>
+          <p className="search-result-label">{copy.search.result(q, memories.length)}</p>
           <div className="memory-grid">
             {memories.map((memory) => (
               <MemoryCard key={memory.id} memory={memory} />
             ))}
           </div>
-          {memories.length === 0 ? <p className="empty-state">没有找到匹配的 Memory。</p> : null}
+          {memories.length === 0 ? <p className="empty-state">{copy.search.empty}</p> : null}
         </>
       ) : (
-        <p className="quiet-empty">输入关键词，寻找标题或 Story 中出现过的片段。</p>
+        <p className="quiet-empty">{copy.search.prompt}</p>
       )}
     </section>
   );

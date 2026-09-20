@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { getSharedMemory, shareTokenExists } from "@/data/share-repository";
 import { ShareAccess } from "@/components/share-access";
+import { copy } from "@/i18n/zh-CN";
 import { MemoryExhibition } from "@/components/memory-exhibition";
 
 export const dynamic = "force-dynamic";
@@ -16,8 +17,8 @@ export default async function SharedMemoryPage({ params }: { params: Promise<{ t
       <section className="section-shell skeleton-page">
         <div className="login-panel">
           <p className="eyebrow">VISITOR ACCESS</p>
-          <h1>一场私人展览</h1>
-          <p>这场展览需要访问密码。</p>
+          <h1>{copy.share.accessTitle}</h1>
+          <p>{copy.share.accessDescription}</p>
           <ShareAccess token={token} />
         </div>
       </section>

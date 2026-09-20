@@ -14,6 +14,7 @@ import {
 } from "react";
 import { ImageOptimizationError, optimizeImageForUpload } from "@/upload/client-image-optimizer";
 import { createClientRandomId } from "@/upload/client-random-id";
+import { copy } from "@/i18n/zh-CN";
 import { isUploadTaskFinished, summarizeUploadStatuses } from "@/upload/upload-task-model";
 import {
   initialUploadTaskState,
@@ -53,30 +54,34 @@ function taskKey(batchId: string, itemId: string): string {
 
 function optimizationErrorMessage(error: unknown): string {
   if (error instanceof ImageOptimizationError) {
-    if (error.code === "EMPTY_FILE") return "文件为空，无法处理。";
-    if (error.code === "UNSUPPORTED_TYPE") return "不支持这种图片格式。";
-    if (error.code === "OPTIMIZED_TOO_LARGE") return "优化后仍超过 20MB。";
-    if (error.code === "WEBP_UNAVAILABLE") return "当前浏览器无法生成 WebP 图片。";
+    if (error.code === "EMPTY_FILE") return copy.uploadTasks.optimizationErrors.empty;
+    if (error.code === "UNSUPPORTED_TYPE") return copy.uploadTasks.optimizationErrors.unsupported;
+    if (error.code === "OPTIMIZED_TOO_LARGE") return copy.uploadTasks.optimizationErrors.tooLarge;
+    if (error.code === "WEBP_UNAVAILABLE")
+      return copy.uploadTasks.optimizationErrors.webpUnavailable;
   }
-  return "图片无法解码或压缩，请检查文件是否损坏。";
+  return copy.uploadTasks.optimizationErrors.invalid;
 }
 
 function responseErrorMessage(status: number, code?: string): string {
-  if (status === 401) return "登录已失效，请重新登录后重试。";
-  if (status === 413 || code === "OPTIMIZED_IMAGE_TOO_LARGE") return "优化图超过上传限制。";
-  if (code === "INVALID_OPTIMIZED_IMAGE") return "服务器未能验证这张优化图片。";
-  return "上传没有完成，请稍后重试。";
+  if (status === 401) return copy.uploadTasks.responseErrors.unauthorized;
+  if (status === 413 || code === "OPTIMIZED_IMAGE_TOO_LARGE")
+    return copy.uploadTasks.responseErrors.tooLarge;
+  if (code === "INVALID_OPTIMIZED_IMAGE") return copy.uploadTasks.responseErrors.invalid;
+  return copy.uploadTasks.responseErrors.failed;
 }
 
 function statusText(item: UploadItem): string {
-  if (item.status === "waiting") return "等待处理";
-  if (item.status === "compressing") return "正在压缩";
+  if (item.status === "waiting") return copy.uploadTasks.statuses.waiting;
+  if (item.status === "compressing") return copy.uploadTasks.statuses.compressing;
   if (item.status === "uploading") {
-    return item.cancelRequested ? "正在确认服务器结果" : "正在上传";
+    return item.cancelRequested
+      ? copy.uploadTasks.statuses.confirming
+      : copy.uploadTasks.statuses.uploading;
   }
-  if (item.status === "success") return "已完成";
-  if (item.status === "cancelled") return "已取消";
-  return "失败";
+  if (item.status === "success") return copy.uploadTasks.statuses.success;
+  if (item.status === "cancelled") return copy.uploadTasks.statuses.cancelled;
+  return copy.uploadTasks.statuses.failed;
 }
 
 export function useUploadTasks(): UploadTaskContextValue {
@@ -129,7 +134,7 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
             patchItem(entry.batchId, entry.itemId, {
               status: "failed",
               photoId,
-              error: "照片已上传，但未能加入当前 Memory；可从已有照片库重新选择。",
+              error: copy.uploadTasks.addToMemoryFailed,
               cancelRequested: false,
             });
           }
@@ -151,7 +156,7 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
             status: "failed",
             error:
               activeRef.current.get(key)?.phase === "uploading"
-                ? "网络中断，服务器结果未知；请在照片整理台确认后再重试。"
+                ? copy.uploadTasks.uncertainResult
                 : optimizationErrorMessage(error),
             cancelRequested: false,
           });
@@ -185,9 +190,9 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
       const batchId = createClientRandomId();
       const items = files.map<UploadItem>((file, index) => ({
         id: createClientRandomId(),
-        name: file.name || `未命名照片 ${index + 1}`,
+        name: file.name || copy.uploadTasks.unnamed(index + 1),
         status: index < maximumFilesPerBatch ? "waiting" : "failed",
-        error: index < maximumFilesPerBatch ? undefined : "单批最多处理 20 张照片。",
+        error: index < maximumFilesPerBatch ? undefined : copy.uploadTasks.batchLimit,
       }));
       const batch: UploadBatch = {
         id: batchId,
@@ -267,7 +272,11 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
     <UploadTaskContext.Provider value={context}>
       {children}
       {batches.length > 0 ? (
-        <aside className="upload-task-stack" aria-label="图片上传任务" aria-live="polite">
+        <aside
+          className="upload-task-stack"
+          aria-label={copy.uploadTasks.ariaLabel}
+          aria-live="polite"
+        >
           {batches.map((batch) => {
             const summary = summarizeUploadStatuses(batch.items.map((item) => item.status));
             const finished = summary.completed === summary.total;
@@ -281,20 +290,26 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
                     type="button"
                     onClick={() => toggleBatch(batch.id)}
                     aria-expanded={batch.expanded}
-                    aria-label={batch.expanded ? "收起上传任务详情" : "展开上传任务详情"}
+                    aria-label={
+                      batch.expanded
+                        ? copy.uploadTasks.collapseDetails
+                        : copy.uploadTasks.expandDetails
+                    }
                   >
-                    <span>照片整理任务 · {batch.createdAt}</span>
+                    <span>{copy.uploadTasks.title(batch.createdAt)}</span>
                     <strong>
                       {summary.completed} / {summary.total}
                     </strong>
-                    <small aria-hidden="true">{batch.expanded ? "收起" : "展开"}</small>
+                    <small aria-hidden="true">
+                      {batch.expanded ? copy.uploadTasks.collapse : copy.uploadTasks.expand}
+                    </small>
                   </button>
                   {finished ? (
                     <button
                       type="button"
                       className="upload-task-dismiss"
                       onClick={() => dismissBatch(batch.id)}
-                      aria-label="关闭已完成的上传任务"
+                      aria-label={copy.uploadTasks.dismiss}
                     >
                       ×
                     </button>
@@ -304,7 +319,7 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
                 {batch.expanded ? (
                   <div className="upload-task-details">
                     <p className="upload-task-summary">
-                      成功 {summary.success} · 失败 {summary.failed} · 取消 {summary.cancelled}
+                      {copy.uploadTasks.summary(summary.success, summary.failed, summary.cancelled)}
                     </p>
                     <ul>
                       {batch.items.map((item) => (
@@ -320,7 +335,9 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
                                 disabled={item.cancelRequested}
                                 onClick={() => cancelItem(batch.id, item.id)}
                               >
-                                {item.cancelRequested ? "确认中" : "取消"}
+                                {item.cancelRequested
+                                  ? copy.uploadTasks.cancelPending
+                                  : copy.uploadTasks.cancel}
                               </button>
                             ) : null}
                           </div>
@@ -331,10 +348,10 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
                     <div className="upload-task-actions">
                       {!finished ? (
                         <button type="button" onClick={() => cancelBatch(batch.id)}>
-                          取消整批
+                          {copy.uploadTasks.cancelBatch}
                         </button>
                       ) : null}
-                      <Link href="/workspace">前往照片整理台</Link>
+                      <Link href="/workspace">{copy.uploadTasks.openWorkspace}</Link>
                     </div>
                   </div>
                 ) : null}

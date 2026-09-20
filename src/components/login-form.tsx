@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { copy } from "@/i18n/zh-CN";
 export function LoginForm() {
   const router = useRouter();
   const [error, setError] = useState("");
@@ -13,16 +14,16 @@ export function LoginForm() {
       body: JSON.stringify({ password }),
     });
     if (response.ok) router.push("/");
-    else setError("密码不正确或尚未配置馆长密码。");
+    else setError(copy.auth.invalidPassword);
   }
   return (
     <form className="login-form" onSubmit={submit}>
       <label className="form-field">
-        <span>馆长密码</span>
+        <span>{copy.auth.password}</span>
         <input name="password" type="password" required autoFocus />
       </label>
       {error ? <p className="form-error">{error}</p> : null}
-      <button className="button-primary">进入</button>
+      <button className="button-primary">{copy.auth.enter}</button>
     </form>
   );
 }

@@ -48,9 +48,9 @@ export default async function LifeGalleryPage() {
       </section>
       <section className="recall-section section-shell">
         <div>
-          <p className="eyebrow">TIME GEAR · 回到某一刻</p>
-          <h2>让时间替你翻开一页</h2>
-          <p>从所有未归档的 Memory 中，完全随机遇见一段过去。</p>
+          <p className="eyebrow">{copy.recall.eyebrow}</p>
+          <h2>{copy.recall.title}</h2>
+          <p>{copy.recall.description}</p>
         </div>
         <TimeGear />
       </section>

@@ -20,7 +20,7 @@ export function SiteHeader() {
       <Link className="brand" href="/">
         {copy.brand}
       </Link>
-      <nav aria-label="主导航">
+      <nav aria-label={copy.common.mainNavigation}>
         {navigationItems.map((item) => {
           const active = isNavigationItemActive(pathname, item.href);
           return (

@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { copy } from "@/i18n/zh-CN";
 export function ShareAccess({ token }: { token: string }) {
   const router = useRouter();
   const [error, setError] = useState("");
@@ -16,15 +17,15 @@ export function ShareAccess({ token }: { token: string }) {
           body: JSON.stringify({ token, password }),
         });
         if (response.ok) router.refresh();
-        else setError("访问密码不正确。");
+        else setError(copy.share.invalidPassword);
       }}
     >
       <label className="form-field">
-        <span>访问密码</span>
+        <span>{copy.share.password}</span>
         <input name="password" type="password" required autoFocus />
       </label>
       {error ? <p className="form-error">{error}</p> : null}
-      <button className="button-primary">进入展览</button>
+      <button className="button-primary">{copy.share.enter}</button>
     </form>
   );
 }

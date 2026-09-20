@@ -146,20 +146,20 @@ export function MemoryManagement({
         }}
       >
         <label className="form-field">
-          <span>追加 Later Note</span>
+          <span>{copy.management.laterNote}</span>
           <textarea
             value={note}
             onChange={(event) => setNote(event.target.value)}
             rows={4}
-            placeholder="给未来的自己留一句话…"
+            placeholder={copy.management.laterNotePlaceholder}
           />
         </label>
         <button className="button-secondary" disabled={busy || !note.trim()}>
-          保存注记
+          {copy.management.saveNote}
         </button>
       </form>
       <details className="relation-editor">
-        <summary>编辑相关记忆</summary>
+        <summary>{copy.management.editRelations}</summary>
         <div className="relation-list">
           {candidates
             .filter((item) => item.id !== memory.id)
@@ -185,17 +185,17 @@ export function MemoryManagement({
           disabled={busy}
           onClick={() => void send({ action: "relations", relatedMemoryIds: related })}
         >
-          保存关联
+          {copy.management.saveRelations}
         </button>
       </details>
       <button
         className="text-button danger"
         disabled={busy}
         onClick={() => {
-          if (window.confirm("将这段 Memory 移入回收站？")) void send({ action: "trash" });
+          if (window.confirm(copy.management.trashConfirm)) void send({ action: "trash" });
         }}
       >
-        移入回收站
+        {copy.management.trash}
       </button>
     </div>
   );

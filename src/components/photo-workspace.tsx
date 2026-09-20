@@ -409,7 +409,7 @@ export function PhotoWorkspace({
                 disabled={loading}
                 onClick={loadMore}
               >
-                {loading ? "加载中…" : copy.workspace.loadMore}
+                {loading ? copy.common.loading : copy.workspace.loadMore}
               </button>
             </div>
           ) : null}

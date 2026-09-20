@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { copy } from "@/i18n/zh-CN";
 export function ShareManager({ memoryId }: { memoryId: string }) {
   const [mode, setMode] = useState<"link" | "password">("link");
   const [password, setPassword] = useState("");
@@ -16,19 +17,19 @@ export function ShareManager({ memoryId }: { memoryId: string }) {
     const result = await response.json();
     if (response.ok) {
       setUrl(`${window.location.origin}${result.url}`);
-      setMessage("分享方式已保存");
-    } else setMessage("分享保存失败，请检查馆长登录状态。");
+      setMessage(copy.share.saved);
+    } else setMessage(copy.share.failed);
   }
   return (
     <form className="share-manager" onSubmit={save}>
-      <h3>分享这场展览</h3>
+      <h3>{copy.share.title}</h3>
       <label className="check-row">
         <input
           type="checkbox"
           checked={enabled}
           onChange={(event) => setEnabled(event.target.checked)}
         />
-        允许 Visitor 参观
+        {copy.share.visitorAccess}
       </label>
       {enabled ? (
         <>
@@ -36,28 +37,28 @@ export function ShareManager({ memoryId }: { memoryId: string }) {
             value={mode}
             onChange={(event) => setMode(event.target.value as "link" | "password")}
           >
-            <option value="link">有链接即可访问</option>
-            <option value="password">链接 + 密码</option>
+            <option value="link">{copy.share.linkAccess}</option>
+            <option value="password">{copy.share.passwordAccess}</option>
           </select>
           {mode === "password" ? (
             <input
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder="访问密码"
+              placeholder={copy.share.password}
               type="password"
               required
             />
           ) : null}
         </>
       ) : null}
-      <button className="button-secondary">保存分享设置</button>
+      <button className="button-secondary">{copy.share.save}</button>
       {enabled && url ? (
         <button
           className="button-secondary"
           type="button"
           onClick={(event) => void save(event, true)}
         >
-          重新生成分享链接
+          {copy.share.rotate}
         </button>
       ) : null}
       {url ? (
