@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { getDatabase } from "./database.ts";
 import { findMemoryByIdInDatabase } from "./memory-repository.ts";
+import { readString } from "./row-readers.ts";
 import { withTransaction } from "./transaction.ts";
 import { DomainError } from "../domain/errors.ts";
 import type { MemorySummary } from "../domain/models.ts";
@@ -21,6 +22,13 @@ export interface CreateMemoryInput {
 }
 
 interface PhotoKeyRow { id: string; storage_key: string }
+
+function readPhotoKeyRow(row: Record<string, unknown>): PhotoKeyRow {
+  return {
+    id: readString(row, "id"),
+    storage_key: readString(row, "storage_key"),
+  };
+}
 
 export function createMemory(input: CreateMemoryInput): MemorySummary {
   return createMemoryInDatabase(getDatabase(), input);
@@ -53,7 +61,8 @@ export function createMemoryInDatabase(
          FROM uploaded_photos
          WHERE id IN (${placeholders})`,
       )
-      .all(...photoIds) as unknown as PhotoKeyRow[];
+      .all(...photoIds)
+      .map(readPhotoKeyRow);
     if (photos.length !== photoIds.length) throw new DomainError("INVALID_PHOTOS");
     const photoById = new Map(photos.map((photo) => [photo.id, photo]));
 
