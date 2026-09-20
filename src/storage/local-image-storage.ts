@@ -2,15 +2,15 @@ import { randomUUID } from "node:crypto";
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getDataDirectory } from "../config.ts";
-import { getDataset } from "@/data/database";
+import { getDataset } from "../data/database.ts";
 import type {
   ImageStorage,
   SaveImageInput,
   SaveOptimizedImageInput,
   SavedImage,
   StoredImage,
-} from "./image-storage";
-import { createWebOptimizedImage, extensionForMimeType } from "./image-processor";
+} from "./image-storage.ts";
+import { createWebOptimizedImage, extensionForMimeType } from "./image-processor.ts";
 
 export function getImageDataDirectory(): string {
   return path.join(/* turbopackIgnore: true */ getDataDirectory(), "images");

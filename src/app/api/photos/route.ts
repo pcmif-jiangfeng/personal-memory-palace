@@ -1,18 +1,15 @@
 import { NextResponse } from "next/server";
 import {
-  commitOptimizedUpload,
   listUploadedPhotosByIds,
-  prepareOptimizedUpload,
   queryWorkspacePhotoCatalog,
   type PhotoCatalogQuery,
 } from "@/data/photo-repository";
-import { getDataset } from "@/data/database";
-import { randomUUID } from "node:crypto";
-import { maximumUploadBytes, validateWebOptimizedImage } from "@/storage/image-processor";
+import { maximumUploadBytes } from "@/storage/image-processor";
 import { imageStorage } from "@/storage/local-image-storage";
 import { isOwner } from "@/auth";
 import { deleteUploadedPhotos } from "@/data/photo-deletion";
 import { parsePhotoBatchDelete } from "@/http/schemas";
+import { uploadOptimizedPhoto } from "@/application/photo-upload-service";
 import {
   apiErrorResponse,
   ownerRequiredResponse,
@@ -123,30 +120,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "OPTIMIZED_IMAGE_TOO_LARGE" }, { status: 413 });
   }
 
-  let validated: Awaited<ReturnType<typeof validateWebOptimizedImage>>;
+  let data: Buffer;
   try {
-    validated = await validateWebOptimizedImage(Buffer.from(await file.arrayBuffer()));
+    data = Buffer.from(await file.arrayBuffer());
   } catch {
     return NextResponse.json({ error: "INVALID_OPTIMIZED_IMAGE" }, { status: 422 });
   }
-
-  let saved: Awaited<ReturnType<typeof imageStorage.saveOptimized>> | null = null;
-  const storageKey = `uploads/${getDataset()}/optimized/${randomUUID()}.webp`;
-  const operationId = prepareOptimizedUpload(storageKey);
-  try {
-    saved = await imageStorage.saveOptimized(validated, storageKey);
-    const requestedName = formData.get("originalName");
-    const originalName =
-      typeof requestedName === "string" && requestedName.trim()
-        ? requestedName.trim().slice(0, 255)
-        : "未命名照片.webp";
-    const photo = commitOptimizedUpload(operationId, {
-      originalName,
-      mimeType: "image/webp",
-      saved,
-    });
-    return NextResponse.json({ photos: [photo] }, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: "IMAGE_STORAGE_FAILED" }, { status: 500 });
+  const requestedName = formData.get("originalName");
+  const result = await uploadOptimizedPhoto({
+    data,
+    requestedName: typeof requestedName === "string" ? requestedName : null,
+  });
+  if (!result.ok) {
+    const status = result.error === "INVALID_OPTIMIZED_IMAGE" ? 422 : 500;
+    return NextResponse.json({ error: result.error }, { status });
   }
+  return NextResponse.json({ photos: [result.photo] }, { status: 201 });
 }
