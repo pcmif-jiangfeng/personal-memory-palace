@@ -2,6 +2,11 @@ import type { DatabaseSync } from "node:sqlite";
 import { withTransaction } from "./transaction.ts";
 import { DomainError } from "../domain/errors.ts";
 import type { ImageStorage } from "../storage/image-storage.ts";
+import {
+  readBooleanFlag,
+  readNullableString,
+  readString,
+} from "./row-readers.ts";
 
 export interface PhotoMemoryReference {
   id: string;
@@ -33,6 +38,42 @@ interface PendingUploadRow {
   storageKey: string;
 }
 
+function readPhotoRow(row: Record<string, unknown>): PhotoRow {
+  return {
+    optimizedStorageKey: readString(row, "optimizedStorageKey"),
+    originalStorageKey: readNullableString(row, "originalStorageKey"),
+  };
+}
+
+function readPendingDeletionRow(row: Record<string, unknown>): PendingDeletionRow {
+  return {
+    photoId: readString(row, "photoId"),
+    ...readPhotoRow(row),
+  };
+}
+
+function readPendingUploadRow(row: Record<string, unknown>): PendingUploadRow {
+  return {
+    id: readString(row, "id"),
+    storageKey: readString(row, "storageKey"),
+  };
+}
+
+function readPhotoMemoryReference(row: Record<string, unknown>): PhotoMemoryReference {
+  return {
+    id: readString(row, "id"),
+    title: readString(row, "title"),
+    isCover: readBooleanFlag(row, "isCover"),
+  };
+}
+
+function readPhotoStageReference(row: Record<string, unknown>): PhotoStageReference {
+  return {
+    id: readString(row, "id"),
+    title: readString(row, "title"),
+  };
+}
+
 function findPhotoReferences(database: DatabaseSync, storageKey: string): PhotoReferences {
   const memories = database
     .prepare(
@@ -43,7 +84,7 @@ function findPhotoReferences(database: DatabaseSync, storageKey: string): PhotoR
        GROUP BY memories.id, memories.title
        ORDER BY memories.created_at DESC, memories.id`,
     )
-    .all(storageKey) as unknown as Array<{ id: string; title: string; isCover: number }>;
+    .all(storageKey).map(readPhotoMemoryReference);
   const stages = database
     .prepare(
       `SELECT stages.id, stages.title
@@ -52,32 +93,34 @@ function findPhotoReferences(database: DatabaseSync, storageKey: string): PhotoR
        WHERE stage_covers.storage_key = ?
        ORDER BY stages.created_at DESC, stages.id`,
     )
-    .all(storageKey) as unknown as PhotoStageReference[];
+    .all(storageKey).map(readPhotoStageReference);
 
   return {
-    memories: memories.map((memory) => ({ ...memory, isCover: memory.isCover === 1 })),
+    memories,
     stages: stages.map((stage) => ({ id: stage.id, title: stage.title })),
   };
 }
 
 function prepareDeletion(database: DatabaseSync, photoId: string): PhotoRow | null {
   return withTransaction(database, () => {
-    const pending = database
+    const pendingRow = database
       .prepare(
         `SELECT optimized_storage_key AS optimizedStorageKey,
                 original_storage_key AS originalStorageKey
          FROM photo_deletion_jobs WHERE photo_id = ?`,
       )
-      .get(photoId) as PhotoRow | undefined;
+      .get(photoId);
+    const pending = pendingRow ? readPhotoRow(pendingRow) : undefined;
     if (pending) return pending;
 
-    const photo = database
+    const photoRow = database
       .prepare(
         `SELECT optimized_storage_key AS optimizedStorageKey,
                 original_storage_key AS originalStorageKey
          FROM uploaded_photos WHERE id = ?`,
       )
-      .get(photoId) as PhotoRow | undefined;
+      .get(photoId);
+    const photo = photoRow ? readPhotoRow(photoRow) : undefined;
     if (!photo) return null;
 
     const references = findPhotoReferences(database, photo.optimizedStorageKey);
@@ -162,7 +205,7 @@ export async function recoverPendingPhotoDeletions(
               original_storage_key AS originalStorageKey
        FROM photo_deletion_jobs ORDER BY created_at, photo_id`,
     )
-    .all() as unknown as PendingDeletionRow[];
+    .all().map(readPendingDeletionRow);
   let recovered = 0;
   let failed = 0;
   for (const job of pending) {
@@ -186,7 +229,7 @@ export async function recoverPendingUploads(
 ): Promise<{ recovered: number; failed: number }> {
   const pending = database
     .prepare("SELECT id, storage_key AS storageKey FROM pending_uploads ORDER BY created_at, id")
-    .all() as unknown as PendingUploadRow[];
+    .all().map(readPendingUploadRow);
   let recovered = 0;
   let failed = 0;
   for (const job of pending) {

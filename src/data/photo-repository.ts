@@ -4,6 +4,7 @@ import type { UploadedPhoto } from "../domain/models.ts";
 import type { SavedImage } from "../storage/image-storage.ts";
 import { withTransaction } from "./transaction.ts";
 import { DomainError } from "../domain/errors.ts";
+import { readNullableString, readNumber, readString } from "./row-readers.ts";
 
 interface PhotoRow {
   id: string;
@@ -23,6 +24,30 @@ interface PhotoReferenceRow {
   memory_id: string;
   memory_title: string;
   stage_id: string | null;
+}
+
+function readPhotoRow(row: Record<string, unknown>): PhotoRow {
+  return {
+    id: readString(row, "id"),
+    original_name: readString(row, "original_name"),
+    mime_type: readString(row, "mime_type"),
+    optimized_storage_key: readString(row, "optimized_storage_key"),
+    original_storage_key: readNullableString(row, "original_storage_key"),
+    width: readNumber(row, "width"),
+    height: readNumber(row, "height"),
+    created_at: readString(row, "created_at"),
+    used_at: readNullableString(row, "used_at"),
+    library_archived_at: readNullableString(row, "library_archived_at"),
+  };
+}
+
+function readPhotoReferenceRow(row: Record<string, unknown>): PhotoReferenceRow {
+  return {
+    photo_id: readString(row, "photo_id"),
+    memory_id: readString(row, "memory_id"),
+    memory_title: readString(row, "memory_title"),
+    stage_id: readNullableString(row, "stage_id"),
+  };
 }
 
 export interface WorkspacePhoto extends UploadedPhoto {
@@ -67,9 +92,12 @@ export function commitOptimizedUploadInDatabase(
   item: { originalName: string; mimeType: string; saved: SavedImage },
 ): UploadedPhoto {
   return withTransaction(database, () => {
-    const pending = database
+    const pendingRow = database
       .prepare("SELECT storage_key AS storageKey FROM pending_uploads WHERE id = ?")
-      .get(operationId) as { storageKey: string } | undefined;
+      .get(operationId);
+    const pending = pendingRow
+      ? { storageKey: readString(pendingRow, "storageKey") }
+      : undefined;
     if (!pending || pending.storageKey !== item.saved.optimizedStorageKey) {
       throw new Error("UPLOAD_OPERATION_NOT_FOUND");
     }
@@ -147,14 +175,14 @@ export function listWorkspacePhotos(): UploadedPhoto[] {
     `SELECT * FROM uploaded_photos
      WHERE used_at IS NULL AND library_archived_at IS NULL
      ORDER BY created_at DESC`
-  ).all() as unknown as PhotoRow[];
+  ).all().map(readPhotoRow);
   return rows.map(mapPhoto);
 }
 
 export function listAllUploadedPhotos(): UploadedPhoto[] {
   const rows = getDatabase().prepare(
     "SELECT * FROM uploaded_photos ORDER BY created_at DESC"
-  ).all() as unknown as PhotoRow[];
+  ).all().map(readPhotoRow);
   return rows.map(mapPhoto);
 }
 
@@ -164,7 +192,7 @@ export function listUploadedPhotosByIds(ids: string[]): UploadedPhoto[] {
   const placeholders = uniqueIds.map(() => "?").join(",");
   const rows = getDatabase()
     .prepare(`SELECT * FROM uploaded_photos WHERE id IN (${placeholders})`)
-    .all(...uniqueIds) as unknown as PhotoRow[];
+    .all(...uniqueIds).map(readPhotoRow);
   const photosById = new Map(rows.map((row) => [row.id, mapPhoto(row)]));
   return uniqueIds.flatMap((id) => {
     const photo = photosById.get(id);
@@ -235,7 +263,7 @@ export function queryWorkspacePhotoCatalogInDatabase(
     WHERE ${where.join(" AND ")}
     ORDER BY created_at DESC, id DESC
     LIMIT ?
-  `).all(...parameters, limit + 1) as unknown as PhotoRow[];
+  `).all(...parameters, limit + 1).map(readPhotoRow);
   const pageRows = rows.slice(0, limit);
   const ids = pageRows.map((row) => row.id);
   const references = ids.length
@@ -246,7 +274,7 @@ export function queryWorkspacePhotoCatalogInDatabase(
         JOIN memory_images ON memory_images.storage_key = uploaded_photos.optimized_storage_key
         JOIN memories ON memories.id = memory_images.memory_id AND memories.trashed_at IS NULL
         WHERE uploaded_photos.id IN (${ids.map(() => "?").join(",")})
-      `).all(...ids) as unknown as PhotoReferenceRow[]
+      `).all(...ids).map(readPhotoReferenceRow)
     : [];
   const referencesByPhoto = new Map<string, { memoryIds: Set<string>; memoryTitles: Set<string>; stageIds: Set<string> }>();
   for (const reference of references) {
@@ -285,7 +313,7 @@ export function listWorkspacePhotoCatalogInDatabase(
 ): WorkspacePhoto[] {
   const photos = database
     .prepare("SELECT * FROM uploaded_photos ORDER BY created_at DESC")
-    .all() as unknown as PhotoRow[];
+    .all().map(readPhotoRow);
   const references = database
     .prepare(
       `SELECT uploaded_photos.id AS photo_id,
@@ -299,7 +327,7 @@ export function listWorkspacePhotoCatalogInDatabase(
          ON memories.id = memory_images.memory_id
         AND memories.trashed_at IS NULL`,
     )
-    .all() as unknown as PhotoReferenceRow[];
+    .all().map(readPhotoReferenceRow);
   const referencesByPhoto = new Map<
     string,
     { memoryIds: Set<string>; memoryTitles: Set<string>; stageIds: Set<string> }
