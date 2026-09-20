@@ -25,3 +25,37 @@ test("swipe selection only adds photos and select-all replaces the result", () =
   assert.deepEqual([...repeated], ["photo-1", "photo-2"]);
   assert.deepEqual([...all], ["photo-3", "photo-4"]);
 });
+
+test("desktop and keyboard clicks toggle while touch selection only adds", async () => {
+  const { resolvePhotoClickIntent } =
+    await import("../src/components/photo-selection-interaction.ts");
+
+  assert.equal(
+    resolvePhotoClickIntent({ suppressed: false, detail: 1, touch: false, selectionMode: false }),
+    "toggle",
+  );
+  assert.equal(
+    resolvePhotoClickIntent({ suppressed: false, detail: 0, touch: false, selectionMode: false }),
+    "toggle",
+  );
+  assert.equal(
+    resolvePhotoClickIntent({ suppressed: false, detail: 1, touch: true, selectionMode: true }),
+    "select",
+  );
+  assert.equal(
+    resolvePhotoClickIntent({ suppressed: false, detail: 1, touch: true, selectionMode: false }),
+    "none",
+  );
+  assert.equal(
+    resolvePhotoClickIntent({ suppressed: true, detail: 1, touch: false, selectionMode: false }),
+    "ignore",
+  );
+});
+
+test("long press movement threshold ignores jitter and cancels after a drag", async () => {
+  const { movedPastLongPressThreshold } =
+    await import("../src/components/photo-selection-interaction.ts");
+
+  assert.equal(movedPastLongPressThreshold({ x: 10, y: 10 }, { x: 16, y: 18 }), false);
+  assert.equal(movedPastLongPressThreshold({ x: 10, y: 10 }, { x: 23, y: 10 }), true);
+});

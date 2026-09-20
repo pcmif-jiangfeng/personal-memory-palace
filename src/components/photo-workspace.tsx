@@ -1,25 +1,15 @@
 "use client";
 
-import {
-  useEffect,
-  useRef,
-  useState,
-  type MouseEvent as ReactMouseEvent,
-  type PointerEvent as ReactPointerEvent,
-} from "react";
+import { useRef, useState } from "react";
 import { copy } from "@/i18n/zh-CN";
 import { useUploadTasks } from "@/components/upload-task-provider";
 import { usePhotoCatalog } from "@/components/use-photo-catalog";
-import {
-  addPhotoSelection,
-  replacePhotoSelection,
-  togglePhotoSelection,
-} from "@/components/photo-selection";
+import { useLongPressSelection } from "@/components/use-long-press-selection";
+import { usePhotoSelection } from "@/components/use-photo-selection";
 import {
   archivePhoto as requestPhotoArchive,
   deletePhoto as requestPhotoDeletion,
   deletePhotos,
-  listPhotoIds,
   referencesFromPhotoError,
 } from "@/client/photo-api";
 import type {
@@ -47,17 +37,6 @@ export function PhotoWorkspace({
 }) {
   const { startUpload } = useUploadTasks();
   const inputRef = useRef<HTMLInputElement>(null);
-  const initialSelectionReset = useRef(true);
-  const selectionModeRef = useRef(false);
-  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const touchGestureRef = useRef<{
-    pointerId: number;
-    startX: number;
-    startY: number;
-    longPressed: boolean;
-  } | null>(null);
-  const suppressClickRef = useRef(false);
-  const lastPointerWasTouchRef = useRef(false);
   const {
     catalogQuery,
     loadFailed,
@@ -77,140 +56,40 @@ export function PhotoWorkspace({
     stageId,
     usageFilter,
   } = usePhotoCatalog({ initialPhotos, initialSource, initialNextCursor, pageSize: PAGE_SIZE });
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const {
+    clearSelection,
+    removePhotoFromSelection,
+    selectAllFilteredPhotos,
+    selected,
+    selectingAll,
+    selectPhoto,
+    togglePhoto,
+  } = usePhotoSelection(catalogQuery, reportLoadFailure);
+  const {
+    exitMobileSelectionMode,
+    finishPhotoPointer,
+    handlePhotoClick,
+    handlePhotoPointerDown,
+    handlePhotoPointerMove,
+    isLastPointerTouch,
+    mobileSelectionMode,
+  } = useLongPressSelection({ clearSelection, queryKey, selectPhoto, togglePhoto });
   const [archivingPhotoId, setArchivingPhotoId] = useState<string | null>(null);
   const [archiveFailedPhotoId, setArchiveFailedPhotoId] = useState<string | null>(null);
   const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
   const [deleteIssue, setDeleteIssue] = useState<PhotoDeleteIssue | null>(null);
-  const [mobileSelectionMode, setMobileSelectionMode] = useState(false);
-  const [selectingAll, setSelectingAll] = useState(false);
   const [batchDeleting, setBatchDeleting] = useState(false);
   const [batchDeleteResult, setBatchDeleteResult] = useState<PhotoBatchDeleteResult | null>(null);
 
-  useEffect(() => {
-    if (initialSelectionReset.current) {
-      initialSelectionReset.current = false;
-      return;
-    }
-    setSelected(new Set());
+  function changeCatalogFilter(update: () => void) {
     setBatchDeleteResult(null);
-    selectionModeRef.current = false;
-    setMobileSelectionMode(false);
-  }, [queryKey]);
-  useEffect(() => {
-    return () => {
-      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
-    };
-  }, []);
+    update();
+  }
 
   function upload(files: FileList | null) {
     if (!files?.length) return;
     startUpload(Array.from(files));
     if (inputRef.current) inputRef.current.value = "";
-  }
-
-  function toggle(id: string) {
-    setSelected((current) => togglePhotoSelection(current, id));
-  }
-
-  function selectPhoto(id: string) {
-    setSelected((current) => addPhotoSelection(current, id));
-  }
-
-  function clearLongPress() {
-    if (!longPressTimerRef.current) return;
-    clearTimeout(longPressTimerRef.current);
-    longPressTimerRef.current = null;
-  }
-
-  function exitMobileSelectionMode() {
-    clearLongPress();
-    touchGestureRef.current = null;
-    selectionModeRef.current = false;
-    setMobileSelectionMode(false);
-    setSelected(new Set());
-  }
-
-  function handlePhotoPointerDown(event: ReactPointerEvent<HTMLButtonElement>, photoId: string) {
-    lastPointerWasTouchRef.current = event.pointerType === "touch";
-    if (event.pointerType !== "touch") return;
-    const tile = event.currentTarget;
-    const gesture = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      longPressed: selectionModeRef.current,
-    };
-    touchGestureRef.current = gesture;
-    if (selectionModeRef.current) {
-      selectPhoto(photoId);
-      tile.setPointerCapture(event.pointerId);
-      return;
-    }
-    clearLongPress();
-    longPressTimerRef.current = setTimeout(() => {
-      if (touchGestureRef.current !== gesture) return;
-      gesture.longPressed = true;
-      suppressClickRef.current = true;
-      selectionModeRef.current = true;
-      setMobileSelectionMode(true);
-      selectPhoto(photoId);
-      tile.setPointerCapture(event.pointerId);
-    }, 450);
-  }
-
-  function handlePhotoPointerMove(event: ReactPointerEvent<HTMLButtonElement>) {
-    const gesture = touchGestureRef.current;
-    if (!gesture || gesture.pointerId !== event.pointerId) return;
-    if (!gesture.longPressed && !selectionModeRef.current) {
-      const distance = Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY);
-      if (distance > 12) clearLongPress();
-      return;
-    }
-    event.preventDefault();
-    const tile = document
-      .elementFromPoint(event.clientX, event.clientY)
-      ?.closest<HTMLElement>("[data-photo-id]");
-    const photoId = tile?.dataset.photoId;
-    if (photoId) selectPhoto(photoId);
-  }
-
-  function finishPhotoPointer(event: ReactPointerEvent<HTMLButtonElement>) {
-    clearLongPress();
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    touchGestureRef.current = null;
-  }
-
-  function handlePhotoClick(event: ReactMouseEvent<HTMLButtonElement>, photoId: string) {
-    if (suppressClickRef.current) {
-      suppressClickRef.current = false;
-      event.preventDefault();
-      return;
-    }
-    if (event.detail === 0) {
-      toggle(photoId);
-      return;
-    }
-    if (lastPointerWasTouchRef.current) {
-      if (selectionModeRef.current) selectPhoto(photoId);
-      return;
-    }
-    toggle(photoId);
-  }
-
-  async function selectAllFilteredPhotos() {
-    if (selectingAll) return;
-    setSelectingAll(true);
-    try {
-      const ids = await listPhotoIds(catalogQuery);
-      setSelected(replacePhotoSelection(ids));
-    } catch {
-      reportLoadFailure();
-    } finally {
-      setSelectingAll(false);
-    }
   }
 
   async function batchDeleteSelectedPhotos() {
@@ -223,10 +102,8 @@ export function PhotoWorkspace({
       const result = await deletePhotos(ids);
       const deleted = new Set(result.deletedIds);
       setPhotos((current) => current.filter((photo) => !deleted.has(photo.id)));
-      setSelected(new Set());
+      exitMobileSelectionMode();
       setBatchDeleteResult(result);
-      selectionModeRef.current = false;
-      setMobileSelectionMode(false);
     } catch {
       setBatchDeleteResult({
         deletedIds: [],
@@ -265,11 +142,7 @@ export function PhotoWorkspace({
     try {
       await requestPhotoDeletion(photo.id);
       setPhotos((current) => current.filter((item) => item.id !== photo.id));
-      setSelected((current) => {
-        const next = new Set(current);
-        next.delete(photo.id);
-        return next;
-      });
+      removePhotoFromSelection(photo.id);
     } catch (error) {
       setDeleteIssue({ photoId: photo.id, references: referencesFromPhotoError(error) });
     } finally {
@@ -298,14 +171,14 @@ export function PhotoWorkspace({
         <button
           type="button"
           className={source === "recent" ? "is-active" : ""}
-          onClick={() => setSource("recent")}
+          onClick={() => changeCatalogFilter(() => setSource("recent"))}
         >
           {copy.workspace.recentPhotos}
         </button>
         <button
           type="button"
           className={source === "library" ? "is-active" : ""}
-          onClick={() => setSource("library")}
+          onClick={() => changeCatalogFilter(() => setSource("library"))}
         >
           {copy.workspace.library}
         </button>
@@ -317,7 +190,9 @@ export function PhotoWorkspace({
             <span>{copy.workspace.usageFilter}</span>
             <select
               value={usageFilter}
-              onChange={(event) => setUsageFilter(event.target.value as PhotoUsageFilter)}
+              onChange={(event) =>
+                changeCatalogFilter(() => setUsageFilter(event.target.value as PhotoUsageFilter))
+              }
             >
               <option value="all">{copy.workspace.usageAll}</option>
               <option value="used">{copy.workspace.usageUsed}</option>
@@ -328,13 +203,16 @@ export function PhotoWorkspace({
             <span>{copy.workspace.memorySearch}</span>
             <input
               value={memoryQuery}
-              onChange={(event) => setMemoryQuery(event.target.value)}
+              onChange={(event) => changeCatalogFilter(() => setMemoryQuery(event.target.value))}
               placeholder={copy.workspace.memorySearchPlaceholder}
             />
           </label>
           <label>
             <span>{copy.workspace.stageFilter}</span>
-            <select value={stageId} onChange={(event) => setStageId(event.target.value)}>
+            <select
+              value={stageId}
+              onChange={(event) => changeCatalogFilter(() => setStageId(event.target.value))}
+            >
               <option value="">{copy.workspace.stageAll}</option>
               {stages.map((stage) => (
                 <option key={stage.id} value={stage.id}>
@@ -363,7 +241,7 @@ export function PhotoWorkspace({
             >
               {selectingAll ? copy.workspace.selectingAll : copy.workspace.selectAll}
             </button>
-            <button type="button" className="text-button" onClick={() => setSelected(new Set())}>
+            <button type="button" className="text-button" onClick={clearSelection}>
               {copy.workspace.clearSelection}
             </button>
             <button
@@ -440,7 +318,7 @@ export function PhotoWorkspace({
                   <input
                     type="checkbox"
                     checked={selected.has(photo.id)}
-                    onChange={() => toggle(photo.id)}
+                    onChange={() => togglePhoto(photo.id)}
                     aria-label={copy.workspace.selectPhotoLabel(photo.name)}
                   />
                 </label>
@@ -453,7 +331,7 @@ export function PhotoWorkspace({
                   onPointerUp={finishPhotoPointer}
                   onPointerCancel={finishPhotoPointer}
                   onContextMenu={(event) => {
-                    if (lastPointerWasTouchRef.current) event.preventDefault();
+                    if (isLastPointerTouch()) event.preventDefault();
                   }}
                   aria-pressed={selected.has(photo.id)}
                 >

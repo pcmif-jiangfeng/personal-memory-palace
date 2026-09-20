@@ -101,6 +101,8 @@ export function usePhotoCatalog({
     return () => controller.abort();
   }, [loadPhotos]);
 
+  const reportLoadFailure = useCallback(() => setLoadFailed(true), []);
+
   const loadMore = useCallback(() => {
     if (!nextCursor || loading) return;
     void loadPhotos(nextCursor, true);
@@ -116,7 +118,7 @@ export function usePhotoCatalog({
     nextCursor,
     photos,
     queryKey,
-    reportLoadFailure: () => setLoadFailed(true),
+    reportLoadFailure,
     setMemoryQuery,
     setPhotos,
     setSource,
