@@ -1,0 +1,60 @@
+/* Memory Exhibition */
+.exhibition {
+  padding: 0;
+}
+.exhibition-opening {
+  min-height: calc(100vh - 72px);
+  display: grid;
+  grid-template-columns: 0.78fr 1.22fr;
+  align-items: center;
+  gap: clamp(3rem, 7vw, 8rem);
+  padding-block: clamp(4rem, 8vw, 7rem);
+}
+.exhibition-title-block h1 {
+  margin: 0.8rem 0 0;
+  font:
+    400 clamp(3.2rem, 7vw, 7rem)/0.98 Georgia,
+    "Songti SC",
+    serif;
+  letter-spacing: -0.04em;
+}
+.exhibition-stage {
+  margin: 4rem 0 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+}
+.exhibition-hero {
+  margin: 0;
+  padding: 0.8rem;
+  background: #fffaf0;
+  box-shadow: 0 2.3rem 6rem rgba(53, 43, 31, 0.2);
+}
+.exhibition-image {
+  width: 100%;
+  max-height: none;
+  aspect-ratio: 4 / 5;
+  margin: 0;
+  object-fit: cover;
+  filter: saturate(0.88);
+}
+.exhibition-hero figcaption {
+  padding: 0.7rem 0.2rem 0;
+  color: var(--muted);
+  font-size: 0.56rem;
+  letter-spacing: 0.15em;
+}
+.photo-viewer-trigger {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: zoom-in;
+}
+.photo-viewer-trigger:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 5px;
+}

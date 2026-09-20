@@ -1,0 +1,50 @@
+/* Stage View */
+.stage-view {
+  min-height: calc(100vh - 72px);
+  padding-block: clamp(4rem, 8vw, 8rem);
+}
+.stage-view-header {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.72fr);
+  align-items: center;
+  gap: clamp(3rem, 8vw, 8rem);
+  margin-bottom: clamp(4rem, 8vw, 7rem);
+}
+.stage-view-copy {
+  position: relative;
+  z-index: 2;
+}
+.stage-view-art {
+  position: relative;
+  padding: 0.75rem;
+  background: #fffaf0;
+  box-shadow: 0 2rem 5rem rgba(50, 40, 30, 0.18);
+  transform: rotate(1.5deg);
+}
+.stage-view-art::after {
+  content: "";
+  position: absolute;
+  inset: 1.2rem -1.4rem -1.4rem 1.2rem;
+  z-index: -1;
+  border: 1px solid rgba(133, 95, 64, 0.3);
+}
+.stage-view-art img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  filter: saturate(0.82);
+}
+.stage-view-count {
+  margin: 1.5rem 0 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+}
+.stage-view-actions {
+  margin-top: 1rem;
+}
+.stage-memory-grid {
+  padding-top: 2rem;
+  border-top: 1px solid var(--line);
+}

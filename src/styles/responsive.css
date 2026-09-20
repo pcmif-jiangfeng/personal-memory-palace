@@ -1,0 +1,279 @@
+@media (max-width: 760px) {
+  .upload-task-stack {
+    right: 0.65rem;
+    bottom: 0.65rem;
+    width: calc(100vw - 1.3rem);
+    max-height: 68vh;
+  }
+  .site-header {
+    min-height: auto;
+    align-items: stretch;
+    flex-direction: column;
+    padding: 1rem 5vw 0.75rem;
+    gap: 0.75rem;
+  }
+  .site-header nav {
+    width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 0.35rem;
+    padding-bottom: 0.25rem;
+    white-space: nowrap;
+  }
+  .stage-grid,
+  .memory-grid {
+    grid-template-columns: 1fr;
+  }
+  .placeholder-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .photo-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .editor-photo-grid,
+  .exhibition-gallery,
+  .stage-edit-list,
+  .relation-list {
+    grid-template-columns: 1fr;
+  }
+  .upload-bar,
+  .selection-bar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .workspace-source-tabs {
+    overflow-x: auto;
+  }
+  .workspace-source-tabs button {
+    white-space: nowrap;
+  }
+  .workspace-filters {
+    grid-template-columns: 1fr;
+  }
+  .memory-exhibit-inspector {
+    grid-template-columns: 1fr;
+  }
+  .memory-exhibit-strip {
+    grid-auto-columns: 96px;
+  }
+  .stage-cover-status {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+  .museum-hero {
+    min-height: auto;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4rem;
+    padding-block: 5rem 7rem;
+  }
+  .museum-hero-copy {
+    min-width: 0;
+    width: 100%;
+    padding-left: 1.2rem;
+  }
+  .museum-hero-copy .page-intro h1 {
+    width: 100%;
+    max-width: 100%;
+    white-space: normal;
+    font-size: clamp(2.35rem, 11.5vw, 3.6rem);
+    line-height: 1.08;
+    overflow-wrap: anywhere;
+    word-break: break-all;
+  }
+  .museum-hero-copy .demo-badge {
+    left: 1.2rem;
+  }
+  .museum-hero-art {
+    width: 88%;
+    margin-inline: auto;
+    transform: none;
+  }
+  .museum-hero-art::before {
+    inset: -0.8rem 0.8rem 1rem -0.8rem;
+  }
+  .section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .stage-gallery {
+    width: 94vw;
+    padding: 3rem 1rem;
+  }
+  .stage-carousel {
+    --stage-card-width: 280px;
+    --stage-card-gap: 1rem;
+    --stage-shelf-padding: 0.3rem;
+  }
+  .stage-shelf {
+    gap: var(--stage-card-gap);
+    padding-inline: var(--stage-shelf-padding);
+    scroll-padding-inline: var(--stage-shelf-padding);
+  }
+  .stage-volume {
+    height: 370px;
+  }
+  .stage-book {
+    min-height: 260px;
+  }
+  .stage-preview-stack {
+    inset-inline: 1rem;
+  }
+  .stage-view-header {
+    grid-template-columns: 1fr;
+    gap: 3rem;
+  }
+  .exhibition-opening {
+    min-height: auto;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3rem;
+    padding-block: 4rem 6rem;
+  }
+  .exhibition-title-block {
+    min-width: 0;
+    width: 100%;
+  }
+  .exhibition-title-block h1 {
+    width: 100%;
+    max-width: 100%;
+    white-space: normal;
+    font-size: clamp(2.5rem, 12vw, 4rem);
+    line-height: 1.05;
+    overflow-wrap: anywhere;
+    word-break: break-all;
+  }
+  .exhibition-stage {
+    margin-top: 2.5rem;
+  }
+  .photo-viewer-stage {
+    padding: max(4.25rem, calc(env(safe-area-inset-top) + 3.5rem))
+      max(1rem, env(safe-area-inset-right)) max(4.25rem, calc(env(safe-area-inset-bottom) + 3.5rem))
+      max(1rem, env(safe-area-inset-left));
+  }
+  .photo-viewer-stage.has-identity {
+    padding-bottom: max(7rem, calc(env(safe-area-inset-bottom) + 6rem));
+  }
+  .photo-viewer-identity {
+    bottom: max(3.9rem, calc(env(safe-area-inset-bottom) + 3.2rem));
+    width: calc(100% - 2rem);
+    max-height: 42%;
+    padding: 0.8rem 0.9rem;
+  }
+  .photo-viewer-identity-heading {
+    gap: 0.65rem;
+  }
+  .photo-viewer.controls-hidden .photo-viewer-close,
+  .photo-viewer.controls-hidden .photo-viewer-navigation,
+  .photo-viewer.controls-hidden .photo-viewer-position,
+  .photo-viewer.controls-hidden .photo-viewer-hint {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .photo-viewer-navigation {
+    width: 42px;
+    height: 56px;
+  }
+  .photo-viewer-hint {
+    bottom: max(0.75rem, env(safe-area-inset-bottom));
+    font-size: 0.62rem;
+  }
+  .story-hall,
+  .later-notes-hall {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  .exhibition-gallery-section {
+    width: 94vw;
+  }
+  .exhibition-gallery {
+    grid-template-columns: 1fr;
+  }
+  .exhibition-gallery figure,
+  .exhibition-gallery figure:nth-child(n),
+  .exhibition-gallery figure:only-child {
+    grid-column: 1;
+    padding: 0;
+  }
+  .related-memory-grid {
+    grid-template-columns: 1fr;
+  }
+  .recall-section {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .time-gear {
+    align-self: center;
+  }
+  .time-gear-experience {
+    align-self: center;
+  }
+  .memory-management {
+    grid-template-columns: 1fr;
+  }
+  .search-form {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .trash-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .photo-tile-checkbox {
+    display: none;
+  }
+  .photo-grid.is-mobile-selection .photo-tile-checkbox {
+    display: grid;
+  }
+  .photo-grid.is-mobile-selection .photo-tile-select {
+    touch-action: none;
+    user-select: none;
+  }
+  .selection-actions {
+    justify-content: flex-start;
+  }
+  .mobile-selection-done {
+    display: inline-flex;
+  }
+  .trash-row {
+    align-items: center;
+    flex-direction: row;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1050px) {
+  .memory-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .stage-carousel {
+    --stage-card-width: 300px;
+  }
+}
+
+@media (hover: none) {
+  .stage-preview-1 {
+    transform: translate(-78%, -82px) rotate(-6deg);
+  }
+  .stage-preview-2 {
+    transform: translate(-50%, -108px) rotate(0);
+  }
+  .stage-preview-3 {
+    transform: translate(-20%, -78px) rotate(6deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+  .photo-viewer-image.is-entering-from-right,
+  .photo-viewer-image.is-entering-from-left {
+    animation-duration: 0.01ms;
+  }
+  .time-gear.is-spinning .time-gear-ring {
+    animation: none;
+  }
+}

@@ -1,0 +1,338 @@
+:root {
+  --paper: #f5f2ea;
+  --paper-deep: #e9e2d5;
+  --ink: #22211f;
+  --muted: #706e68;
+  --line: rgba(34, 33, 31, 0.14);
+  --accent: #855f40;
+  --brass: #a98658;
+  --museum-dark: #26231f;
+}
+
+* {
+  box-sizing: border-box;
+}
+html {
+  background: var(--paper);
+  color: var(--ink);
+}
+body {
+  margin: 0;
+  overflow-x: hidden;
+  font-family: "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  background:
+    radial-gradient(circle at 8% 4%, rgba(255, 255, 255, 0.72), transparent 26rem), var(--paper);
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+img {
+  display: block;
+  max-width: 100%;
+}
+
+.site-header {
+  min-height: 72px;
+  padding: 0 5vw;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(245, 242, 234, 0.88);
+  backdrop-filter: blur(18px);
+}
+.brand {
+  font-family: Georgia, "Songti SC", serif;
+  font-size: 1.15rem;
+  letter-spacing: 0.08em;
+}
+.site-header nav {
+  display: flex;
+  gap: 0.45rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.site-header nav a {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  min-height: 40px;
+  padding: 0.5rem 0.72rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+.site-header nav a:hover {
+  color: var(--ink);
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.45);
+  transform: translateY(-1px);
+}
+.site-header nav a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.site-header nav a.is-active {
+  border-color: rgba(133, 95, 64, 0.34);
+  background: rgba(169, 134, 88, 0.13);
+  color: var(--ink);
+  font-weight: 600;
+}
+.site-nav-marker {
+  color: var(--accent);
+  font-size: 0.78rem;
+  line-height: 1;
+  opacity: 0.5;
+}
+.site-header nav a.is-active .site-nav-marker {
+  opacity: 1;
+  transform: scale(1.16);
+}
+.section-shell {
+  width: min(1120px, 90vw);
+  margin-inline: auto;
+}
+.hero {
+  padding-block: clamp(5rem, 12vw, 9rem);
+  position: relative;
+}
+.demo-badge {
+  position: absolute;
+  top: 2rem;
+  right: 0;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+}
+.page-intro {
+  min-width: 0;
+  max-width: 760px;
+}
+.eyebrow {
+  color: var(--accent);
+  letter-spacing: 0.22em;
+  font-size: 0.72rem;
+}
+.page-intro h1,
+.exhibition h1 {
+  margin: 0.65rem 0 1rem;
+  font:
+    400 clamp(2.4rem, 6vw, 5.4rem)/1.08 Georgia,
+    "Songti SC",
+    serif;
+}
+.page-intro > p:last-child {
+  max-width: 580px;
+  color: var(--muted);
+  line-height: 1.8;
+}
+.collection-section {
+  padding-bottom: 6rem;
+}
+.collection-section > h2 {
+  margin-bottom: 1.8rem;
+  font:
+    400 1.35rem Georgia,
+    "Songti SC",
+    serif;
+}
+.stage-grid,
+.memory-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+}
+.stage-card {
+  min-height: 220px;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  background: #e9e1d3;
+  border-left: 8px solid #6f4e37;
+  box-shadow: 0 14px 35px rgba(42, 35, 27, 0.08);
+}
+.stage-card-with-cover {
+  position: relative;
+  overflow: hidden;
+  color: white;
+}
+.stage-card-with-cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(transparent 20%, rgba(20, 16, 12, 0.78));
+}
+.stage-card-with-cover > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.stage-card-copy {
+  position: relative;
+  z-index: 1;
+}
+.stage-card-with-cover .stage-card-copy p,
+.stage-card-with-cover .stage-card-copy span {
+  color: rgba(255, 255, 255, 0.76);
+}
+.stage-card span,
+.memory-card-copy > p {
+  color: var(--muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.stage-card h3 {
+  margin: 0.6rem 0;
+  font:
+    400 1.6rem Georgia,
+    "Songti SC",
+    serif;
+}
+.stage-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.6;
+}
+.memory-card {
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid var(--line);
+}
+.memory-card-image {
+  aspect-ratio: 4 / 3;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #ddd6ca;
+  color: var(--muted);
+}
+.memory-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.memory-card-copy {
+  padding: 1.2rem;
+}
+.memory-card-copy h3 {
+  margin: 0.45rem 0 1rem;
+  font:
+    400 1.25rem Georgia,
+    "Songti SC",
+    serif;
+}
+.memory-card-copy span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.skeleton-page {
+  min-height: calc(100vh - 73px);
+  padding-block: 6rem;
+}
+.placeholder-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin: 3rem 0;
+}
+.placeholder-grid span {
+  aspect-ratio: 4 / 3;
+  background: #e5e0d7;
+  border: 1px dashed #bbb2a5;
+}
+.text-link {
+  color: var(--accent);
+  border-bottom: 1px solid currentColor;
+}
+.editor-skeleton {
+  max-width: 760px;
+  display: grid;
+  gap: 1rem;
+  margin-top: 3rem;
+}
+.field-placeholder,
+.search-placeholder,
+.empty-state {
+  padding: 1.25rem;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.3);
+}
+.field-placeholder-large {
+  min-height: 180px;
+}
+.exhibition {
+  padding-block: 5rem 8rem;
+}
+.exhibition-image {
+  width: 100%;
+  max-height: 66vh;
+  object-fit: cover;
+  margin: 1.5rem 0 3rem;
+}
+.exhibition-stage {
+  color: var(--muted);
+}
+.story-block {
+  max-width: 720px;
+  margin-top: 4rem;
+}
+.story-block h2 {
+  font:
+    400 1rem Georgia,
+    serif;
+  color: var(--accent);
+}
+.story-block p {
+  font:
+    400 1.08rem/2 Georgia,
+    "Songti SC",
+    serif;
+}
+.button-primary,
+.button-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 44px;
+  padding: 0.7rem 1.15rem;
+  border: 1px solid var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.button-primary {
+  background: var(--ink);
+  color: var(--paper);
+}
+.button-secondary {
+  background: transparent;
+  color: var(--ink);
+}
+.button-primary:disabled,
+.button-secondary:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+.button-primary input[type="file"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}

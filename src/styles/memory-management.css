@@ -1,0 +1,287 @@
+.story-hall {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 720px);
+  justify-content: center;
+  gap: clamp(2rem, 7vw, 7rem);
+  padding-block: clamp(6rem, 12vw, 11rem);
+}
+.story-label {
+  display: flex;
+  align-items: baseline;
+  gap: 0.8rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+.story-label span,
+.exhibition-section-heading > span {
+  color: var(--brass);
+  font:
+    0.62rem/1 Georgia,
+    serif;
+  letter-spacing: 0.12em;
+}
+.story-label h2,
+.exhibition-section-heading h2 {
+  margin: 0;
+  font:
+    400 1.1rem Georgia,
+    "Songti SC",
+    serif;
+}
+.story-hall > p {
+  margin: 0;
+  white-space: pre-wrap;
+  font:
+    400 clamp(1.12rem, 2vw, 1.42rem)/2.05 Georgia,
+    "Songti SC",
+    serif;
+}
+.exhibition-section {
+  margin-top: 0;
+  padding-block: clamp(5rem, 10vw, 9rem);
+}
+.exhibition-gallery-section {
+  width: min(1280px, 94vw);
+  padding-inline: clamp(1rem, 4vw, 4rem);
+  background: #ece5d9;
+}
+.exhibition-section-heading {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: baseline;
+  gap: 0.75rem 1rem;
+  margin-bottom: clamp(2rem, 5vw, 4rem);
+}
+.exhibition-section-heading > p {
+  justify-self: end;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.exhibition-gallery {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  align-items: start;
+  gap: clamp(0.8rem, 2vw, 1.5rem);
+}
+.exhibition-gallery figure {
+  grid-column: span 6;
+  margin: 0;
+}
+.exhibition-gallery figure:nth-child(5n + 1) {
+  grid-column: span 7;
+}
+.exhibition-gallery figure:nth-child(5n + 2) {
+  grid-column: span 5;
+  padding-top: 12%;
+}
+.exhibition-gallery figure:nth-child(5n + 3) {
+  grid-column: 2 / span 5;
+}
+.exhibition-gallery figure:nth-child(5n + 4) {
+  grid-column: span 6;
+}
+.exhibition-gallery figure:only-child {
+  grid-column: 2 / span 10;
+  padding: 0;
+}
+.exhibition-gallery-image {
+  width: 100%;
+  height: auto;
+  max-height: 760px;
+  aspect-ratio: auto;
+  object-fit: contain;
+  background: rgba(255, 255, 255, 0.42);
+}
+.exhibition-gallery-image {
+  display: block;
+}
+.exhibition-gallery figcaption {
+  margin-top: 0.55rem;
+  color: var(--muted);
+  font-size: 0.58rem;
+  letter-spacing: 0.12em;
+}
+.exhibition-gallery figcaption strong {
+  display: block;
+  color: var(--ink);
+}
+.exhibition-gallery figcaption p {
+  margin: 0.4rem 0 0;
+  font-size: 0.82rem;
+  letter-spacing: 0;
+  line-height: 1.6;
+}
+.later-notes-hall {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.35fr) minmax(0, 1fr);
+  gap: clamp(2rem, 7vw, 7rem);
+}
+.later-notes-hall .exhibition-section-heading {
+  display: flex;
+  align-items: baseline;
+  height: fit-content;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+.later-notes-list {
+  display: grid;
+  gap: 1.2rem;
+}
+.later-note {
+  padding: 1.7rem 1.8rem;
+  border-left: 2px solid var(--brass);
+  background: rgba(255, 255, 255, 0.42);
+}
+.later-note time {
+  color: var(--muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+}
+.later-note p {
+  margin: 0.7rem 0 0;
+  font:
+    1rem/1.8 Georgia,
+    "Songti SC",
+    serif;
+}
+.quiet-empty {
+  max-width: 620px;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.8;
+}
+.related-memory-grid {
+  max-width: 840px;
+  grid-template-columns: repeat(2, 1fr);
+}
+.exhibition-stage-hall {
+  padding-block: clamp(4rem, 8vw, 7rem);
+  background: var(--museum-dark);
+  color: #f2ede4;
+}
+.exhibition-stage-hall p {
+  margin: 0 0 0.8rem;
+  color: #b99a72;
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+}
+.exhibition-stage-hall a,
+.exhibition-stage-hall strong {
+  font:
+    400 clamp(2rem, 5vw, 4.5rem)/1.1 Georgia,
+    "Songti SC",
+    serif;
+}
+.exhibition-stage-hall a span {
+  color: #b99a72;
+  transition: margin-left 0.3s ease;
+}
+.exhibition-stage-hall a:hover span {
+  margin-left: 0.4rem;
+}
+
+.selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+.selection-actions .text-button:disabled,
+.trash-batch-actions .text-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+.batch-delete-result {
+  margin: 0 0 1.5rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(133, 95, 64, 0.28);
+  background: rgba(255, 255, 255, 0.5);
+}
+.batch-delete-result > ul {
+  display: grid;
+  gap: 0.85rem;
+  margin: 0.9rem 0 0;
+  padding-left: 1.25rem;
+}
+.batch-delete-result li span {
+  display: block;
+  font-weight: 600;
+}
+.batch-delete-result li ul {
+  margin-top: 0.3rem;
+  color: #6f382f;
+  font-size: 0.78rem;
+}
+.photo-tile-checkbox {
+  position: absolute;
+  z-index: 3;
+  top: 0.55rem;
+  left: 0.55rem;
+  display: grid;
+  width: 1.7rem;
+  height: 1.7rem;
+  place-items: center;
+  cursor: pointer;
+}
+.photo-tile-checkbox input {
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.photo-tile-checkbox input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.mobile-selection-done {
+  display: none;
+}
+.memory-exhibit-upload-block {
+  display: grid;
+  justify-items: start;
+  gap: 0.9rem;
+  margin-top: 1rem;
+}
+.memory-exhibit-upload-block .memory-exhibit-upload {
+  margin-top: 0;
+}
+.memory-exhibit-upload-block .field-help {
+  max-width: 38rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.7;
+}
+.trash-section-heading,
+.trash-batch-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+}
+.trash-section-heading {
+  justify-content: space-between;
+}
+.trash-section-heading span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.trash-batch-actions {
+  margin: 0.9rem 0 0.4rem;
+}
+.trash-row {
+  justify-content: flex-start;
+  cursor: pointer;
+}
+.trash-row input {
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.trash-row > span:last-child {
+  display: inline;
+}
