@@ -110,4 +110,4 @@ export function runDatabaseMigrations(database: DatabaseSync): void {
       record.run(migration.version, new Date().toISOString());
     });
   }
-}
+}
