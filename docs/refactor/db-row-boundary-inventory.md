@@ -98,3 +98,17 @@ Notes:
 - Existing primitive readers are sufficient for all SQLite primitives.
 - One local semantic validator is likely needed for `MemorySummaryRow.visibility`.
 - No JSON reader is needed.
+
+## Phase A completion
+
+Tasks A2–A5 removed all 21 inventoried SQLite result assertions.
+
+The Task A6 search of `src/data/` found no remaining `as unknown as` occurrences:
+
+- Reasonable to retain: **0**.
+- Should be removed: **0**.
+- Unrelated to SQLite rows: **0**.
+
+The Row Boundary phase is complete. Direct assertions outside the inventory's exact
+`as unknown as` scope remain separate review candidates and were not expanded into
+this closeout task.
