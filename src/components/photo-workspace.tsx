@@ -15,39 +15,25 @@ import {
   replacePhotoSelection,
   togglePhotoSelection,
 } from "@/components/photo-selection";
+import {
+  archivePhoto as requestPhotoArchive,
+  deletePhoto as requestPhotoDeletion,
+  deletePhotos,
+  listPhotoIds,
+  listPhotos,
+  referencesFromPhotoError,
+} from "@/client/photo-api";
+import type {
+  PhotoBatchDeleteResult,
+  PhotoDeleteIssue,
+  PhotoSource,
+  PhotoUsageFilter,
+  WorkspacePhotoView,
+} from "@/contracts/photo";
+
+export type { WorkspacePhotoView } from "@/contracts/photo";
 
 const PAGE_SIZE = 24;
-
-export interface WorkspacePhotoView {
-  id: string;
-  name: string;
-  src: string;
-  hasOriginal: boolean;
-  libraryMember: boolean;
-  activeMemoryCount: number;
-  memoryTitles: string[];
-  stageIds: string[];
-}
-
-interface PhotoReferences {
-  memories: Array<{ id: string; title: string; isCover: boolean }>;
-  stages: Array<{ id: string; title: string }>;
-}
-
-interface DeleteIssue {
-  photoId: string;
-  name?: string;
-  error?: string;
-  references?: PhotoReferences;
-}
-
-interface BatchDeleteResult {
-  deletedIds: string[];
-  failures: Array<DeleteIssue & { error: string }>;
-}
-
-type PhotoSource = "recent" | "library";
-type UsageFilter = "all" | "used" | "unused";
 
 export function PhotoWorkspace({
   initialPhotos,
@@ -79,39 +65,34 @@ export function PhotoWorkspace({
   const [loadFailed, setLoadFailed] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [source, setSource] = useState<PhotoSource>(initialSource);
-  const [usageFilter, setUsageFilter] = useState<UsageFilter>("all");
+  const [usageFilter, setUsageFilter] = useState<PhotoUsageFilter>("all");
   const [memoryQuery, setMemoryQuery] = useState("");
   const [stageId, setStageId] = useState("");
   const [archivingPhotoId, setArchivingPhotoId] = useState<string | null>(null);
   const [archiveFailedPhotoId, setArchiveFailedPhotoId] = useState<string | null>(null);
   const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
-  const [deleteIssue, setDeleteIssue] = useState<DeleteIssue | null>(null);
+  const [deleteIssue, setDeleteIssue] = useState<PhotoDeleteIssue | null>(null);
   const [mobileSelectionMode, setMobileSelectionMode] = useState(false);
   const [selectingAll, setSelectingAll] = useState(false);
   const [batchDeleting, setBatchDeleting] = useState(false);
-  const [batchDeleteResult, setBatchDeleteResult] = useState<BatchDeleteResult | null>(null);
+  const [batchDeleteResult, setBatchDeleteResult] = useState<PhotoBatchDeleteResult | null>(null);
 
   const loadPhotos = useCallback(
     async (cursor: string | null, append: boolean, signal?: AbortSignal) => {
       setLoading(true);
       setLoadFailed(false);
-      const parameters = new URLSearchParams({ source, limit: String(PAGE_SIZE) });
-      if (source === "library") {
-        parameters.set("usage", usageFilter);
-        if (memoryQuery.trim()) parameters.set("q", memoryQuery.trim());
-        if (stageId) parameters.set("stageId", stageId);
-      }
-      if (cursor) parameters.set("cursor", cursor);
       try {
-        const response = await fetch(`/api/photos?${parameters}`, { signal });
-        if (!response.ok) {
-          setLoadFailed(true);
-          return;
-        }
-        const page = (await response.json()) as {
-          items: WorkspacePhotoView[];
-          nextCursor: string | null;
-        };
+        const page = await listPhotos(
+          {
+            source,
+            usage: usageFilter,
+            query: memoryQuery,
+            stageId,
+            cursor,
+            limit: PAGE_SIZE,
+          },
+          signal,
+        );
         setPhotos((current) => (append ? [...current, ...page.items] : page.items));
         setNextCursor(page.nextCursor);
       } catch (error) {
@@ -246,17 +227,15 @@ export function PhotoWorkspace({
   async function selectAllFilteredPhotos() {
     if (selectingAll) return;
     setSelectingAll(true);
-    const parameters = new URLSearchParams({ source, limit: String(PAGE_SIZE), selection: "ids" });
-    if (source === "library") {
-      parameters.set("usage", usageFilter);
-      if (memoryQuery.trim()) parameters.set("q", memoryQuery.trim());
-      if (stageId) parameters.set("stageId", stageId);
-    }
     try {
-      const response = await fetch(`/api/photos?${parameters}`);
-      if (!response.ok) throw new Error("REQUEST_FAILED");
-      const result = (await response.json()) as { ids: string[] };
-      setSelected(replacePhotoSelection(result.ids));
+      const ids = await listPhotoIds({
+        source,
+        usage: usageFilter,
+        query: memoryQuery,
+        stageId,
+        limit: PAGE_SIZE,
+      });
+      setSelected(replacePhotoSelection(ids));
     } catch {
       setLoadFailed(true);
     } finally {
@@ -271,25 +250,7 @@ export function PhotoWorkspace({
     setBatchDeleting(true);
     setBatchDeleteResult(null);
     try {
-      const response = await fetch("/api/photos", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids }),
-      });
-      if (!response.ok) throw new Error("REQUEST_FAILED");
-      const payload = (await response.json()) as {
-        deletedIds: string[];
-        failures: Array<
-          DeleteIssue & { error: string; details?: { references?: PhotoReferences } }
-        >;
-      };
-      const result: BatchDeleteResult = {
-        deletedIds: payload.deletedIds,
-        failures: payload.failures.map(({ details, ...failure }) => ({
-          ...failure,
-          references: details?.references,
-        })),
-      };
+      const result = await deletePhotos(ids);
       const deleted = new Set(result.deletedIds);
       setPhotos((current) => current.filter((photo) => !deleted.has(photo.id)));
       setSelected(new Set());
@@ -314,13 +275,7 @@ export function PhotoWorkspace({
     setArchivingPhotoId(photo.id);
     setArchiveFailedPhotoId(null);
     try {
-      const response = await fetch(`/api/photos/${encodeURIComponent(photo.id)}/archive`, {
-        method: "POST",
-      });
-      if (!response.ok) {
-        setArchiveFailedPhotoId(photo.id);
-        return;
-      }
+      await requestPhotoArchive(photo.id);
       setPhotos((current) =>
         source === "recent"
           ? current.filter((item) => item.id !== photo.id)
@@ -338,29 +293,15 @@ export function PhotoWorkspace({
     setDeletingPhotoId(photo.id);
     setDeleteIssue(null);
     try {
-      const response = await fetch(`/api/photos/${encodeURIComponent(photo.id)}`, {
-        method: "DELETE",
-      });
-      const result = (await response.json()) as {
-        error?: string;
-        details?: { references?: PhotoReferences };
-      };
-      if (!response.ok) {
-        if (response.status === 409 && result.error === "PHOTO_IN_USE") {
-          setDeleteIssue({ photoId: photo.id, references: result.details?.references });
-          return;
-        }
-        setDeleteIssue({ photoId: photo.id });
-        return;
-      }
+      await requestPhotoDeletion(photo.id);
       setPhotos((current) => current.filter((item) => item.id !== photo.id));
       setSelected((current) => {
         const next = new Set(current);
         next.delete(photo.id);
         return next;
       });
-    } catch {
-      setDeleteIssue({ photoId: photo.id });
+    } catch (error) {
+      setDeleteIssue({ photoId: photo.id, references: referencesFromPhotoError(error) });
     } finally {
       setDeletingPhotoId(null);
     }
@@ -406,7 +347,7 @@ export function PhotoWorkspace({
             <span>{copy.workspace.usageFilter}</span>
             <select
               value={usageFilter}
-              onChange={(event) => setUsageFilter(event.target.value as UsageFilter)}
+              onChange={(event) => setUsageFilter(event.target.value as PhotoUsageFilter)}
             >
               <option value="all">{copy.workspace.usageAll}</option>
               <option value="used">{copy.workspace.usageUsed}</option>
