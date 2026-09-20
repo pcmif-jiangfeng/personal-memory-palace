@@ -8,33 +8,19 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useReducer,
   useRef,
-  useState,
   type ReactNode,
 } from "react";
 import { ImageOptimizationError, optimizeImageForUpload } from "@/upload/client-image-optimizer";
 import { createClientRandomId } from "@/upload/client-random-id";
+import { isUploadTaskFinished, summarizeUploadStatuses } from "@/upload/upload-task-model";
 import {
-  isUploadTaskFinished,
-  summarizeUploadStatuses,
-  type UploadItemStatus,
-} from "@/upload/upload-task-model";
-
-interface UploadItem {
-  id: string;
-  name: string;
-  status: UploadItemStatus;
-  error?: string;
-  cancelRequested?: boolean;
-  photoId?: string;
-}
-
-interface UploadBatch {
-  id: string;
-  createdAt: string;
-  expanded: boolean;
-  items: UploadItem[];
-}
+  initialUploadTaskState,
+  uploadTaskReducer,
+  type UploadBatch,
+  type UploadItem,
+} from "@/upload/upload-task-reducer";
 
 interface QueueEntry {
   batchId: string;
@@ -101,35 +87,15 @@ export function useUploadTasks(): UploadTaskContextValue {
 
 export function UploadTaskProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const [batches, setBatches] = useState<UploadBatch[]>([]);
-  const batchesRef = useRef<UploadBatch[]>([]);
+  const [batches, dispatch] = useReducer(uploadTaskReducer, initialUploadTaskState);
   const queueRef = useRef<QueueEntry[]>([]);
   const activeRef = useRef(new Map<string, ActiveEntry>());
   const cancelledRef = useRef(new Set<string>());
   const pumpRef = useRef<() => void>(() => undefined);
 
-  const commitBatches = useCallback((next: UploadBatch[]) => {
-    batchesRef.current = next;
-    setBatches(next);
+  const patchItem = useCallback((batchId: string, itemId: string, patch: Partial<UploadItem>) => {
+    dispatch({ type: "patch-item", batchId, itemId, patch });
   }, []);
-
-  const patchItem = useCallback(
-    (batchId: string, itemId: string, patch: Partial<UploadItem>) => {
-      commitBatches(
-        batchesRef.current.map((batch) =>
-          batch.id === batchId
-            ? {
-                ...batch,
-                items: batch.items.map((item) =>
-                  item.id === itemId ? { ...item, ...patch } : item,
-                ),
-              }
-            : batch,
-        ),
-      );
-    },
-    [commitBatches],
-  );
 
   const processEntry = useCallback(
     async (entry: QueueEntry, controller: AbortController) => {
@@ -229,7 +195,7 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
         expanded: false,
         items,
       };
-      commitBatches([batch, ...batchesRef.current]);
+      dispatch({ type: "add-batch", batch });
       queueRef.current.push(
         ...items.slice(0, maximumFilesPerBatch).map((item, index) => ({
           batchId,
@@ -240,7 +206,7 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
       );
       queueMicrotask(() => pumpRef.current());
     },
-    [commitBatches],
+    [],
   );
 
   const cancelItem = useCallback(
@@ -265,39 +231,27 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
 
   const cancelBatch = useCallback(
     (batchId: string) => {
-      const batch = batchesRef.current.find((candidate) => candidate.id === batchId);
+      const batch = batches.find((candidate) => candidate.id === batchId);
       batch?.items.forEach((item) => {
         if (["waiting", "compressing", "uploading"].includes(item.status)) {
           cancelItem(batchId, item.id);
         }
       });
     },
-    [cancelItem],
+    [batches, cancelItem],
   );
 
-  const toggleBatch = useCallback(
-    (batchId: string) => {
-      commitBatches(
-        batchesRef.current.map((batch) =>
-          batch.id === batchId ? { ...batch, expanded: !batch.expanded } : batch,
-        ),
-      );
-    },
-    [commitBatches],
-  );
+  const toggleBatch = useCallback((batchId: string) => {
+    dispatch({ type: "toggle-batch", batchId });
+  }, []);
 
-  const dismissBatch = useCallback(
-    (batchId: string) => {
-      const batch = batchesRef.current.find((candidate) => candidate.id === batchId);
-      if (!batch || !isUploadTaskFinished(batch.items.map((item) => item.status))) return;
-      commitBatches(batchesRef.current.filter((candidate) => candidate.id !== batchId));
-    },
-    [commitBatches],
-  );
+  const dismissBatch = useCallback((batchId: string) => {
+    dispatch({ type: "dismiss-finished-batch", batchId });
+  }, []);
 
   useEffect(() => {
     const warnBeforeUnload = (event: BeforeUnloadEvent) => {
-      const hasUnfinished = batchesRef.current.some(
+      const hasUnfinished = batches.some(
         (batch) => !isUploadTaskFinished(batch.items.map((item) => item.status)),
       );
       if (!hasUnfinished) return;
@@ -305,7 +259,7 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
     };
     window.addEventListener("beforeunload", warnBeforeUnload);
     return () => window.removeEventListener("beforeunload", warnBeforeUnload);
-  }, []);
+  }, [batches]);
 
   const context = useMemo(() => ({ startUpload }), [startUpload]);
 
