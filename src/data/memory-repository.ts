@@ -1,4 +1,10 @@
 import { getDatabase } from "./database.ts";
+import {
+  readBooleanFlag,
+  readNullableString,
+  readNumber,
+  readString,
+} from "./row-readers.ts";
 import type { LaterNote, MemoryDetails, MemoryImage, MemorySummary, Stage, StageShelfItem } from "../domain/models.ts";
 
 interface StageRow {
@@ -20,7 +26,7 @@ interface MemoryImageRow {
   exhibit_title: string;
   exhibit_description: string;
   sort_order: number;
-  is_cover: number;
+  is_cover: boolean;
   created_at: string;
 }
 
@@ -45,6 +51,93 @@ interface MemorySummaryRow {
   image_count: number;
 }
 
+interface StageCountRow {
+  stage_id: string;
+  count: number;
+}
+
+interface StagePreviewRow {
+  stage_id: string;
+  storage_key: string;
+}
+
+function readVisibility(row: Record<string, unknown>): MemorySummaryRow["visibility"] {
+  const visibility = readString(row, "visibility");
+  if (visibility !== "private" && visibility !== "shared") {
+    throw new TypeError("Invalid database column visibility; expected private or shared");
+  }
+  return visibility;
+}
+
+function readStageRow(row: Record<string, unknown>): StageRow {
+  return {
+    id: readString(row, "id"),
+    title: readString(row, "title"),
+    description: readString(row, "description"),
+    created_at: readString(row, "created_at"),
+    updated_at: readString(row, "updated_at"),
+    trashed_at: readNullableString(row, "trashed_at"),
+    cover_key: readNullableString(row, "cover_key"),
+  };
+}
+
+function readStageCountRow(row: Record<string, unknown>): StageCountRow {
+  return {
+    stage_id: readString(row, "stage_id"),
+    count: readNumber(row, "count"),
+  };
+}
+
+function readStagePreviewRow(row: Record<string, unknown>): StagePreviewRow {
+  return {
+    stage_id: readString(row, "stage_id"),
+    storage_key: readString(row, "storage_key"),
+  };
+}
+
+function readMemorySummaryRow(row: Record<string, unknown>): MemorySummaryRow {
+  return {
+    id: readString(row, "id"),
+    stage_id: readNullableString(row, "stage_id"),
+    stage_title: readNullableString(row, "stage_title"),
+    title: readString(row, "title"),
+    story: readString(row, "story"),
+    visibility: readVisibility(row),
+    created_at: readString(row, "created_at"),
+    updated_at: readString(row, "updated_at"),
+    trashed_at: readNullableString(row, "trashed_at"),
+    cover_key: readNullableString(row, "cover_key"),
+    image_count: readNumber(row, "image_count"),
+  };
+}
+
+function readMemoryImageRow(row: Record<string, unknown>): MemoryImageRow {
+  return {
+    id: readString(row, "id"),
+    memory_id: readString(row, "memory_id"),
+    photo_id: readString(row, "photo_id"),
+    storage_key: readString(row, "storage_key"),
+    alt_text: readString(row, "alt_text"),
+    exhibit_title: readString(row, "exhibit_title"),
+    exhibit_description: readString(row, "exhibit_description"),
+    sort_order: readNumber(row, "sort_order"),
+    is_cover: readBooleanFlag(row, "is_cover"),
+    created_at: readString(row, "created_at"),
+  };
+}
+
+function readIdRow(row: Record<string, unknown>): { id: string } {
+  return { id: readString(row, "id") };
+}
+
+function readLaterNoteRow(row: Record<string, unknown>): LaterNoteRow {
+  return {
+    id: readString(row, "id"),
+    memory_id: readString(row, "memory_id"),
+    content: readString(row, "content"),
+    created_at: readString(row, "created_at"),
+  };
+}
 function mapStage(row: StageRow): Stage {
   return {
     id: row.id,
@@ -88,7 +181,7 @@ export function listActiveStages(): Stage[] {
     `SELECT stages.*, stage_covers.storage_key AS cover_key FROM stages
      LEFT JOIN stage_covers ON stage_covers.stage_id = stages.id
      WHERE stages.trashed_at IS NULL ORDER BY stages.created_at`
-  ).all() as unknown as StageRow[];
+  ).all().map(readStageRow);
   return rows.map(mapStage);
 }
 
@@ -100,7 +193,7 @@ export function listStageShelfItems(): StageShelfItem[] {
     FROM memories
     WHERE trashed_at IS NULL AND stage_id IS NOT NULL
     GROUP BY stage_id
-  `).all() as unknown as Array<{ stage_id: string; count: number }>;
+  `).all().map(readStageCountRow);
   const previews = database.prepare(`
     WITH ranked AS (
       SELECT memories.stage_id, memory_images.storage_key,
@@ -113,7 +206,7 @@ export function listStageShelfItems(): StageShelfItem[] {
       WHERE memories.trashed_at IS NULL AND memories.stage_id IS NOT NULL
     )
     SELECT stage_id, storage_key FROM ranked WHERE position <= 3 ORDER BY stage_id, position
-  `).all() as unknown as Array<{ stage_id: string; storage_key: string }>;
+  `).all().map(readStagePreviewRow);
   const countByStage = new Map(counts.map((row) => [row.stage_id, row.count]));
   const previewsByStage = new Map<string, string[]>();
   for (const preview of previews) {
@@ -131,7 +224,7 @@ export function listStageShelfItems(): StageShelfItem[] {
 export function listActiveMemories(): MemorySummary[] {
   const rows = getDatabase().prepare(
     `${summarySql} WHERE memories.trashed_at IS NULL GROUP BY memories.id ORDER BY memories.created_at DESC`
-  ).all() as unknown as MemorySummaryRow[];
+  ).all().map(readMemorySummaryRow);
   return rows.map(mapMemory);
 }
 
@@ -140,7 +233,7 @@ export function searchActiveMemories(query: string): MemorySummary[] {
   if (!term) return listActiveMemories();
   const rows = getDatabase().prepare(
     `${summarySql} WHERE memories.trashed_at IS NULL AND (memories.title LIKE ? OR memories.story LIKE ?) GROUP BY memories.id ORDER BY memories.created_at DESC`
-  ).all(`%${term}%`, `%${term}%`) as unknown as MemorySummaryRow[];
+  ).all(`%${term}%`, `%${term}%`).map(readMemorySummaryRow);
   return rows.map(mapMemory);
 }
 
@@ -155,17 +248,17 @@ export function findRandomActiveMemoryInDatabase(
     .prepare(
       `${summarySql} WHERE memories.trashed_at IS NULL GROUP BY memories.id ORDER BY RANDOM() LIMIT 1`,
     )
-    .get() as unknown as MemorySummaryRow | undefined;
-  return row ? mapMemory(row) : null;
+    .get();
+  return row ? mapMemory(readMemorySummaryRow(row)) : null;
 }
 
 export function listTrashedMemories(): MemorySummary[] {
-  const rows = getDatabase().prepare(`${summarySql} WHERE memories.trashed_at IS NOT NULL GROUP BY memories.id ORDER BY memories.trashed_at DESC`).all() as unknown as MemorySummaryRow[];
+  const rows = getDatabase().prepare(`${summarySql} WHERE memories.trashed_at IS NOT NULL GROUP BY memories.id ORDER BY memories.trashed_at DESC`).all().map(readMemorySummaryRow);
   return rows.map(mapMemory);
 }
 
 export function listTrashedStages(): Stage[] {
-  const rows = getDatabase().prepare(`SELECT stages.*, stage_covers.storage_key AS cover_key FROM stages LEFT JOIN stage_covers ON stage_covers.stage_id = stages.id WHERE stages.trashed_at IS NOT NULL ORDER BY stages.trashed_at DESC`).all() as unknown as StageRow[];
+  const rows = getDatabase().prepare(`SELECT stages.*, stage_covers.storage_key AS cover_key FROM stages LEFT JOIN stage_covers ON stage_covers.stage_id = stages.id WHERE stages.trashed_at IS NOT NULL ORDER BY stages.trashed_at DESC`).all().map(readStageRow);
   return rows.map(mapStage);
 }
 
@@ -179,8 +272,8 @@ export function findMemoryByIdInDatabase(
 ): MemorySummary | null {
   const row = database.prepare(
     `${summarySql} WHERE memories.id = ? GROUP BY memories.id`
-  ).get(id) as unknown as MemorySummaryRow | undefined;
-  return row ? mapMemory(row) : null;
+  ).get(id);
+  return row ? mapMemory(readMemorySummaryRow(row)) : null;
 }
 
 export function findStageById(id: string): Stage | null {
@@ -188,8 +281,8 @@ export function findStageById(id: string): Stage | null {
     `SELECT stages.*, stage_covers.storage_key AS cover_key FROM stages
      LEFT JOIN stage_covers ON stage_covers.stage_id = stages.id
      WHERE stages.id = ? AND stages.trashed_at IS NULL`
-  ).get(id) as unknown as StageRow | undefined;
-  return row ? mapStage(row) : null;
+  ).get(id);
+  return row ? mapStage(readStageRow(row)) : null;
 }
 
 export function findMemoryDetails(id: string): MemoryDetails | null {
@@ -202,7 +295,7 @@ export function findMemoryDetails(id: string): MemoryDetails | null {
      JOIN uploaded_photos ON uploaded_photos.optimized_storage_key = memory_images.storage_key
      WHERE memory_images.memory_id = ?
      ORDER BY memory_images.sort_order`,
-  ).all(id) as unknown as MemoryImageRow[];
+  ).all(id).map(readMemoryImageRow);
   const images: MemoryImage[] = imageRows.map((row) => ({
     id: row.id,
     memoryId: row.memory_id,
@@ -212,13 +305,13 @@ export function findMemoryDetails(id: string): MemoryDetails | null {
     exhibitTitle: row.exhibit_title,
     exhibitDescription: row.exhibit_description,
     sortOrder: row.sort_order,
-    isCover: row.is_cover === 1,
+    isCover: row.is_cover,
     createdAt: row.created_at,
   }));
   const relationRows = database.prepare(`
     SELECT CASE WHEN memory_id = ? THEN related_memory_id ELSE memory_id END AS id
     FROM memory_relations WHERE memory_id = ? OR related_memory_id = ?
-  `).all(id, id, id) as unknown as Array<{ id: string }>;
+  `).all(id, id, id).map(readIdRow);
   let relatedMemories: MemorySummary[] = [];
   if (relationRows.length > 0) {
     const relatedIds = relationRows.map((row) => row.id);
@@ -226,12 +319,12 @@ export function findMemoryDetails(id: string): MemoryDetails | null {
     const relatedRows = database.prepare(
       `${summarySql} WHERE memories.id IN (${placeholders}) AND memories.trashed_at IS NULL
        GROUP BY memories.id ORDER BY memories.created_at DESC`,
-    ).all(...relatedIds) as unknown as MemorySummaryRow[];
+    ).all(...relatedIds).map(readMemorySummaryRow);
     relatedMemories = relatedRows.map(mapMemory);
   }
   const noteRows = database.prepare(
     "SELECT * FROM later_notes WHERE memory_id = ? ORDER BY created_at"
-  ).all(id) as unknown as LaterNoteRow[];
+  ).all(id).map(readLaterNoteRow);
   const laterNotes: LaterNote[] = noteRows.map((row) => ({
     id: row.id,
     memoryId: row.memory_id,
@@ -244,6 +337,6 @@ export function findMemoryDetails(id: string): MemoryDetails | null {
 export function listMemoriesByStage(stageId: string): MemorySummary[] {
   const rows = getDatabase().prepare(
     `${summarySql} WHERE memories.stage_id = ? AND memories.trashed_at IS NULL GROUP BY memories.id ORDER BY memories.created_at DESC`
-  ).all(stageId) as unknown as MemorySummaryRow[];
+  ).all(stageId).map(readMemorySummaryRow);
   return rows.map(mapMemory);
 }
