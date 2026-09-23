@@ -16,6 +16,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <UploadTaskProvider>
           <SiteHeader />
           <main>{children}</main>
+          <footer className="site-footer">
+            <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">
+              京ICP备202604286号-1
+            </a>
+          </footer>
         </UploadTaskProvider>
       </body>
     </html>
