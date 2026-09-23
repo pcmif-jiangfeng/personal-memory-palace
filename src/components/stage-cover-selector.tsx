@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { copy } from "@/i18n/zh-CN";
+import { imageVariantUrl } from "@/components/image-variant-url";
 
 export interface StageCoverPhotoOption {
   id: string;
@@ -68,7 +69,7 @@ export function StageCoverSelector({
       <div className="stage-cover-preview" aria-live="polite">
         {selectedPhoto && !selectedPhotoFailed ? (
           <img
-            src={selectedPhoto.src}
+            src={imageVariantUrl(selectedPhoto.src)}
             alt={copy.stage.previewAlt(selectedPhoto.name)}
             onError={() => recordImageFailure(selectedPhoto.id)}
           />
@@ -136,7 +137,7 @@ export function StageCoverSelector({
                         </span>
                       ) : (
                         <img
-                          src={photo.src}
+                          src={imageVariantUrl(photo.src)}
                           alt=""
                           loading="lazy"
                           decoding="async"

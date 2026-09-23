@@ -25,6 +25,25 @@ export async function createWebOptimizedImage(data: Buffer): Promise<OptimizedIm
   return { data: result.data, width: result.info.width, height: result.info.height };
 }
 
+export type ImagePreviewVariant = "thumbnail" | "preview";
+
+export async function createWebPreview(
+  data: Buffer,
+  variant: ImagePreviewVariant,
+): Promise<Buffer> {
+  const maxDimension = variant === "thumbnail" ? 640 : 1440;
+  const quality = variant === "thumbnail" ? 74 : 78;
+  return sharp(data, { failOn: "error" })
+    .resize({
+      width: maxDimension,
+      height: maxDimension,
+      fit: "inside",
+      withoutEnlargement: true,
+    })
+    .webp({ quality })
+    .toBuffer();
+}
+
 export async function validateWebOptimizedImage(data: Buffer): Promise<OptimizedImage> {
   if (data.length === 0 || data.length > maximumUploadBytes) {
     throw new Error("Invalid optimized image size");

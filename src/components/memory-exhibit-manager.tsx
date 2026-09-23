@@ -16,6 +16,7 @@ import { useExhibitLibrarySelection } from "@/components/use-exhibit-library-sel
 import { usePhotoCatalog } from "@/components/use-photo-catalog";
 import type { PhotoUsageFilter, WorkspacePhotoView } from "@/contracts/photo";
 import { copy } from "@/i18n/zh-CN";
+import { imageVariantUrl } from "@/components/image-variant-url";
 
 const PAGE_SIZE = 24;
 
@@ -215,7 +216,7 @@ export function MemoryExhibitManager({
                       aria-pressed={librarySelection.has(photo.id)}
                       onClick={() => toggleLibraryPhoto(photo.id)}
                     >
-                      <img src={photo.src} alt={photo.name} loading="lazy" />
+                      <img src={imageVariantUrl(photo.src)} alt={photo.name} loading="lazy" />
                       <span>{photo.name}</span>
                     </button>
                   ))}

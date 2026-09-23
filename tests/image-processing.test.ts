@@ -3,6 +3,7 @@ import test from "node:test";
 import sharp from "sharp";
 import {
   createWebOptimizedImage,
+  createWebPreview,
   maximumUploadBatchBytes,
   maximumUploadBytes,
   maximumUploadFileCount,
@@ -42,6 +43,33 @@ test("validates a decoded WebP optimized by the client", async () => {
   assert.equal(result.width, 2560);
   assert.equal(result.height, 1440);
   assert.equal(result.data, input);
+});
+
+test("creates a smaller WebP thumbnail without enlarging small photos", async () => {
+  const large = await sharp({
+    create: { width: 2560, height: 1440, channels: 3, background: "#705742" },
+  })
+    .webp({ quality: 82 })
+    .toBuffer();
+  const thumbnail = await createWebPreview(large, "thumbnail");
+  const metadata = await sharp(thumbnail).metadata();
+  assert.equal(metadata.format, "webp");
+  assert.equal(metadata.width, 640);
+  assert.equal(metadata.height, 360);
+  assert.ok(thumbnail.length < large.length);
+
+  const small = await sharp({
+    create: { width: 320, height: 180, channels: 3, background: "#705742" },
+  })
+    .webp()
+    .toBuffer();
+  const smallThumbnail = await sharp(await createWebPreview(small, "thumbnail")).metadata();
+  assert.equal(smallThumbnail.width, 320);
+  assert.equal(smallThumbnail.height, 180);
+
+  const galleryPreview = await sharp(await createWebPreview(large, "preview")).metadata();
+  assert.equal(galleryPreview.width, 1440);
+  assert.equal(galleryPreview.height, 810);
 });
 
 test("rejects a claimed optimized image when its real format is not WebP", async () => {

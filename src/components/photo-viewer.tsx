@@ -12,6 +12,7 @@ import { usePhotoNavigation } from "@/components/use-photo-navigation";
 import { usePhotoTransform } from "@/components/use-photo-transform";
 import { useViewerControls } from "@/components/use-viewer-controls";
 import { MIN_PHOTO_SCALE } from "@/components/photo-viewer-geometry";
+import { imageVariantUrl } from "@/components/image-variant-url";
 
 type ViewerViewport = {
   width: number;
@@ -225,7 +226,7 @@ export function PhotoViewer({
       >
         <img
           className={imageClassName}
-          src={triggerImage.src}
+          src={imageVariantUrl(triggerImage.src, "preview")}
           alt={triggerImage.alt}
           loading={loading}
         />

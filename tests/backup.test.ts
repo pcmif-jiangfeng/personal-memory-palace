@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -18,6 +18,14 @@ test("creates an integrity-checked backup and restores it into an isolated data 
       recursive: true,
     });
     writeFileSync(path.join(dataDirectory, "images", storageKey), "test-image");
+    const previewCachePath = path.join(
+      dataDirectory,
+      "images",
+      "cache",
+      `${storageKey}.thumbnail.webp`,
+    );
+    mkdirSync(path.dirname(previewCachePath), { recursive: true });
+    writeFileSync(previewCachePath, "regenerable-preview");
     const database = initializeDatabase(path.join(dataDirectory, "palace.sqlite"), false);
     database
       .prepare(
@@ -38,6 +46,10 @@ test("creates an integrity-checked backup and restores it into an isolated data 
     );
     assert.equal(backupResult.status, 0, backupResult.stderr);
     const backupDirectory = path.join(backupRoot, readdirSync(backupRoot)[0]);
+    assert.equal(
+      readdirSync(path.join(backupDirectory, "uploads", "owner", "optimized")).length,
+      1,
+    );
 
     const restoreResult = spawnSync(
       process.execPath,
@@ -50,6 +62,7 @@ test("creates an integrity-checked backup and restores it into an isolated data 
       readdirSync(path.join(restoreDirectory, "images", "uploads", "owner", "optimized")).length,
       1,
     );
+    assert.equal(existsSync(path.join(restoreDirectory, "images", "cache")), false);
 
     const restored = initializeDatabase(path.join(restoreDirectory, "palace.sqlite"), false);
     const count = restored.prepare("SELECT COUNT(*) AS count FROM uploaded_photos").get() as {

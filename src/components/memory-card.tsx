@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { MemorySummary } from "@/domain/models";
 import { copy } from "@/i18n/zh-CN";
 import { imageStorage } from "@/storage/local-image-storage";
+import { imageVariantUrl } from "@/components/image-variant-url";
 
 export function MemoryCard({ memory }: { memory: MemorySummary }) {
   const imagePath = memory.coverKey ? imageStorage.resolve(memory.coverKey).publicPath : null;
@@ -9,7 +10,11 @@ export function MemoryCard({ memory }: { memory: MemorySummary }) {
   return (
     <Link className="memory-card" href={`/memories/${memory.id}`}>
       <div className="memory-card-image">
-        {imagePath ? <img src={imagePath} alt="" /> : <span>Memory</span>}
+        {imagePath ? (
+          <img src={imageVariantUrl(imagePath)} alt="" loading="lazy" />
+        ) : (
+          <span>Memory</span>
+        )}
       </div>
       <div className="memory-card-copy">
         <p className="memory-card-stage">{memory.stageTitle ?? copy.common.uncategorized}</p>

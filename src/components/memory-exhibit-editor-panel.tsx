@@ -1,5 +1,6 @@
 import type { ExhibitEditorController, ExhibitPhotoView } from "@/components/use-exhibit-editor";
 import { copy } from "@/i18n/zh-CN";
+import { imageVariantUrl } from "@/components/image-variant-url";
 
 export function MemoryExhibitEditorPanel({
   exhibits,
@@ -38,7 +39,7 @@ export function MemoryExhibitEditorPanel({
             aria-pressed={photo.photoId === selected?.photoId}
             onClick={() => onSelect(photo)}
           >
-            <img src={photo.src} alt={photo.name} />
+            <img src={imageVariantUrl(photo.src)} alt={photo.name} />
             <span>{index + 1}</span>
             {photo.isCover ? <strong>{copy.exhibits.coverBadge}</strong> : null}
           </button>
@@ -47,7 +48,7 @@ export function MemoryExhibitEditorPanel({
 
       {selected ? (
         <section className="memory-exhibit-inspector">
-          <img src={selected.src} alt={selected.name} />
+          <img src={imageVariantUrl(selected.src)} alt={selected.name} />
           <div>
             <p>{selected.name}</p>
             <div className="memory-exhibit-actions">

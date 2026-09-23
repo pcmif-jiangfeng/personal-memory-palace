@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createMemory } from "@/client/memory-api";
 import type { MemorySummary, Stage } from "@/domain/models";
 import { copy } from "@/i18n/zh-CN";
+import { imageVariantUrl } from "@/components/image-variant-url";
 
 interface EditorPhoto {
   id: string;
@@ -81,7 +82,7 @@ export function MemoryEditor({
               key={photo.id}
               className={`editor-photo${coverPhotoId === photo.id ? " is-cover" : ""}`}
             >
-              <img src={photo.src} alt={photo.name} />
+              <img src={imageVariantUrl(photo.src)} alt={photo.name} />
               <span>
                 <input
                   type="radio"

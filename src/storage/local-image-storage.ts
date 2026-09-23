@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getDataDirectory } from "../config.ts";
 import { getDataset } from "../data/database.ts";
@@ -10,7 +10,12 @@ import type {
   SavedImage,
   StoredImage,
 } from "./image-storage.ts";
-import { createWebOptimizedImage, extensionForMimeType } from "./image-processor.ts";
+import {
+  createWebOptimizedImage,
+  createWebPreview,
+  extensionForMimeType,
+  type ImagePreviewVariant,
+} from "./image-processor.ts";
 
 export function getImageDataDirectory(): string {
   return path.join(/* turbopackIgnore: true */ getDataDirectory(), "images");
@@ -25,6 +30,10 @@ export function resolveStoredImagePath(key: string): string {
   return resolved;
 }
 
+export function resolveImagePreviewPath(key: string, variant: ImagePreviewVariant): string {
+  return resolveStoredImagePath(`cache/${key}.${variant}.webp`);
+}
+
 async function writeAtomically(filePath: string, data: Buffer): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true });
   const temporaryPath = `${filePath}.${randomUUID()}.tmp`;
@@ -34,6 +43,24 @@ async function writeAtomically(filePath: string, data: Buffer): Promise<void> {
   } finally {
     await rm(temporaryPath, { force: true });
   }
+}
+
+export async function readOrCreateImagePreview(
+  imagePath: string,
+  previewPath: string,
+  sourceModifiedAt: number,
+  variant: ImagePreviewVariant,
+): Promise<Buffer> {
+  try {
+    const cached = await stat(previewPath);
+    if (cached.mtimeMs >= sourceModifiedAt) return await readFile(previewPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+
+  const preview = await createWebPreview(await readFile(imagePath), variant);
+  await writeAtomically(previewPath, preview);
+  return preview;
 }
 
 export class LocalImageStorage implements ImageStorage {
@@ -96,7 +123,15 @@ export class LocalImageStorage implements ImageStorage {
       keys
         .filter((key): key is string => Boolean(key))
         .map(async (key) => {
-          await rm(resolveStoredImagePath(key), { force: true });
+          const imagePath = resolveStoredImagePath(key);
+          await rm(imagePath, { force: true });
+          if (/^uploads\/(demo|owner)\/optimized\/[0-9a-f-]+\.webp$/.test(key)) {
+            await Promise.all(
+              (["thumbnail", "preview"] as const).map((variant) =>
+                rm(resolveImagePreviewPath(key, variant), { force: true }),
+              ),
+            );
+          }
         }),
     );
   }

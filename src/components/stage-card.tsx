@@ -3,6 +3,7 @@ import { StageDeleteAction } from "@/components/stage-delete-action";
 import type { StageShelfItem } from "@/domain/models";
 import { copy } from "@/i18n/zh-CN";
 import { imageStorage } from "@/storage/local-image-storage";
+import { imageVariantUrl } from "@/components/image-variant-url";
 
 export function StageCard({ stage, index }: { stage: StageShelfItem; index: number }) {
   const coverKey = stage.coverKey ?? stage.previewImageKeys[0] ?? null;
@@ -12,7 +13,11 @@ export function StageCard({ stage, index }: { stage: StageShelfItem; index: numb
       <div className="stage-preview-stack" aria-hidden="true">
         {stage.previewImageKeys.map((key, previewIndex) => (
           <div className={`stage-preview stage-preview-${previewIndex + 1}`} key={key}>
-            <img src={imageStorage.resolve(key).publicPath} alt="" />
+            <img
+              src={imageVariantUrl(imageStorage.resolve(key).publicPath)}
+              alt=""
+              loading="lazy"
+            />
           </div>
         ))}
       </div>
@@ -21,7 +26,14 @@ export function StageCard({ stage, index }: { stage: StageShelfItem; index: numb
           className={`stage-book${coverPath ? " stage-book-with-cover" : ""}`}
           href={`/stages/${stage.id}`}
         >
-          {coverPath ? <img className="stage-book-cover" src={coverPath} alt="" /> : null}
+          {coverPath ? (
+            <img
+              className="stage-book-cover"
+              src={imageVariantUrl(coverPath)}
+              alt=""
+              loading="lazy"
+            />
+          ) : null}
           <span className="stage-book-shade" />
           <div className="stage-book-copy">
             <span className="stage-book-index">CHAPTER {String(index + 1).padStart(2, "0")}</span>

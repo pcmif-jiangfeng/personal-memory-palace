@@ -20,6 +20,7 @@ import type {
   PhotoUsageFilter,
   WorkspacePhotoView,
 } from "@/contracts/photo";
+import { imageVariantUrl } from "@/components/image-variant-url";
 
 export type { WorkspacePhotoView } from "@/contracts/photo";
 
@@ -338,7 +339,7 @@ export function PhotoWorkspace({
                   aria-pressed={selected.has(photo.id)}
                 >
                   <div className="photo-tile-image">
-                    <img src={photo.src} alt={photo.name} loading="lazy" />
+                    <img src={imageVariantUrl(photo.src)} alt={photo.name} loading="lazy" />
                     {photo.libraryMember ? (
                       <span className="photo-library-status">
                         {photo.activeMemoryCount > 0
