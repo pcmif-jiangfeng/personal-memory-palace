@@ -1,6 +1,6 @@
 # Personal Memory Palace
 
-> 个人记忆宫殿 / 人生长廊：一座由照片与文字构成的私人数字人生博物馆。
+> 个人记忆宫殿 / 人生博物馆：一座由照片与文字构成的私人数字空间。
 
 Personal Memory Palace 不是普通相册、日记软件或社交平台。它希望提供一种更安静的方式，让人整理已经发生的经历，并在未来重新走进自己的过去。
 
@@ -50,7 +50,7 @@ Memory
 
 ## 当前已实现功能
 
-### 人生长廊
+### 人生博物馆
 
 - 现代数字博物馆式首页；
 - Stage 收藏册 / 书架式人生章节；
@@ -289,7 +289,7 @@ V1 当前只服务单一 Owner。以下内容不属于当前版本：
 Personal Memory Palace 的长期方向不是增加更多管理面板，而是让“重新遇见过去”逐渐拥有空间感：
 
 ```text
-二维人生长廊
+二维人生博物馆
 ↓
 空间化私人博物馆
 ↓
@@ -307,7 +307,7 @@ Personal Memory Palace 的长期方向不是增加更多管理面板，而是让
 当前已完成：
 
 - 照片驱动的 Memory 创建闭环；
-- 人生长廊、Stage 与 Memory Exhibition；
+- 人生博物馆、Stage 与 Memory Exhibition；
 - 随机回忆、基础搜索、Later Notes、关联和回收站；
 - Owner 登录与 Visitor 分享；
 - Memory 核心内容编辑；

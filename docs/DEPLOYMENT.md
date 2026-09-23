@@ -110,7 +110,7 @@ http://82.156.172.124
 
 1. 未登录打开首页会进入登录页。
 2. 错误密码被拒绝，正确密码可以登录。
-3. 首页、人生长廊、Stage、Memory Detail 和 Search 可访问。
+3. 人生博物馆首页、Stage、Memory Detail 和 Search 可访问。
 4. 创建 Stage：`Production Verification`。
 5. 上传一张测试图片，创建 Memory，Story 使用唯一文字：`Production persistence verification record.`
 6. 刷新 Memory、Stage 页面，确认图片继续显示。

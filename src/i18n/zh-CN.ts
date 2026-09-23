@@ -1,11 +1,11 @@
 export const copy = {
   metadata: {
-    title: "人生长廊 · Personal Memory Palace",
+    title: "人生博物馆",
     description: "一座保存自己人生的现代数字博物馆。",
   },
-  brand: "人生长廊",
+  brand: "人生博物馆",
   nav: {
-    gallery: "人生长廊",
+    gallery: "人生博物馆",
     workspace: "照片整理台",
     stages: "人生章节",
     search: "搜索",
@@ -93,7 +93,7 @@ export const copy = {
     uncategorized: "未归类",
     loading: "加载中…",
     mainNavigation: "主导航",
-    backToGallery: "返回人生长廊",
+    backToGallery: "返回人生博物馆",
   },
   gallery: {
     eyebrow: "PERSONAL MEMORY PALACE",
@@ -171,7 +171,7 @@ export const copy = {
     uncategorized: "未归类",
     loading: "加载中…",
     mainNavigation: "主导航",
-    backToGallery: "返回人生长廊",
+    backToGallery: "返回人生博物馆",
     related: "关联 Memory（可跳过）",
     save: "保存 Memory",
     saving: "正在保存…",
@@ -292,7 +292,7 @@ export const copy = {
     deleting: "正在删除…",
     deleteFailed: "删除失败，请稍后重试。",
     deleteConfirm: (title: string) =>
-      `确定删除人生章节“${title}”吗？Stage 会从人生长廊中消失，其中的 Memory 会完整保留并变为“未归类”。`,
+      `确定删除人生章节“${title}”吗？Stage 会从人生博物馆中消失，其中的 Memory 会完整保留并变为“未归类”。`,
   },
   search: {
     title: "搜索",
