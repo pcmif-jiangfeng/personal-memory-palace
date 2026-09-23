@@ -5,6 +5,7 @@ import { listPhotoIds } from "../client/photo-api.ts";
 import type { PhotoCatalogQuery } from "../contracts/photo.ts";
 import {
   addPhotoSelection,
+  removePhotoSelections,
   replacePhotoSelection,
   togglePhotoSelection,
 } from "./photo-selection.ts";
@@ -24,12 +25,11 @@ export function usePhotoSelection(catalogQuery: PhotoCatalogQuery, reportLoadFai
   const clearSelection = useCallback(() => setSelected(new Set()), []);
 
   const removePhotoFromSelection = useCallback((photoId: string) => {
-    setSelected((current) => {
-      if (!current.has(photoId)) return current;
-      const next = new Set(current);
-      next.delete(photoId);
-      return next;
-    });
+    setSelected((current) => removePhotoSelections(current, [photoId]));
+  }, []);
+
+  const removePhotosFromSelection = useCallback((photoIds: Iterable<string>) => {
+    setSelected((current) => removePhotoSelections(current, photoIds));
   }, []);
 
   const selectAllFilteredPhotos = useCallback(async () => {
@@ -47,6 +47,7 @@ export function usePhotoSelection(catalogQuery: PhotoCatalogQuery, reportLoadFai
   return {
     clearSelection,
     removePhotoFromSelection,
+    removePhotosFromSelection,
     selectAllFilteredPhotos,
     selected,
     selectingAll,

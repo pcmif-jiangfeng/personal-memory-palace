@@ -2,11 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { applyTrashAction, type TrashAction, type TrashType } from "@/client/trash-api";
 import type { MemorySummary, Stage } from "@/domain/models";
 import { copy } from "@/i18n/zh-CN";
 
-type TrashType = "memory" | "stage";
-type TrashAction = "restore" | "permanent";
 type TrashItem = { id: string; title: string };
 
 function TrashSelectionSection({
@@ -41,18 +40,9 @@ function TrashSelectionSection({
     setBusy(true);
     setError("");
     try {
-      const response = await fetch("/api/trash", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, ids, action, confirm: action === "permanent" }),
-      });
-      const result = (await response.json()) as {
-        succeededIds?: string[];
-        failures?: Array<{ id: string; error: string }>;
-      };
-      if (!response.ok) throw new Error("REQUEST_FAILED");
-      setSelected(new Set(result.failures?.map((failure) => failure.id) ?? []));
-      if (result.failures?.length) setError(copy.trash.partialFailure);
+      const result = await applyTrashAction(type, ids, action);
+      setSelected(new Set(result.failures.map((failure) => failure.id)));
+      if (result.failures.length) setError(copy.trash.partialFailure);
       router.refresh();
     } catch {
       setError(copy.trash.failed);

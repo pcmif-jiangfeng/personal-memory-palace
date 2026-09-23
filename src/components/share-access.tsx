@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { requestShareAccess } from "@/client/share-api";
 import { copy } from "@/i18n/zh-CN";
 export function ShareAccess({ token }: { token: string }) {
   const router = useRouter();
@@ -10,14 +11,13 @@ export function ShareAccess({ token }: { token: string }) {
       className="login-form"
       onSubmit={async (event) => {
         event.preventDefault();
-        const password = new FormData(event.currentTarget).get("password");
-        const response = await fetch("/api/share-access", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token, password }),
-        });
-        if (response.ok) router.refresh();
-        else setError(copy.share.invalidPassword);
+        const password = String(new FormData(event.currentTarget).get("password") ?? "");
+        try {
+          await requestShareAccess(token, password);
+          router.refresh();
+        } catch {
+          setError(copy.share.invalidPassword);
+        }
       }}
     >
       <label className="form-field">

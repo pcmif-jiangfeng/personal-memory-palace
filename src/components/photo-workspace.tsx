@@ -6,6 +6,7 @@ import { useUploadTasks } from "@/components/upload-task-provider";
 import { usePhotoCatalog } from "@/components/use-photo-catalog";
 import { useLongPressSelection } from "@/components/use-long-press-selection";
 import { usePhotoSelection } from "@/components/use-photo-selection";
+import { removeBatchDeletedPhotos } from "@/components/photo-workspace-state";
 import {
   archivePhoto as requestPhotoArchive,
   deletePhoto as requestPhotoDeletion,
@@ -59,6 +60,7 @@ export function PhotoWorkspace({
   const {
     clearSelection,
     removePhotoFromSelection,
+    removePhotosFromSelection,
     selectAllFilteredPhotos,
     selected,
     selectingAll,
@@ -100,8 +102,8 @@ export function PhotoWorkspace({
     setBatchDeleteResult(null);
     try {
       const result = await deletePhotos(ids);
-      const deleted = new Set(result.deletedIds);
-      setPhotos((current) => current.filter((photo) => !deleted.has(photo.id)));
+      setPhotos((current) => removeBatchDeletedPhotos(current, result));
+      removePhotosFromSelection(result.deletedIds);
       exitMobileSelectionMode();
       setBatchDeleteResult(result);
     } catch {

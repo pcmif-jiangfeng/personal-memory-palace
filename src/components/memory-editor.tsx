@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { createMemory } from "@/client/memory-api";
 import type { MemorySummary, Stage } from "@/domain/models";
 import { copy } from "@/i18n/zh-CN";
 
@@ -53,21 +54,15 @@ export function MemoryEditor({
     setError("");
     const form = new FormData(event.currentTarget);
     try {
-      const response = await fetch("/api/memories", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: form.get("title"),
-          story: form.get("story"),
-          stageId: form.get("stageId") || null,
-          photoIds: photos.map((photo) => photo.id),
-          coverPhotoId,
-          relatedMemoryIds: [...relatedIds],
-        }),
+      const result = await createMemory({
+        title: String(form.get("title") ?? ""),
+        story: String(form.get("story") ?? ""),
+        stageId: String(form.get("stageId") ?? "") || null,
+        photoIds: photos.map((photo) => photo.id),
+        coverPhotoId,
+        relatedMemoryIds: [...relatedIds],
       });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error);
-      router.push(`/memories/${result.memory.id}`);
+      router.push(`/memories/${result.id}`);
       router.refresh();
     } catch {
       setError(copy.editor.saveFailed);

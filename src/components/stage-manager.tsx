@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { StageCoverSelector, type StageCoverPhotoOption } from "@/components/stage-cover-selector";
 import { StageDeleteAction } from "@/components/stage-delete-action";
+import { createStage, updateStage } from "@/client/stage-api";
 import type { Stage } from "@/domain/models";
 import { copy } from "@/i18n/zh-CN";
 
@@ -25,26 +26,25 @@ export function StageManager({
     const data = new FormData(form);
     setBusy(stageId ?? "new");
     setMessage("");
-    const response = await fetch(stageId ? `/api/stages/${stageId}` : "/api/stages", {
-      method: stageId ? "PUT" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: data.get("title"),
-        description: data.get("description"),
-        coverPhotoId: data.get("coverPhotoId") || null,
-      }),
-    });
-    if (response.ok) {
+    try {
+      const input = {
+        title: String(data.get("title") ?? ""),
+        description: String(data.get("description") ?? ""),
+        coverPhotoId: String(data.get("coverPhotoId") ?? "") || null,
+      };
+      if (stageId) await updateStage(stageId, input);
+      else await createStage(input);
       if (!stageId) {
         form.reset();
         setNewCoverVersion((current) => current + 1);
       }
       setMessage(copy.stage.saved);
       router.refresh();
-    } else {
+    } catch {
       setMessage(copy.editor.saveFailed);
+    } finally {
+      setBusy(null);
     }
-    setBusy(null);
   }
 
   function fields(stage?: Stage, selectorKey?: string) {

@@ -27,6 +27,25 @@ V1 是单体 Next.js 应用。页面渲染、写入 API、身份校验和图片�
 
 Route Handler 负责认证、解析输入和选择业务操作；Repository 负责数据约束和持久化。未知内部错误只记录服务端上下文，对客户端统一返回 `INTERNAL_ERROR`。
 
+## 2.1 Components Runtime Boundary
+
+### Server Components
+
+Server Components 可以使用仅限服务端的展示依赖、图片路径解析器等服务端模块，并在需要时读取服务端数据。传给 Client Components 的应是可序列化的展示数据。
+
+写操作由 Route Handler 编排；不要在 Server Components 中承担写操作，也不要把服务端专用依赖或对象传给 Client Components。
+
+### Client Components
+
+交互组件必须声明 `"use client"`。不得直接导入 `data/`、仅限服务端的 `storage/` 或 `security/` 模块。数据操作应经过以下边界：
+
+```text
+Client Component
+  -> client API
+  -> Route Handler
+  -> server layers
+```
+
 ## 3. 身份与分享
 
 Owner 登录成功后获得 HMAC 签名、带到期时间的 HttpOnly Cookie。签名密钥来自独立的 `MEMORY_PALACE_SESSION_SECRET`，不再使用 Owner 密码摘要作为会话令牌。修改 Owner 密码会使已有会话失效。

@@ -1,5 +1,6 @@
 export type IdentifiedPhoto = { id: string };
 export type PhotoNavigationDirection = -1 | 0 | 1;
+export type PhotoViewerKeyboardAction = { type: "close" } | { type: "show-photo"; index: number };
 
 export function hasExhibitMetadata(photo: {
   exhibitTitle?: string | null;
@@ -30,4 +31,16 @@ export function resolvePhotoSwipeDirection(
 ): PhotoNavigationDirection {
   if (Math.abs(deltaX) < minimumDistance || Math.abs(deltaX) <= Math.abs(deltaY)) return 0;
   return deltaX < 0 ? 1 : -1;
+}
+export function resolvePhotoViewerKeyboardAction(
+  key: string,
+  activeIndex: number,
+  photoCount: number,
+): PhotoViewerKeyboardAction | null {
+  if (key === "Escape") return { type: "close" };
+  if (key === "ArrowLeft" && activeIndex > 0) return { type: "show-photo", index: activeIndex - 1 };
+  if (key === "ArrowRight" && activeIndex < photoCount - 1) {
+    return { type: "show-photo", index: activeIndex + 1 };
+  }
+  return null;
 }

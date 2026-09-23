@@ -53,6 +53,50 @@ test("patches only the requested upload item", () => {
   assert.equal(original.items[1].status, "uploading");
 });
 
+test("tracks queued upload progress while a second item is cancelled", () => {
+  let state = uploadTaskReducer(initialUploadTaskState, {
+    type: "add-batch",
+    batch: batch({
+      items: [
+        { id: "item-1", name: "one.jpg", status: "waiting" },
+        { id: "item-2", name: "two.jpg", status: "waiting" },
+      ],
+    }),
+  });
+
+  state = uploadTaskReducer(state, {
+    type: "patch-item",
+    batchId: "batch-1",
+    itemId: "item-1",
+    patch: { status: "compressing" },
+  });
+  state = uploadTaskReducer(state, {
+    type: "patch-item",
+    batchId: "batch-1",
+    itemId: "item-2",
+    patch: { status: "cancelled", cancelRequested: false },
+  });
+  state = uploadTaskReducer(state, {
+    type: "patch-item",
+    batchId: "batch-1",
+    itemId: "item-1",
+    patch: { status: "uploading" },
+  });
+  state = uploadTaskReducer(state, {
+    type: "patch-item",
+    batchId: "batch-1",
+    itemId: "item-1",
+    patch: { status: "success", photoId: "photo-1", cancelRequested: false },
+  });
+
+  assert.deepEqual(
+    state[0].items.map((item) => ({ id: item.id, status: item.status, photoId: item.photoId })),
+    [
+      { id: "item-1", status: "success", photoId: "photo-1" },
+      { id: "item-2", status: "cancelled", photoId: undefined },
+    ],
+  );
+});
 test("toggles batch expansion independently", () => {
   const first = batch({ id: "first", expanded: false });
   const second = batch({ id: "second", expanded: true });

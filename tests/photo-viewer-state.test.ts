@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   hasExhibitMetadata,
   resolvePhotoSwipeDirection,
+  resolvePhotoViewerKeyboardAction,
   resolvePhotoViewerIndex,
 } from "../src/components/photo-viewer-state.ts";
 
@@ -31,6 +32,20 @@ test("recognizes deliberate horizontal swipes without stealing vertical gestures
   assert.equal(resolvePhotoSwipeDirection(80, 100, 56), 0);
 });
 
+test("moves to the next photo and closes the viewer from the keyboard", () => {
+  let isOpen = true;
+  let activeIndex = 0;
+
+  const next = resolvePhotoViewerKeyboardAction("ArrowRight", activeIndex, photos.length);
+  assert.deepEqual(next, { type: "show-photo", index: 1 });
+  if (next?.type === "show-photo") activeIndex = next.index;
+  assert.equal(activeIndex, 1);
+
+  const close = resolvePhotoViewerKeyboardAction("Escape", activeIndex, photos.length);
+  assert.deepEqual(close, { type: "close" });
+  if (close?.type === "close") isOpen = false;
+  assert.equal(isOpen, false);
+});
 test("renders viewer metadata only when a title or description has content", () => {
   assert.equal(hasExhibitMetadata({}), false);
   assert.equal(hasExhibitMetadata({ exhibitTitle: "  ", exhibitDescription: "" }), false);

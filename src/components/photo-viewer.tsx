@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { copy } from "@/i18n/zh-CN";
 import { viewerOrientationChanged, type ViewerOrientation } from "@/components/photo-gesture-state";
-import { hasExhibitMetadata } from "@/components/photo-viewer-state";
+import {
+  hasExhibitMetadata,
+  resolvePhotoViewerKeyboardAction,
+} from "@/components/photo-viewer-state";
 import { usePhotoGestures } from "@/components/use-photo-gestures";
 import { usePhotoNavigation } from "@/components/use-photo-navigation";
 import { usePhotoTransform } from "@/components/use-photo-transform";
@@ -184,33 +187,30 @@ export function PhotoViewer({
     document.body.style.overscrollBehavior = "none";
     closeButtonRef.current?.focus();
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeViewer();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-
     return () => {
       document.body.style.overflow = previousOverflow;
       document.body.style.overscrollBehavior = previousOverscrollBehavior;
-      window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [closeViewer, isOpen]);
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "ArrowLeft" && activeIndex > 0) {
+      const action = resolvePhotoViewerKeyboardAction(event.key, activeIndex, images.length);
+      if (action?.type === "close") {
+        closeViewer();
+      } else if (action?.type === "show-photo") {
         event.preventDefault();
-        showImageAt(activeIndex - 1);
-      } else if (event.key === "ArrowRight" && activeIndex < images.length - 1) {
-        event.preventDefault();
-        showImageAt(activeIndex + 1);
+        showImageAt(action.index);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeIndex, images.length, isOpen, showImageAt]);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [activeIndex, closeViewer, images.length, isOpen, showImageAt]);
 
   if (!triggerImage) return null;
 

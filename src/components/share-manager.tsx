@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { configureShare } from "@/client/share-api";
 import { copy } from "@/i18n/zh-CN";
 export function ShareManager({ memoryId }: { memoryId: string }) {
   const [mode, setMode] = useState<"link" | "password">("link");
@@ -9,16 +10,13 @@ export function ShareManager({ memoryId }: { memoryId: string }) {
   const [message, setMessage] = useState("");
   async function save(event: React.FormEvent, rotate = false) {
     event.preventDefault();
-    const response = await fetch("/api/shares", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ memoryId, enabled, mode, password, rotate }),
-    });
-    const result = await response.json();
-    if (response.ok) {
-      setUrl(`${window.location.origin}${result.url}`);
+    try {
+      const result = await configureShare({ memoryId, enabled, mode, password, rotate });
+      setUrl(result.url ? `${window.location.origin}${result.url}` : "");
       setMessage(copy.share.saved);
-    } else setMessage(copy.share.failed);
+    } catch {
+      setMessage(copy.share.failed);
+    }
   }
   return (
     <form className="share-manager" onSubmit={save}>

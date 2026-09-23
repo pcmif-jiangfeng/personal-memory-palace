@@ -2,22 +2,24 @@
 
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  addMemoryPhotos,
+  removeMemoryPhoto,
+  reorderMemoryPhotos,
+  setMemoryCover,
+  updateMemoryExhibitMetadata,
+} from "@/client/memory-api";
+import { MemoryExhibitEditorPanel } from "@/components/memory-exhibit-editor-panel";
 import { useUploadTasks } from "@/components/upload-task-provider";
+import { useExhibitEditor, type ExhibitPhotoView } from "@/components/use-exhibit-editor";
+import { useExhibitLibrarySelection } from "@/components/use-exhibit-library-selection";
 import { usePhotoCatalog } from "@/components/use-photo-catalog";
 import type { PhotoUsageFilter, WorkspacePhotoView } from "@/contracts/photo";
 import { copy } from "@/i18n/zh-CN";
 
 const PAGE_SIZE = 24;
-const MAX_PHOTOS = 20;
 
-export interface ExhibitPhotoView {
-  photoId: string;
-  name: string;
-  src: string;
-  isCover: boolean;
-  exhibitTitle: string;
-  exhibitDescription: string;
-}
+export type { ExhibitPhotoView } from "@/components/use-exhibit-editor";
 
 export function MemoryExhibitManager({
   memoryId,
@@ -36,14 +38,6 @@ export function MemoryExhibitManager({
   const { startUpload } = useUploadTasks();
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const initialSelected = exhibits.find((photo) => photo.isCover) ?? exhibits[0];
-  const [selectedPhotoId, setSelectedPhotoId] = useState(initialSelected?.photoId ?? "");
-  const [draftTitle, setDraftTitle] = useState(initialSelected?.exhibitTitle ?? "");
-  const [draftDescription, setDraftDescription] = useState(
-    initialSelected?.exhibitDescription ?? "",
-  );
-  const [metadataDirty, setMetadataDirty] = useState(false);
-  const [librarySelection, setLibrarySelection] = useState<Set<string>>(new Set());
   const {
     loadFailed: libraryLoadFailed,
     loading: loadingLibrary,
@@ -70,26 +64,15 @@ export function MemoryExhibitManager({
     () => new Set(exhibits.map((photo) => photo.photoId)),
     [exhibits],
   );
-  const selected = exhibits.find((photo) => photo.photoId === selectedPhotoId) ?? exhibits[0];
-  const remainingSlots = Math.max(0, MAX_PHOTOS - exhibits.length);
   const filteredLibrary = availableLibraryPhotos.filter((photo) => !currentPhotoIds.has(photo.id));
 
-  async function request(body: unknown): Promise<void> {
-    const response = await fetch(`/api/memories/${encodeURIComponent(memoryId)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!response.ok) throw new Error("REQUEST_FAILED");
-  }
-
-  async function perform(body: unknown, successMessage: string): Promise<boolean> {
+  async function perform(request: () => Promise<void>, successMessage: string): Promise<boolean> {
     if (busy) return false;
     setBusy(true);
     setMessage("");
     setError("");
     try {
-      await request(body);
+      await request();
       setMessage(successMessage);
       router.refresh();
       return true;
@@ -101,86 +84,41 @@ export function MemoryExhibitManager({
     }
   }
 
-  function loadMetadataDraft(photo: ExhibitPhotoView | undefined) {
-    setDraftTitle(photo?.exhibitTitle ?? "");
-    setDraftDescription(photo?.exhibitDescription ?? "");
-    setMetadataDirty(false);
-  }
+  const editor = useExhibitEditor({
+    exhibits,
+    confirmDiscard: () => window.confirm(copy.exhibits.discardUnsaved),
+    confirmRemove: (photo) =>
+      window.confirm(
+        photo.isCover
+          ? copy.exhibits.removeCoverConfirm(photo.name)
+          : copy.exhibits.removeConfirm(photo.name),
+      ),
+    reorderPhotos: (photoIds) =>
+      perform(() => reorderMemoryPhotos(memoryId, photoIds), copy.exhibits.orderSaved),
+    removePhoto: (photoId) =>
+      perform(() => removeMemoryPhoto(memoryId, photoId), copy.exhibits.removed),
+    updateMetadata: (photoId, metadata) =>
+      perform(
+        () => updateMemoryExhibitMetadata(memoryId, photoId, metadata.title, metadata.description),
+        copy.exhibits.metadataSaved,
+      ),
+  });
+
+  const {
+    addSelected: addSelectedLibraryPhotos,
+    remainingSlots,
+    selectedPhotoIds: librarySelection,
+    togglePhoto: toggleLibraryPhoto,
+  } = useExhibitLibrarySelection({
+    exhibitCount: exhibits.length,
+    addPhotos: (photoIds) =>
+      perform(() => addMemoryPhotos(memoryId, photoIds), copy.exhibits.photosAdded),
+  });
 
   function selectExhibit(photo: ExhibitPhotoView) {
-    if (photo.photoId === selected?.photoId) return;
-    if (metadataDirty && !window.confirm(copy.exhibits.discardUnsaved)) return;
-    setSelectedPhotoId(photo.photoId);
-    loadMetadataDraft(photo);
+    if (!editor.selectPhoto(photo)) return;
     setMessage("");
     setError("");
-  }
-
-  async function moveSelected(direction: -1 | 1) {
-    if (!selected) return;
-    const index = exhibits.findIndex((photo) => photo.photoId === selected.photoId);
-    const target = index + direction;
-    if (target < 0 || target >= exhibits.length) return;
-    const ordered = exhibits.map((photo) => photo.photoId);
-    [ordered[index], ordered[target]] = [ordered[target], ordered[index]];
-    await perform({ action: "reorderPhotos", photoIds: ordered }, copy.exhibits.orderSaved);
-  }
-
-  async function removeSelected() {
-    if (!selected) return;
-    const confirmation = selected.isCover
-      ? copy.exhibits.removeCoverConfirm(selected.name)
-      : copy.exhibits.removeConfirm(selected.name);
-    if (!window.confirm(confirmation)) return;
-    const index = exhibits.findIndex((photo) => photo.photoId === selected.photoId);
-    const fallback = exhibits[index + 1] ?? exhibits[index - 1];
-    if (
-      await perform({ action: "removePhoto", photoId: selected.photoId }, copy.exhibits.removed)
-    ) {
-      setSelectedPhotoId(fallback?.photoId ?? "");
-      loadMetadataDraft(fallback);
-    }
-  }
-
-  async function saveMetadata() {
-    if (!selected) return;
-    if (
-      await perform(
-        {
-          action: "exhibitMetadata",
-          photoId: selected.photoId,
-          title: draftTitle,
-          description: draftDescription,
-        },
-        copy.exhibits.metadataSaved,
-      )
-    ) {
-      setMetadataDirty(false);
-    }
-  }
-
-  function toggleLibraryPhoto(photoId: string) {
-    setLibrarySelection((current) => {
-      const next = new Set(current);
-      if (next.has(photoId)) {
-        next.delete(photoId);
-      } else if (next.size < remainingSlots) {
-        next.add(photoId);
-      }
-      return next;
-    });
-  }
-
-  async function addSelectedLibraryPhotos() {
-    if (librarySelection.size === 0) return;
-    if (
-      await perform(
-        { action: "addPhotos", photoIds: [...librarySelection] },
-        copy.exhibits.photosAdded,
-      )
-    ) {
-      setLibrarySelection(new Set());
-    }
   }
 
   function upload(files: FileList | null) {
@@ -189,7 +127,7 @@ export function MemoryExhibitManager({
     if (files.length > remainingSlots) setError(copy.exhibits.uploadLimit(remainingSlots));
     startUpload(selectedFiles, {
       onPhotoUploaded: async (photoId) => {
-        await request({ action: "addPhotos", photoIds: [photoId] });
+        await addMemoryPhotos(memoryId, [photoId]);
         router.refresh();
       },
     });
@@ -201,109 +139,15 @@ export function MemoryExhibitManager({
       <summary>{copy.exhibits.title}</summary>
       <p className="field-help">{copy.exhibits.description}</p>
 
-      {exhibits.length === 0 ? (
-        <p className="quiet-empty">{copy.exhibits.empty}</p>
-      ) : (
-        <>
-          <div className="memory-exhibit-strip" aria-label={copy.exhibits.currentPhotos}>
-            {exhibits.map((photo, index) => (
-              <button
-                type="button"
-                key={photo.photoId}
-                className={photo.photoId === selected?.photoId ? "is-selected" : ""}
-                aria-pressed={photo.photoId === selected?.photoId}
-                onClick={() => selectExhibit(photo)}
-              >
-                <img src={photo.src} alt={photo.name} />
-                <span>{index + 1}</span>
-                {photo.isCover ? <strong>{copy.exhibits.coverBadge}</strong> : null}
-              </button>
-            ))}
-          </div>
-
-          {selected ? (
-            <section className="memory-exhibit-inspector">
-              <img src={selected.src} alt={selected.name} />
-              <div>
-                <p>{selected.name}</p>
-                <div className="memory-exhibit-actions">
-                  <button
-                    type="button"
-                    className="button-secondary"
-                    disabled={busy || selected.isCover}
-                    onClick={() =>
-                      void perform(
-                        { action: "setCover", photoId: selected.photoId },
-                        copy.exhibits.coverSaved,
-                      )
-                    }
-                  >
-                    {selected.isCover ? copy.exhibits.currentCover : copy.exhibits.setCover}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy || exhibits[0]?.photoId === selected.photoId}
-                    onClick={() => void moveSelected(-1)}
-                  >
-                    {copy.exhibits.moveEarlier}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy || exhibits.at(-1)?.photoId === selected.photoId}
-                    onClick={() => void moveSelected(1)}
-                  >
-                    {copy.exhibits.moveLater}
-                  </button>
-                  <button
-                    type="button"
-                    className="text-button danger"
-                    disabled={busy}
-                    onClick={() => void removeSelected()}
-                  >
-                    {copy.exhibits.remove}
-                  </button>
-                </div>
-                <form
-                  className="memory-exhibit-metadata"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void saveMetadata();
-                  }}
-                >
-                  <label className="form-field">
-                    <span>{copy.exhibits.exhibitTitle}</span>
-                    <input
-                      name="exhibitTitle"
-                      value={draftTitle}
-                      onChange={(event) => {
-                        setDraftTitle(event.target.value);
-                        setMetadataDirty(true);
-                      }}
-                      maxLength={120}
-                    />
-                  </label>
-                  <label className="form-field">
-                    <span>{copy.exhibits.exhibitDescription}</span>
-                    <textarea
-                      name="exhibitDescription"
-                      value={draftDescription}
-                      onChange={(event) => {
-                        setDraftDescription(event.target.value);
-                        setMetadataDirty(true);
-                      }}
-                      maxLength={2000}
-                      rows={4}
-                    />
-                  </label>
-                  <button className="button-secondary" type="submit" disabled={busy}>
-                    {copy.exhibits.saveMetadata}
-                  </button>
-                </form>
-              </div>
-            </section>
-          ) : null}
-        </>
-      )}
+      <MemoryExhibitEditorPanel
+        exhibits={exhibits}
+        editor={editor}
+        busy={busy}
+        onSelect={selectExhibit}
+        onSetCover={(photoId) =>
+          void perform(() => setMemoryCover(memoryId, photoId), copy.exhibits.coverSaved)
+        }
+      />
 
       <details className="memory-exhibit-add-panel">
         <summary>{copy.exhibits.addPhotos}</summary>

@@ -15,3 +15,12 @@ export function togglePhotoSelection(current: ReadonlySet<string>, id: string): 
 export function replacePhotoSelection(ids: Iterable<string>): Set<string> {
   return new Set(ids);
 }
+
+export function removePhotoSelections(
+  current: ReadonlySet<string>,
+  photoIds: Iterable<string>,
+): Set<string> {
+  const next = new Set(current);
+  for (const photoId of photoIds) next.delete(photoId);
+  return next;
+}

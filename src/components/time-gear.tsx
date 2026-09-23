@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { recallMemory } from "@/client/memory-api";
 import { copy } from "@/i18n/zh-CN";
 
 type RecallStatus = "idle" | "spinning" | "empty" | "error";
@@ -23,14 +24,9 @@ export function TimeGear() {
       const ritualDelay = reduceMotion
         ? Promise.resolve()
         : new Promise<void>((resolve) => window.setTimeout(resolve, 650));
-      const [response] = await Promise.all([
-        fetch("/api/recall", { cache: "no-store" }),
-        ritualDelay,
-      ]);
-      if (!response.ok) throw new Error("RECALL_FAILED");
-      const result = (await response.json()) as { memory: { id: string } | null };
-      if (result.memory?.id) {
-        router.push(`/memories/${encodeURIComponent(result.memory.id)}`);
+      const [memory] = await Promise.all([recallMemory(), ritualDelay]);
+      if (memory?.id) {
+        router.push(`/memories/${encodeURIComponent(memory.id)}`);
         return;
       }
       setStatus("empty");

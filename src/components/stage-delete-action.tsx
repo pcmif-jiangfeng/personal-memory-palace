@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { copy } from "@/i18n/zh-CN";
+import { deleteStage as deleteStageRequest } from "@/client/stage-api";
 
 interface StageDeleteActionProps {
   stageId: string;
@@ -30,11 +31,7 @@ export function StageDeleteAction({
     setError("");
     let deleted = false;
     try {
-      const response = await fetch("/api/stages/" + stageId, { method: "DELETE" });
-      if (!response.ok) {
-        setError(copy.stage.deleteFailed);
-        return;
-      }
+      await deleteStageRequest(stageId);
       deleted = true;
       if (redirectTo) {
         router.replace(redirectTo);

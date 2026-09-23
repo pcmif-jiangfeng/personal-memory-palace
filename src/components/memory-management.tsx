@@ -3,6 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import {
+  addMemoryNote,
+  trashMemory,
+  updateMemoryDetails,
+  updateMemoryRelations,
+} from "@/client/memory-api";
 import type { WorkspacePhotoView } from "@/contracts/photo";
 import type { MemoryDetails, MemorySummary, Stage } from "@/domain/models";
 import { copy } from "@/i18n/zh-CN";
@@ -35,17 +41,12 @@ export function MemoryManagement({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  async function send(body: unknown, successMessage = ""): Promise<boolean> {
+  async function send(request: () => Promise<void>, successMessage = ""): Promise<boolean> {
     setBusy(true);
     setMessage("");
     setError("");
     try {
-      const response = await fetch(`/api/memories/${memory.id}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!response.ok) throw new Error("REQUEST_FAILED");
+      await request();
       setMessage(successMessage);
       router.refresh();
       return true;
@@ -66,12 +67,7 @@ export function MemoryManagement({
           onSubmit={(event) => {
             event.preventDefault();
             void send(
-              {
-                action: "details",
-                title,
-                story,
-                stageId: stageId || null,
-              },
+              () => updateMemoryDetails(memory.id, { title, story, stageId: stageId || null }),
               copy.management.saved,
             );
           }}
@@ -141,7 +137,7 @@ export function MemoryManagement({
         onSubmit={(event) => {
           event.preventDefault();
           void (async () => {
-            if (await send({ action: "note", content: note })) setNote("");
+            if (await send(() => addMemoryNote(memory.id, note))) setNote("");
           })();
         }}
       >
@@ -183,7 +179,7 @@ export function MemoryManagement({
         <button
           className="button-secondary"
           disabled={busy}
-          onClick={() => void send({ action: "relations", relatedMemoryIds: related })}
+          onClick={() => void send(() => updateMemoryRelations(memory.id, related))}
         >
           {copy.management.saveRelations}
         </button>
@@ -192,7 +188,7 @@ export function MemoryManagement({
         className="text-button danger"
         disabled={busy}
         onClick={() => {
-          if (window.confirm(copy.management.trashConfirm)) void send({ action: "trash" });
+          if (window.confirm(copy.management.trashConfirm)) void send(() => trashMemory(memory.id));
         }}
       >
         {copy.management.trash}
