@@ -10,6 +10,8 @@ import {
   findRandomActiveMemoryInDatabase,
   listActiveMemoriesInDatabase,
 } from "../src/data/memory-repository.ts";
+import { updateMemoryDetailsInDatabase } from "../src/data/management-repository.ts";
+import { addMemoryPhotosInDatabase } from "../src/data/memory-exhibit-repository.ts";
 import {
   isMemoryPublicInDatabase,
   isPublicImageAccessibleInDatabase,
@@ -43,6 +45,50 @@ test("publication defaults are public for stages and memories", () => {
       1,
     );
     assert.equal(findMemoryByIdInDatabase(database, "memory", true)?.isPublic, true);
+  } finally {
+    database.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("the same public memory URL reads updated details and photos on the next request", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "memory-palace-public-update-"));
+  const database = initializeDatabase(path.join(directory, "owner.sqlite"), false);
+  const now = new Date().toISOString();
+  try {
+    database
+      .prepare(
+        "INSERT INTO stages (id, title, created_at, updated_at) VALUES ('stage', 'Stage', ?, ?)",
+      )
+      .run(now, now);
+    database
+      .prepare(
+        "INSERT INTO memories (id, title, story, created_at, updated_at) VALUES ('memory', 'Before', 'Old story', ?, ?)",
+      )
+      .run(now, now);
+    database
+      .prepare(
+        "INSERT INTO uploaded_photos (id, original_name, mime_type, optimized_storage_key, width, height, created_at) VALUES ('photo', 'photo.jpg', 'image/jpeg', 'photo.webp', 1200, 800, ?)",
+      )
+      .run(now);
+
+    assert.equal(findMemoryByIdInDatabase(database, "memory", true)?.title, "Before");
+    updateMemoryDetailsInDatabase(database, "memory", {
+      title: "After",
+      story: "New story",
+      stageId: "stage",
+    });
+    addMemoryPhotosInDatabase(database, "memory", ["photo"]);
+
+    const refreshed = findMemoryByIdInDatabase(database, "memory", true);
+    assert.equal(refreshed?.title, "After");
+    assert.equal(refreshed?.story, "New story");
+    assert.equal(refreshed?.stageId, "stage");
+    assert.equal(refreshed?.coverKey, "photo.webp");
+    assert.equal(refreshed?.imageCount, 1);
+
+    setStagePublicInDatabase(database, "stage", false);
+    assert.equal(findMemoryByIdInDatabase(database, "memory", true), null);
   } finally {
     database.close();
     rmSync(directory, { recursive: true, force: true });

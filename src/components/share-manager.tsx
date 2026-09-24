@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { publicMemoryUrl } from "@/domain/share-links";
 
 export function ShareManager({
   memoryId,
@@ -12,8 +13,8 @@ export function ShareManager({
   const [url, setUrl] = useState("");
   const [message, setMessage] = useState("");
 
-  async function copyUrl(path: string) {
-    const nextUrl = `${window.location.origin}${path}`;
+  async function copyUrl() {
+    const nextUrl = publicMemoryUrl(memoryId);
     setUrl(nextUrl);
     try {
       await navigator.clipboard.writeText(nextUrl);
@@ -25,16 +26,13 @@ export function ShareManager({
 
   return (
     <div className="share-manager">
-      <h3>分享人生博物馆</h3>
+      <h3>分享这段记忆</h3>
       <p>访客只能浏览公开内容，无法进入照片整理台或编辑页面。</p>
-      <button className="button-secondary" type="button" onClick={() => void copyUrl("/")}>
-        复制网站网址
-      </button>
       <button
         className="button-secondary"
         type="button"
         disabled={!publiclyVisible}
-        onClick={() => void copyUrl(`/memories/${encodeURIComponent(memoryId)}`)}
+        onClick={() => void copyUrl()}
       >
         复制这段记忆的链接
       </button>

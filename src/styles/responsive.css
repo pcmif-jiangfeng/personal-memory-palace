@@ -242,6 +242,17 @@
 }
 
 @media (min-width: 761px) and (max-width: 1050px) {
+  .site-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding-block: 0.75rem;
+  }
+  .site-header nav {
+    overflow-x: auto;
+    white-space: nowrap;
+    padding-bottom: 0.2rem;
+  }
   .memory-grid {
     grid-template-columns: repeat(2, 1fr);
   }
