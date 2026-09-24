@@ -1,73 +1,58 @@
 "use client";
+
 import { useState } from "react";
-import { configureShare } from "@/client/share-api";
-import { copy } from "@/i18n/zh-CN";
-export function ShareManager({ memoryId }: { memoryId: string }) {
-  const [mode, setMode] = useState<"link" | "password">("link");
-  const [password, setPassword] = useState("");
+
+export function ShareManager({
+  memoryId,
+  publiclyVisible,
+}: {
+  memoryId: string;
+  publiclyVisible: boolean;
+}) {
   const [url, setUrl] = useState("");
-  const [enabled, setEnabled] = useState(false);
   const [message, setMessage] = useState("");
-  async function save(event: React.FormEvent, rotate = false) {
-    event.preventDefault();
+
+  async function copyUrl(path: string) {
+    const nextUrl = `${window.location.origin}${path}`;
+    setUrl(nextUrl);
     try {
-      const result = await configureShare({ memoryId, enabled, mode, password, rotate });
-      setUrl(result.url ? `${window.location.origin}${result.url}` : "");
-      setMessage(copy.share.saved);
+      await navigator.clipboard.writeText(nextUrl);
+      setMessage("链接已复制，可以直接发送给访客，不需要密码。");
     } catch {
-      setMessage(copy.share.failed);
+      setMessage("请手动复制下面的链接。");
     }
   }
+
   return (
-    <form className="share-manager" onSubmit={save}>
-      <h3>{copy.share.title}</h3>
-      <label className="check-row">
-        <input
-          type="checkbox"
-          checked={enabled}
-          onChange={(event) => setEnabled(event.target.checked)}
-        />
-        {copy.share.visitorAccess}
-      </label>
-      {enabled ? (
-        <>
-          <select
-            value={mode}
-            onChange={(event) => setMode(event.target.value as "link" | "password")}
-          >
-            <option value="link">{copy.share.linkAccess}</option>
-            <option value="password">{copy.share.passwordAccess}</option>
-          </select>
-          {mode === "password" ? (
-            <input
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder={copy.share.password}
-              type="password"
-              required
-            />
-          ) : null}
-        </>
-      ) : null}
-      <button className="button-secondary">{copy.share.save}</button>
-      {enabled && url ? (
-        <button
-          className="button-secondary"
-          type="button"
-          onClick={(event) => void save(event, true)}
-        >
-          {copy.share.rotate}
-        </button>
-      ) : null}
+    <div className="share-manager">
+      <h3>分享人生博物馆</h3>
+      <p>访客只能浏览公开内容，无法进入照片整理台或编辑页面。</p>
+      <button className="button-secondary" type="button" onClick={() => void copyUrl("/")}>
+        复制网站网址
+      </button>
+      <button
+        className="button-secondary"
+        type="button"
+        disabled={!publiclyVisible}
+        onClick={() => void copyUrl(`/memories/${encodeURIComponent(memoryId)}`)}
+      >
+        复制这段记忆的链接
+      </button>
+      {!publiclyVisible ? <p>这段记忆当前对访客隐藏，无法单独分享。</p> : null}
       {url ? (
         <input
           className="share-url"
+          aria-label="分享链接"
           readOnly
           value={url}
           onFocus={(event) => event.currentTarget.select()}
         />
       ) : null}
-      {message ? <p className="form-message">{message}</p> : null}
-    </form>
+      {message ? (
+        <p className="form-message" role="status">
+          {message}
+        </p>
+      ) : null}
+    </div>
   );
 }

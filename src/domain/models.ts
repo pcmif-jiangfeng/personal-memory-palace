@@ -4,6 +4,7 @@ export interface Stage {
   id: string;
   title: string;
   description: string;
+  isPublic: boolean;
   createdAt: string;
   updatedAt: string;
   trashedAt: string | null;
@@ -29,6 +30,7 @@ export interface Memory {
   title: string;
   story: string;
   visibility: Visibility;
+  isPublic: boolean;
   createdAt: string;
   updatedAt: string;
   trashedAt: string | null;

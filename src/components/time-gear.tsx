@@ -8,7 +8,7 @@ import { copy } from "@/i18n/zh-CN";
 
 type RecallStatus = "idle" | "spinning" | "empty" | "error";
 
-export function TimeGear() {
+export function TimeGear({ owner = true }: { owner?: boolean }) {
   const router = useRouter();
   const feedbackId = useId();
   const requestInFlight = useRef(false);
@@ -55,7 +55,7 @@ export function TimeGear() {
         <div id={feedbackId} className="time-gear-feedback" role="status">
           <strong>{copy.recall.emptyTitle}</strong>
           <p>{copy.recall.emptyDescription}</p>
-          <Link href="/memories/new">{copy.recall.createFirst}</Link>
+          {owner ? <Link href="/memories/new">{copy.recall.createFirst}</Link> : null}
         </div>
       ) : null}
       {status === "error" ? (

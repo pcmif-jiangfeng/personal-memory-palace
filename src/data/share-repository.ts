@@ -5,6 +5,7 @@ import { getDatabase } from "./database.ts";
 import { findMemoryDetails } from "./memory-repository.ts";
 import { withTransaction } from "./transaction.ts";
 import { DomainError } from "../domain/errors.ts";
+import { isMemoryPublicInDatabase } from "./publication-repository.ts";
 
 export type ShareMode = "link" | "password";
 
@@ -116,7 +117,9 @@ export function getSharedMemory(token: string, password?: string, accessCookie?:
   const row = getDatabase().prepare(`SELECT share_configs.*, memories.visibility, memories.trashed_at
     FROM share_configs JOIN memories ON memories.id = share_configs.memory_id
     WHERE share_configs.id = ? AND share_configs.enabled = 1`).get(token) as ShareAccessRow | undefined;
-  if (!row || row.visibility !== "shared" || row.trashed_at || !hasShareAccess(row, token, password, accessCookie)) return null;
+  if (!row || row.visibility !== "shared" || row.trashed_at ||
+      !isMemoryPublicInDatabase(getDatabase(), row.memory_id) ||
+      !hasShareAccess(row, token, password, accessCookie)) return null;
   return findMemoryDetails(row.memory_id);
 }
 
@@ -136,7 +139,9 @@ export function isSharedImageAccessibleInDatabase(
       AND share_configs.enabled = 1
       AND memory_images.storage_key = ?
   `).get(token, storageKey) as ShareAccessRow | undefined;
-  return Boolean(row && row.visibility === "shared" && !row.trashed_at && hasShareAccess(row, token, undefined, accessCookie));
+  return Boolean(row && row.visibility === "shared" && !row.trashed_at &&
+    isMemoryPublicInDatabase(database, row.memory_id) &&
+    hasShareAccess(row, token, undefined, accessCookie));
 }
 
 export function isSharedImageAccessible(token: string, storageKey: string, accessCookie?: string): boolean {
@@ -148,5 +153,8 @@ export function getShareConfig(memoryId: string) {
 }
 
 export function shareTokenExists(token: string) {
-  return Boolean(getDatabase().prepare("SELECT id FROM share_configs WHERE id = ? AND enabled = 1").get(token));
+  const row = getDatabase().prepare(
+    "SELECT memory_id FROM share_configs WHERE id = ? AND enabled = 1",
+  ).get(token) as { memory_id: string } | undefined;
+  return Boolean(row && isMemoryPublicInDatabase(getDatabase(), row.memory_id));
 }

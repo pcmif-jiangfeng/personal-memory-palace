@@ -5,7 +5,15 @@ import { copy } from "@/i18n/zh-CN";
 import { imageStorage } from "@/storage/local-image-storage";
 import { imageVariantUrl } from "@/components/image-variant-url";
 
-export function StageCard({ stage, index }: { stage: StageShelfItem; index: number }) {
+export function StageCard({
+  stage,
+  index,
+  owner = true,
+}: {
+  stage: StageShelfItem;
+  index: number;
+  owner?: boolean;
+}) {
   const coverKey = stage.coverKey ?? stage.previewImageKeys[0] ?? null;
   const coverPath = coverKey ? imageStorage.resolve(coverKey).publicPath : null;
   return (
@@ -45,7 +53,9 @@ export function StageCard({ stage, index }: { stage: StageShelfItem; index: numb
             </div>
           </div>
         </Link>
-        <StageDeleteAction mode="menu" stageId={stage.id} stageTitle={stage.title} />
+        {owner ? (
+          <StageDeleteAction mode="menu" stageId={stage.id} stageTitle={stage.title} />
+        ) : null}
       </div>
     </article>
   );

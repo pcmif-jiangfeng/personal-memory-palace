@@ -68,6 +68,10 @@ export function updateMemoryDetails(memoryId: string, input: MemoryDetailsInput)
   return performMemoryAction(memoryId, { action: "details", ...input });
 }
 
+export function setMemoryPublic(memoryId: string, isPublic: boolean): Promise<void> {
+  return performMemoryAction(memoryId, { action: "publication", isPublic });
+}
+
 export function addMemoryNote(memoryId: string, content: string): Promise<void> {
   return performMemoryAction(memoryId, { action: "note", content });
 }

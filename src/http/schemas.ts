@@ -142,6 +142,10 @@ export async function parseCreateMemory(request: Request) {
 export async function parseMemoryAction(request: Request) {
   const input = await readJsonObject(request);
   const action = stringValue(input, "action", { required: true, maxLength: 30 })!;
+  if (action === "publication") {
+    if (typeof input.isPublic !== "boolean") throw new ApiError("INVALID_IS_PUBLIC", 400);
+    return { action, isPublic: input.isPublic } as const;
+  }
   if (action === "details") {
     return {
       action,

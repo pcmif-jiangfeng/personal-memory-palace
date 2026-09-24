@@ -5,12 +5,12 @@ import { listActiveStages } from "@/data/memory-repository";
 import { copy } from "@/i18n/zh-CN";
 import { imageStorage } from "@/storage/local-image-storage";
 import { isOwner } from "@/auth";
-import { redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function PhotoWorkspacePage() {
-  if (!(await isOwner())) redirect("/login");
+  if (!(await isOwner())) notFound();
   let source: "recent" | "library" = "recent";
   let page = queryWorkspacePhotoCatalog({ source, limit: 24 });
   if (page.items.length === 0) {

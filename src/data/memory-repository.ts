@@ -1,4 +1,5 @@
 import { getDatabase } from "./database.ts";
+import { publicMemoryPredicate } from "./publication-repository.ts";
 import {
   readBooleanFlag,
   readNullableString,
@@ -11,6 +12,7 @@ interface StageRow {
   id: string;
   title: string;
   description: string;
+  is_public: boolean;
   created_at: string;
   updated_at: string;
   trashed_at: string | null;
@@ -44,6 +46,7 @@ interface MemorySummaryRow {
   title: string;
   story: string;
   visibility: "private" | "shared";
+  is_public: boolean;
   created_at: string;
   updated_at: string;
   trashed_at: string | null;
@@ -74,6 +77,7 @@ function readStageRow(row: Record<string, unknown>): StageRow {
     id: readString(row, "id"),
     title: readString(row, "title"),
     description: readString(row, "description"),
+    is_public: readBooleanFlag(row, "is_public"),
     created_at: readString(row, "created_at"),
     updated_at: readString(row, "updated_at"),
     trashed_at: readNullableString(row, "trashed_at"),
@@ -103,6 +107,7 @@ function readMemorySummaryRow(row: Record<string, unknown>): MemorySummaryRow {
     title: readString(row, "title"),
     story: readString(row, "story"),
     visibility: readVisibility(row),
+    is_public: readBooleanFlag(row, "is_public"),
     created_at: readString(row, "created_at"),
     updated_at: readString(row, "updated_at"),
     trashed_at: readNullableString(row, "trashed_at"),
@@ -143,6 +148,7 @@ function mapStage(row: StageRow): Stage {
     id: row.id,
     title: row.title,
     description: row.description,
+    isPublic: row.is_public,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     trashedAt: row.trashed_at,
@@ -158,6 +164,7 @@ function mapMemory(row: MemorySummaryRow): MemorySummary {
     title: row.title,
     story: row.story,
     visibility: row.visibility,
+    isPublic: row.is_public,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     trashedAt: row.trashed_at,
@@ -176,22 +183,24 @@ const summarySql = `
   LEFT JOIN memory_images AS images ON images.memory_id = memories.id
 `;
 
-export function listActiveStages(): Stage[] {
+export function listActiveStages(publicOnly = false): Stage[] {
   const rows = getDatabase().prepare(
     `SELECT stages.*, stage_covers.storage_key AS cover_key FROM stages
      LEFT JOIN stage_covers ON stage_covers.stage_id = stages.id
-     WHERE stages.trashed_at IS NULL ORDER BY stages.created_at`
+     WHERE stages.trashed_at IS NULL ${publicOnly ? "AND stages.is_public = 1" : ""}
+     ORDER BY stages.created_at`
   ).all().map(readStageRow);
   return rows.map(mapStage);
 }
 
-export function listStageShelfItems(): StageShelfItem[] {
+export function listStageShelfItems(publicOnly = false): StageShelfItem[] {
   const database = getDatabase();
-  const stages = listActiveStages();
+  const stages = listActiveStages(publicOnly);
   const counts = database.prepare(`
     SELECT stage_id, COUNT(*) AS count
     FROM memories
     WHERE trashed_at IS NULL AND stage_id IS NOT NULL
+      ${publicOnly ? "AND is_public = 1" : ""}
     GROUP BY stage_id
   `).all().map(readStageCountRow);
   const previews = database.prepare(`
@@ -204,6 +213,7 @@ export function listStageShelfItems(): StageShelfItem[] {
       FROM memories
       JOIN memory_images ON memory_images.memory_id = memories.id
       WHERE memories.trashed_at IS NULL AND memories.stage_id IS NOT NULL
+        ${publicOnly ? "AND memories.is_public = 1" : ""}
     )
     SELECT stage_id, storage_key FROM ranked WHERE position <= 3 ORDER BY stage_id, position
   `).all().map(readStagePreviewRow);
@@ -221,32 +231,46 @@ export function listStageShelfItems(): StageShelfItem[] {
   }));
 }
 
-export function listActiveMemories(): MemorySummary[] {
-  const rows = getDatabase().prepare(
-    `${summarySql} WHERE memories.trashed_at IS NULL GROUP BY memories.id ORDER BY memories.created_at DESC`
+export function listActiveMemories(publicOnly = false): MemorySummary[] {
+  return listActiveMemoriesInDatabase(getDatabase(), publicOnly);
+}
+
+export function listActiveMemoriesInDatabase(
+  database: ReturnType<typeof getDatabase>,
+  publicOnly = false,
+): MemorySummary[] {
+  const rows = database.prepare(
+    `${summarySql} WHERE memories.trashed_at IS NULL
+     ${publicOnly ? `AND ${publicMemoryPredicate}` : ""}
+     GROUP BY memories.id ORDER BY memories.created_at DESC`
   ).all().map(readMemorySummaryRow);
   return rows.map(mapMemory);
 }
 
-export function searchActiveMemories(query: string): MemorySummary[] {
+export function searchActiveMemories(query: string, publicOnly = false): MemorySummary[] {
   const term = query.trim();
-  if (!term) return listActiveMemories();
+  if (!term) return listActiveMemories(publicOnly);
   const rows = getDatabase().prepare(
-    `${summarySql} WHERE memories.trashed_at IS NULL AND (memories.title LIKE ? OR memories.story LIKE ?) GROUP BY memories.id ORDER BY memories.created_at DESC`
+    `${summarySql} WHERE memories.trashed_at IS NULL AND (memories.title LIKE ? OR memories.story LIKE ?)
+     ${publicOnly ? `AND ${publicMemoryPredicate}` : ""}
+     GROUP BY memories.id ORDER BY memories.created_at DESC`
   ).all(`%${term}%`, `%${term}%`).map(readMemorySummaryRow);
   return rows.map(mapMemory);
 }
 
-export function findRandomActiveMemory(): MemorySummary | null {
-  return findRandomActiveMemoryInDatabase(getDatabase());
+export function findRandomActiveMemory(publicOnly = false): MemorySummary | null {
+  return findRandomActiveMemoryInDatabase(getDatabase(), publicOnly);
 }
 
 export function findRandomActiveMemoryInDatabase(
   database: ReturnType<typeof getDatabase>,
+  publicOnly = false,
 ): MemorySummary | null {
   const row = database
     .prepare(
-      `${summarySql} WHERE memories.trashed_at IS NULL GROUP BY memories.id ORDER BY RANDOM() LIMIT 1`,
+      `${summarySql} WHERE memories.trashed_at IS NULL
+       ${publicOnly ? `AND ${publicMemoryPredicate}` : ""}
+       GROUP BY memories.id ORDER BY RANDOM() LIMIT 1`,
     )
     .get();
   return row ? mapMemory(readMemorySummaryRow(row)) : null;
@@ -262,31 +286,35 @@ export function listTrashedStages(): Stage[] {
   return rows.map(mapStage);
 }
 
-export function findMemoryById(id: string): MemorySummary | null {
-  return findMemoryByIdInDatabase(getDatabase(), id);
+export function findMemoryById(id: string, publicOnly = false): MemorySummary | null {
+  return findMemoryByIdInDatabase(getDatabase(), id, publicOnly);
 }
 
 export function findMemoryByIdInDatabase(
   database: ReturnType<typeof getDatabase>,
   id: string,
+  publicOnly = false,
 ): MemorySummary | null {
   const row = database.prepare(
-    `${summarySql} WHERE memories.id = ? GROUP BY memories.id`
+    `${summarySql} WHERE memories.id = ?
+     ${publicOnly ? `AND ${publicMemoryPredicate}` : ""}
+     GROUP BY memories.id`
   ).get(id);
   return row ? mapMemory(readMemorySummaryRow(row)) : null;
 }
 
-export function findStageById(id: string): Stage | null {
+export function findStageById(id: string, publicOnly = false): Stage | null {
   const row = getDatabase().prepare(
     `SELECT stages.*, stage_covers.storage_key AS cover_key FROM stages
      LEFT JOIN stage_covers ON stage_covers.stage_id = stages.id
-     WHERE stages.id = ? AND stages.trashed_at IS NULL`
+     WHERE stages.id = ? AND stages.trashed_at IS NULL
+       ${publicOnly ? "AND stages.is_public = 1" : ""}`
   ).get(id);
   return row ? mapStage(readStageRow(row)) : null;
 }
 
-export function findMemoryDetails(id: string): MemoryDetails | null {
-  const memory = findMemoryById(id);
+export function findMemoryDetails(id: string, publicOnly = false): MemoryDetails | null {
+  const memory = findMemoryById(id, publicOnly);
   if (!memory) return null;
   const database = getDatabase();
   const imageRows = database.prepare(
@@ -318,6 +346,7 @@ export function findMemoryDetails(id: string): MemoryDetails | null {
     const placeholders = relatedIds.map(() => "?").join(",");
     const relatedRows = database.prepare(
       `${summarySql} WHERE memories.id IN (${placeholders}) AND memories.trashed_at IS NULL
+       ${publicOnly ? `AND ${publicMemoryPredicate}` : ""}
        GROUP BY memories.id ORDER BY memories.created_at DESC`,
     ).all(...relatedIds).map(readMemorySummaryRow);
     relatedMemories = relatedRows.map(mapMemory);
@@ -334,9 +363,11 @@ export function findMemoryDetails(id: string): MemoryDetails | null {
   return { ...memory, images, relatedMemories, laterNotes };
 }
 
-export function listMemoriesByStage(stageId: string): MemorySummary[] {
+export function listMemoriesByStage(stageId: string, publicOnly = false): MemorySummary[] {
   const rows = getDatabase().prepare(
-    `${summarySql} WHERE memories.stage_id = ? AND memories.trashed_at IS NULL GROUP BY memories.id ORDER BY memories.created_at DESC`
+    `${summarySql} WHERE memories.stage_id = ? AND memories.trashed_at IS NULL
+     ${publicOnly ? `AND ${publicMemoryPredicate}` : ""}
+     GROUP BY memories.id ORDER BY memories.created_at DESC`
   ).all(stageId).map(readMemorySummaryRow);
   return rows.map(mapMemory);
 }

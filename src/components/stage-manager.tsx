@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { StageCoverSelector, type StageCoverPhotoOption } from "@/components/stage-cover-selector";
 import { StageDeleteAction } from "@/components/stage-delete-action";
-import { createStage, updateStage } from "@/client/stage-api";
+import { createStage, setStagePublic, updateStage } from "@/client/stage-api";
 import type { Stage } from "@/domain/models";
 import { copy } from "@/i18n/zh-CN";
 
@@ -42,6 +42,20 @@ export function StageManager({
       router.refresh();
     } catch {
       setMessage(copy.editor.saveFailed);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function togglePublication(stage: Stage) {
+    setBusy(stage.id);
+    setMessage("");
+    try {
+      await setStagePublic(stage.id, !stage.isPublic);
+      setMessage(copy.publication.saved);
+      router.refresh();
+    } catch {
+      setMessage(copy.publication.failed);
     } finally {
       setBusy(null);
     }
@@ -89,10 +103,20 @@ export function StageManager({
             onSubmit={(event) => void save(event, stage.id)}
           >
             <h2>{stage.title}</h2>
+            <p>{stage.isPublic ? copy.publication.public : copy.publication.private}</p>
+            <p className="field-help">{copy.publication.stageHint}</p>
             {fields(stage)}
             <div className="stage-form-actions">
               <button className="button-secondary" disabled={busy === stage.id}>
                 {copy.stage.save}
+              </button>
+              <button
+                className="button-secondary"
+                type="button"
+                disabled={busy === stage.id}
+                onClick={() => void togglePublication(stage)}
+              >
+                {stage.isPublic ? copy.publication.hide : copy.publication.publish}
               </button>
               <StageDeleteAction stageId={stage.id} stageTitle={stage.title} />
             </div>

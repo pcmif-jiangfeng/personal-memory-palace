@@ -164,7 +164,7 @@ test("adds photo library membership to an existing owner database without losing
       .prepare("SELECT version FROM schema_migrations ORDER BY version")
       .all()
       .map((row) => (row as { version: number }).version);
-    assert.deepEqual(versions, [1, 2, 3, 4]);
+    assert.deepEqual(versions, [1, 2, 3, 4, 5]);
     database.close();
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -361,7 +361,7 @@ test("records each database migration once", () => {
       .map((row) => (row as { version: number }).version);
     database.close();
 
-    assert.deepEqual(versions, [1, 2, 3, 4]);
+    assert.deepEqual(versions, [1, 2, 3, 4, 5]);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

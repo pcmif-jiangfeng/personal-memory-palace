@@ -3,7 +3,6 @@ import { copy } from "@/i18n/zh-CN";
 import { searchActiveMemories } from "@/data/memory-repository";
 import { MemoryCard } from "@/components/memory-card";
 import { isOwner } from "@/auth";
-import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 export default async function SearchPage({
@@ -11,9 +10,9 @@ export default async function SearchPage({
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
-  if (!(await isOwner())) redirect("/login");
+  const owner = await isOwner();
   const q = (await searchParams).q?.trim() ?? "";
-  const memories = q ? searchActiveMemories(q) : [];
+  const memories = q ? searchActiveMemories(q, !owner) : [];
   return (
     <section className="section-shell skeleton-page">
       <PageIntro title={copy.search.title} description={copy.search.description} />

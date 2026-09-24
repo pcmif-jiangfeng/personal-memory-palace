@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   addMemoryNote,
+  setMemoryPublic,
   trashMemory,
   updateMemoryDetails,
   updateMemoryRelations,
@@ -60,6 +61,25 @@ export function MemoryManagement({
 
   return (
     <div className="memory-management">
+      <section className="publication-control">
+        <h3>访客可见范围</h3>
+        <p>{memory.isPublic ? copy.publication.public : copy.publication.private}</p>
+        <p className="field-help">{copy.publication.memoryHint}</p>
+        {memory.stageId &&
+        stages.find((stage) => stage.id === memory.stageId)?.isPublic === false ? (
+          <p className="field-help">所属章节目前对访客隐藏，因此这段记忆也不会显示。</p>
+        ) : null}
+        <button
+          className="button-secondary"
+          type="button"
+          disabled={busy}
+          onClick={() =>
+            void send(() => setMemoryPublic(memory.id, !memory.isPublic), copy.publication.saved)
+          }
+        >
+          {memory.isPublic ? copy.publication.hide : copy.publication.publish}
+        </button>
+      </section>
       <details className="relation-editor memory-details-editor" open>
         <summary>{copy.management.editDetails}</summary>
         <form

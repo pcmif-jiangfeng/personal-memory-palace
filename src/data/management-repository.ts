@@ -123,9 +123,13 @@ export function trashStageInDatabase(database: DatabaseSync, id: string): void {
       .run(now, now, id);
     if (!result.changes) throw new DomainError("STAGE_NOT_FOUND");
 
-    database
-      .prepare("UPDATE memories SET stage_id = NULL, updated_at = ? WHERE stage_id = ?")
-      .run(now, id);
+    database.prepare(`
+      UPDATE memories
+      SET stage_id = NULL,
+          is_public = CASE WHEN (SELECT is_public FROM stages WHERE id = ?) = 0 THEN 0 ELSE is_public END,
+          updated_at = ?
+      WHERE stage_id = ?
+    `).run(id, now, id);
   });
 }
 export function trashStage(id: string) {

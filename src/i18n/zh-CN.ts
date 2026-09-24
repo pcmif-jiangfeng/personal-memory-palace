@@ -34,6 +34,16 @@ export const copy = {
     saved: "分享方式已保存",
     failed: "分享保存失败，请检查馆长登录状态。",
   },
+  publication: {
+    public: "访客可见",
+    private: "仅馆长可见",
+    publish: "设为访客可见",
+    hide: "对访客隐藏",
+    memoryHint: "公开后，访客无需密码即可从网站浏览这段记忆。",
+    stageHint: "隐藏章节会同时隐藏其中所有记忆；重新公开章节也不会自动公开私密记忆。",
+    saved: "访客可见范围已更新",
+    failed: "可见范围更新失败，请重试。",
+  },
   uploadTasks: {
     ariaLabel: "图片上传任务",
     collapseDetails: "收起上传任务详情",

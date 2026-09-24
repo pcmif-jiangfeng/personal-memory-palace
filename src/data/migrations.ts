@@ -85,6 +85,18 @@ const migrations: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 5,
+    migrate(database) {
+      if (!hasColumn(database, "stages", "is_public")) {
+        database.exec("ALTER TABLE stages ADD COLUMN is_public INTEGER NOT NULL DEFAULT 1 CHECK (is_public IN (0, 1))");
+      }
+      if (!hasColumn(database, "memories", "is_public")) {
+        database.exec("ALTER TABLE memories ADD COLUMN is_public INTEGER NOT NULL DEFAULT 1 CHECK (is_public IN (0, 1))");
+      }
+      database.exec("CREATE INDEX IF NOT EXISTS memory_images_storage_key ON memory_images(storage_key)");
+    },
+  },
 ];
 
 export function runDatabaseMigrations(database: DatabaseSync): void {

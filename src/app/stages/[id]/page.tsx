@@ -6,16 +6,15 @@ import { findStageById, listMemoriesByStage } from "@/data/memory-repository";
 import { copy } from "@/i18n/zh-CN";
 import { imageStorage } from "@/storage/local-image-storage";
 import { isOwner } from "@/auth";
-import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function StageViewPage({ params }: { params: Promise<{ id: string }> }) {
-  if (!(await isOwner())) redirect("/login");
+  const owner = await isOwner();
   const { id } = await params;
-  const stage = findStageById(id);
+  const stage = findStageById(id, !owner);
   if (!stage) notFound();
-  const memories = listMemoriesByStage(id);
+  const memories = listMemoriesByStage(id, !owner);
   const coverKey = stage.coverKey ?? memories.find((memory) => memory.coverKey)?.coverKey ?? null;
 
   return (
@@ -28,9 +27,11 @@ export default async function StageViewPage({ params }: { params: Promise<{ id: 
             description={stage.description}
           />
           <p className="stage-view-count">{copy.stage.memoryCount(memories.length)}</p>
-          <div className="stage-view-actions">
-            <StageDeleteAction stageId={stage.id} stageTitle={stage.title} redirectTo="/" />
-          </div>
+          {owner ? (
+            <div className="stage-view-actions">
+              <StageDeleteAction stageId={stage.id} stageTitle={stage.title} redirectTo="/" />
+            </div>
+          ) : null}
         </div>
         {coverKey ? (
           <div className="stage-view-art">

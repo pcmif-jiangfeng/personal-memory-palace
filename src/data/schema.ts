@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS stages (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
+  is_public INTEGER NOT NULL DEFAULT 1 CHECK (is_public IN (0, 1)),
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   trashed_at TEXT
@@ -21,6 +22,7 @@ CREATE TABLE IF NOT EXISTS memories (
   title TEXT NOT NULL,
   story TEXT NOT NULL,
   visibility TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('private', 'shared')),
+  is_public INTEGER NOT NULL DEFAULT 1 CHECK (is_public IN (0, 1)),
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   trashed_at TEXT
@@ -74,6 +76,9 @@ ON memory_images(memory_id, sort_order);
 
 CREATE UNIQUE INDEX IF NOT EXISTS memory_images_unique_photo
 ON memory_images(memory_id, storage_key);
+
+CREATE INDEX IF NOT EXISTS memory_images_storage_key
+ON memory_images(storage_key);
 
 CREATE TABLE IF NOT EXISTS memory_relations (
   memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,

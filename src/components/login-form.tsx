@@ -11,7 +11,8 @@ export function LoginForm() {
     const password = String(new FormData(event.currentTarget).get("password") ?? "");
     try {
       await login(password);
-      router.push("/");
+      router.replace("/");
+      router.refresh();
     } catch {
       setError(copy.auth.invalidPassword);
     }

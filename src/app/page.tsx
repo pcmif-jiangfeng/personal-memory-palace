@@ -8,14 +8,13 @@ import { copy } from "@/i18n/zh-CN";
 import { imageStorage } from "@/storage/local-image-storage";
 import { TimeGear } from "@/components/time-gear";
 import { isOwner } from "@/auth";
-import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function LifeGalleryPage() {
-  if (!(await isOwner())) redirect("/login");
-  const stages = listStageShelfItems();
-  const memories = listActiveMemories();
+  const owner = await isOwner();
+  const stages = listStageShelfItems(!owner);
+  const memories = listActiveMemories(!owner);
   const featured = memories.find((memory) => memory.coverKey) ?? null;
 
   return (
@@ -31,7 +30,7 @@ export default async function LifeGalleryPage() {
           <div className="archive-mark">
             <span>EST.</span>
             <strong>V1</strong>
-            <span>PRIVATE ARCHIVE</span>
+            <span>{owner ? "PRIVATE ARCHIVE" : "PUBLIC EXHIBITION"}</span>
           </div>
         </div>
         {featured?.coverKey ? (
@@ -52,7 +51,7 @@ export default async function LifeGalleryPage() {
           <h2>{copy.recall.title}</h2>
           <p>{copy.recall.description}</p>
         </div>
-        <TimeGear />
+        <TimeGear owner={owner} />
       </section>
       <section className="stage-gallery section-shell" id="stage-shelf">
         <header className="section-heading">
@@ -64,7 +63,7 @@ export default async function LifeGalleryPage() {
         </header>
         <StageCarousel itemCount={stages.length}>
           {stages.map((stage, index) => (
-            <StageCard key={stage.id} stage={stage} index={index} />
+            <StageCard key={stage.id} stage={stage} index={index} owner={owner} />
           ))}
         </StageCarousel>
       </section>

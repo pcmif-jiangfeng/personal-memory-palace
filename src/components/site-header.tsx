@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { isNavigationItemActive } from "@/components/site-navigation";
 import { copy } from "@/i18n/zh-CN";
 
-const navigationItems = [
+const ownerNavigationItems = [
   { href: "/", label: copy.nav.gallery, marker: "◇" },
   { href: "/workspace", label: copy.nav.workspace, marker: "▦" },
   { href: "/stages", label: copy.nav.stages, marker: "Ⅱ" },
@@ -13,8 +13,16 @@ const navigationItems = [
   { href: "/trash", label: copy.nav.trash, marker: "○" },
 ] as const;
 
-export function SiteHeader() {
+const visitorNavigationItems = [
+  { href: "/", label: copy.nav.gallery, marker: "◇" },
+  { href: "/stages", label: copy.nav.stages, marker: "Ⅱ" },
+  { href: "/search", label: copy.nav.search, marker: "⌕" },
+  { href: "/login", label: "馆长登录", marker: "○" },
+] as const;
+
+export function SiteHeader({ owner }: { owner: boolean }) {
   const pathname = usePathname();
+  const navigationItems = owner ? ownerNavigationItems : visitorNavigationItems;
   return (
     <header className="site-header">
       <Link className="brand" href="/">

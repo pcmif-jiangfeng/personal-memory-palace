@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { isOwner } from "@/auth";
 import { isSharedImageAccessible, shareAccessCookieName } from "@/data/share-repository";
+import { isPublicImageAccessible } from "@/data/publication-repository";
 import {
   readOrCreateImagePreview,
   resolveImagePreviewPath,
@@ -24,11 +25,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ key:
 
   if (!(await isOwner())) {
     const token = new URL(request.url).searchParams.get("share");
-    if (!token || !/^[A-Za-z0-9_-]{10,200}$/.test(token)) {
-      return new NextResponse(null, { status: 404 });
-    }
-    const accessCookie = (await cookies()).get(shareAccessCookieName(token))?.value;
-    if (!isSharedImageAccessible(token, key, accessCookie)) {
+    const publicImage = isPublicImageAccessible(key);
+    const sharedImage =
+      token && /^[A-Za-z0-9_-]{10,200}$/.test(token)
+        ? isSharedImageAccessible(
+            token,
+            key,
+            (await cookies()).get(shareAccessCookieName(token))?.value,
+          )
+        : false;
+    if (!publicImage && !sharedImage) {
       return new NextResponse(null, { status: 404 });
     }
   }

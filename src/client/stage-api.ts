@@ -58,3 +58,15 @@ export function deleteStage(stageId: string): Promise<void> {
     decodeDeleteResponse,
   );
 }
+
+export function setStagePublic(stageId: string, isPublic: boolean): Promise<void> {
+  return requestJson(
+    `/api/stages/${encodeURIComponent(stageId)}/publication`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isPublic }),
+    },
+    decodeDeleteResponse,
+  );
+}

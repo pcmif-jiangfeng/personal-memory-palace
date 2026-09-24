@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { MemoryCard } from "@/components/memory-card";
 import { findMemoryDetails, listActiveMemories, listActiveStages } from "@/data/memory-repository";
@@ -10,6 +9,7 @@ import { MemoryManagement } from "@/components/memory-management";
 import { ShareManager } from "@/components/share-manager";
 import { isOwner } from "@/auth";
 import { PhotoViewer } from "@/components/photo-viewer";
+import { MemoryExhibition } from "@/components/memory-exhibition";
 
 export const dynamic = "force-dynamic";
 
@@ -18,10 +18,11 @@ export default async function MemoryExhibitionPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  if (!(await isOwner())) redirect("/login");
+  const owner = await isOwner();
   const { id } = await params;
-  const memory = findMemoryDetails(id);
+  const memory = findMemoryDetails(id, !owner);
   if (!memory) notFound();
+  if (!owner) return <MemoryExhibition memory={memory} visitor />;
   const imagePath = memory.coverKey ? imageStorage.resolve(memory.coverKey).publicPath : null;
   const viewerImages = memory.images.map((image) => ({
     id: image.id,
@@ -160,7 +161,14 @@ export default async function MemoryExhibitionPage({
           libraryPhotos={libraryPhotos}
           libraryNextCursor={libraryPage.nextCursor}
         />
-        <ShareManager memoryId={memory.id} />
+        <ShareManager
+          memoryId={memory.id}
+          publiclyVisible={
+            memory.isPublic &&
+            (!memory.stageId ||
+              stages.some((stage) => stage.id === memory.stageId && stage.isPublic))
+          }
+        />
       </section>
     </article>
   );

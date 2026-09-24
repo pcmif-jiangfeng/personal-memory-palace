@@ -21,6 +21,7 @@ import {
   sameOriginRequiredResponse,
 } from "@/http/api-error";
 import { parseMemoryAction } from "@/http/schemas";
+import { setMemoryPublic } from "@/data/publication-repository";
 
 export const runtime = "nodejs";
 
@@ -51,6 +52,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       setMemoryCover(id, input.photoId);
     } else if (input.action === "exhibitMetadata") {
       updateMemoryExhibitMetadata(id, input.photoId, input);
+    } else if (input.action === "publication") {
+      setMemoryPublic(id, input.isPublic);
     } else {
       permanentlyDeleteMemory(id);
     }

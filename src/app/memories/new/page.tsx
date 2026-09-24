@@ -5,7 +5,7 @@ import { listUploadedPhotosByIds } from "@/data/photo-repository";
 import { copy } from "@/i18n/zh-CN";
 import { imageStorage } from "@/storage/local-image-storage";
 import { isOwner } from "@/auth";
-import { redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +14,7 @@ export default async function MemoryEditorPage({
 }: {
   searchParams: Promise<{ photos?: string | string[] }>;
 }) {
-  if (!(await isOwner())) redirect("/login");
+  if (!(await isOwner())) notFound();
   const params = await searchParams;
   const rawPhotoIds = Array.isArray(params.photos)
     ? params.photos.join(",")
