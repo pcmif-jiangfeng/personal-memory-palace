@@ -1,4 +1,5 @@
 import { requestJson } from "./http-client.ts";
+import { memoryMuseumUrl } from "./memory-museum-url.ts";
 
 export interface ShareConfiguration {
   memoryId: string;
@@ -30,7 +31,7 @@ function decodeAccessResponse(value: unknown): void {
 
 export function configureShare(input: ShareConfiguration): Promise<{ url: string | null }> {
   return requestJson(
-    "/api/shares",
+    memoryMuseumUrl("/api/shares"),
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

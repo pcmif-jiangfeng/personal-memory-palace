@@ -4,11 +4,14 @@ import { copy } from "@/i18n/zh-CN";
 import { imageStorage } from "@/storage/local-image-storage";
 import { imageVariantUrl } from "@/components/image-variant-url";
 
-export function MemoryCard({ memory }: { memory: MemorySummary }) {
+export function MemoryCard({ memory, museumId }: { memory: MemorySummary; museumId?: string }) {
   const imagePath = memory.coverKey ? imageStorage.resolve(memory.coverKey).publicPath : null;
 
   return (
-    <Link className="memory-card" href={`/memories/${memory.id}`}>
+    <Link
+      className="memory-card"
+      href={`/memories/${memory.id}${museumId ? `?museumId=${encodeURIComponent(museumId)}` : ""}`}
+    >
       <div className="memory-card-image">
         {imagePath ? (
           <img src={imageVariantUrl(imagePath)} alt="" loading="lazy" />

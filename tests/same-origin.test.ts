@@ -89,13 +89,79 @@ test("every mutation route applies same-origin checks before authorization", () 
     const source = readFileSync(file, "utf8");
     const originCheck = source.indexOf("sameOriginRequiredResponse(request)");
     assert.notEqual(originCheck, -1, `${path.relative(apiDirectory, file)} lacks origin checking`);
+    const isInviteRoute = path.relative(apiDirectory, file).startsWith(`invites${path.sep}`);
+    if (isInviteRoute) {
+      assert.match(
+        source,
+        /(createOwnInviteInDatabase|revokeOwnInviteInDatabase|acceptInviteInDatabase)\(getDatabase\(\), user.id/,
+        "Invite mutations must derive the acting User from the authenticated session",
+      );
+    }
+    const isLeaveRoute =
+      file.endsWith(path.join("leave", "route.ts")) &&
+      path.relative(apiDirectory, file).startsWith(`museums${path.sep}`);
+    if (isLeaveRoute) {
+      assert.match(
+        source,
+        /leaveMuseumInDatabase\(getDatabase\(\), user.id, id\)/,
+        "Leaving must only change the authenticated User's own membership",
+      );
+    }
+    const isMuseumMemoryRoute = file.endsWith(path.join("[id]", "memories", "route.ts"));
+    if (isMuseumMemoryRoute) {
+      assert.match(
+        source,
+        /createMemoryInDatabase\(getDatabase\(\), input, \{ userId: user.id, museumId: id \}\)/,
+      );
+    }
+    if (
+      file.endsWith(path.join("museums", "route.ts")) ||
+      isInviteRoute ||
+      isLeaveRoute ||
+      isMuseumMemoryRoute
+    ) {
+      const userCheck = source.indexOf("await currentUser()", originCheck);
+      assert.ok(userCheck > originCheck, "Museum creation must check User after origin");
+      assert.match(
+        source,
+        /if \(!user\).*status: 401/,
+        "Museum creation must reject unauthenticated Users",
+      );
+      continue;
+    }
     const ownerCheck = source.indexOf("await isOwner()", originCheck);
     if (
+      path.relative(apiDirectory, file).startsWith(`memories${path.sep}`) ||
+      path.relative(apiDirectory, file).startsWith(`stages${path.sep}`) ||
+      path.relative(apiDirectory, file).startsWith(`photos${path.sep}`) ||
+      file.endsWith(path.join("trash", "route.ts")) ||
+      file.endsWith(path.join("shares", "route.ts"))
+    ) {
+      assert.ok(source.indexOf("await memoryRequestScope(request)", originCheck) > originCheck);
+      continue;
+    }
+    if (
       !file.endsWith(path.join("auth", "route.ts")) &&
-      !file.endsWith(path.join("share-access", "route.ts"))
+      !file.endsWith(path.join("share-access", "route.ts")) &&
+      !file.endsWith(path.join("user-auth", "route.ts")) &&
+      !file.endsWith(path.join("register", "route.ts")) &&
+      !file.endsWith(path.join("password-reset", "request", "route.ts")) &&
+      !file.endsWith(path.join("password-reset", "confirm", "route.ts")) &&
+      !file.endsWith(path.join("resend-verification", "route.ts")) &&
+      !file.endsWith(path.join("verify-email", "route.ts"))
     ) {
       assert.notEqual(ownerCheck, -1, `${path.relative(apiDirectory, file)} lacks owner checking`);
       assert.ok(originCheck < ownerCheck, `${path.relative(apiDirectory, file)} checks auth first`);
+    }
+    if (
+      file.endsWith(path.join("register", "route.ts")) ||
+      file.endsWith(path.join("user-auth", "route.ts")) ||
+      file.endsWith(path.join("password-reset", "request", "route.ts")) ||
+      file.endsWith(path.join("password-reset", "confirm", "route.ts")) ||
+      file.endsWith(path.join("resend-verification", "route.ts")) ||
+      file.endsWith(path.join("verify-email", "route.ts"))
+    ) {
+      assert.match(source, /consumeRateLimit\(/, "public account routes must be rate limited");
     }
   }
 });

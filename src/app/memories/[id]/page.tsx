@@ -1,26 +1,40 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { MemoryCard } from "@/components/memory-card";
-import { findMemoryDetails, listActiveMemories, listActiveStages } from "@/data/memory-repository";
+import { findMemoryDetails, listActiveStages } from "@/data/memory-repository";
 import { listUploadedPhotosByIds, queryWorkspacePhotoCatalog } from "@/data/photo-repository";
 import { copy } from "@/i18n/zh-CN";
 import { imageStorage } from "@/storage/local-image-storage";
 import { MemoryManagement } from "@/components/memory-management";
 import { ShareManager } from "@/components/share-manager";
-import { isOwner } from "@/auth";
+import { memoryPageScope } from "@/memory-page-scope";
+import { requireMemoryAccessInDatabase } from "@/data/memory-access";
+import { getDatabase } from "@/data/database";
+import { listScopedMemories } from "@/data/scoped-memory";
 import { PhotoViewer } from "@/components/photo-viewer";
 import { MemoryExhibition } from "@/components/memory-exhibition";
+import { MemoryAttribution } from "@/components/memory-attribution";
 
 export const dynamic = "force-dynamic";
 
 export default async function MemoryExhibitionPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ museumId?: string }>;
 }) {
-  const owner = await isOwner();
   const { id } = await params;
-  const memory = findMemoryDetails(id, !owner);
+  let scope;
+  try {
+    scope = await memoryPageScope((await searchParams).museumId);
+    if (scope)
+      requireMemoryAccessInDatabase(getDatabase(), scope.userId, scope.museumId, id, "read");
+  } catch {
+    notFound();
+  }
+  const owner = Boolean(scope);
+  const memory = findMemoryDetails(id, !owner, scope?.museumId);
   if (!memory) notFound();
   if (!owner) return <MemoryExhibition memory={memory} visitor />;
   const imagePath = memory.coverKey ? imageStorage.resolve(memory.coverKey).publicPath : null;
@@ -31,7 +45,7 @@ export default async function MemoryExhibitionPage({
     exhibitTitle: image.exhibitTitle,
     exhibitDescription: image.exhibitDescription,
   }));
-  const stages = listActiveStages();
+  const stages = listActiveStages(false, scope!.museumId);
   const exhibitPhotos = listUploadedPhotosByIds(memory.images.map((image) => image.photoId));
   const catalogById = new Map(exhibitPhotos.map((photo) => [photo.id, photo]));
   const exhibits = memory.images.map((image) => ({
@@ -42,7 +56,7 @@ export default async function MemoryExhibitionPage({
     exhibitTitle: image.exhibitTitle,
     exhibitDescription: image.exhibitDescription,
   }));
-  const libraryPage = queryWorkspacePhotoCatalog({ source: "library", limit: 24 });
+  const libraryPage = queryWorkspacePhotoCatalog({ source: "library", limit: 24 }, scope!.museumId);
   const libraryPhotos = libraryPage.items.map((photo) => ({
     id: photo.id,
     name: photo.originalName,
@@ -61,6 +75,7 @@ export default async function MemoryExhibitionPage({
           <p className="eyebrow">{copy.exhibition.label}</p>
           <p className="exhibition-stage">{memory.stageTitle ?? copy.common.uncategorized}</p>
           <h1>{memory.title}</h1>
+          <MemoryAttribution memory={memory} />
         </div>
         {imagePath ? (
           <figure className="exhibition-hero">
@@ -134,7 +149,7 @@ export default async function MemoryExhibitionPage({
             </div>
             <div className="memory-grid related-memory-grid">
               {memory.relatedMemories.map((related) => (
-                <MemoryCard key={related.id} memory={related} />
+                <MemoryCard key={related.id} memory={related} museumId={scope?.museumId} />
               ))}
             </div>
           </div>
@@ -155,20 +170,23 @@ export default async function MemoryExhibitionPage({
       <section className="section-shell exhibition-management">
         <MemoryManagement
           memory={memory}
-          candidates={listActiveMemories()}
+          museumId={scope!.museumId}
+          candidates={listScopedMemories(getDatabase(), scope!)}
           stages={stages}
           exhibits={exhibits}
           libraryPhotos={libraryPhotos}
           libraryNextCursor={libraryPage.nextCursor}
         />
-        <ShareManager
-          memoryId={memory.id}
-          publiclyVisible={
-            memory.isPublic &&
-            (!memory.stageId ||
-              stages.some((stage) => stage.id === memory.stageId && stage.isPublic))
-          }
-        />
+        {scope?.role === "owner" ? (
+          <ShareManager
+            memoryId={memory.id}
+            publiclyVisible={
+              memory.isPublic &&
+              (!memory.stageId ||
+                stages.some((stage) => stage.id === memory.stageId && stage.isPublic))
+            }
+          />
+        ) : null}
       </section>
     </article>
   );

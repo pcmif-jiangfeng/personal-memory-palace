@@ -9,10 +9,12 @@ export function StageCard({
   stage,
   index,
   owner = true,
+  museumId,
 }: {
   stage: StageShelfItem;
   index: number;
   owner?: boolean;
+  museumId?: string;
 }) {
   const coverKey = stage.coverKey ?? stage.previewImageKeys[0] ?? null;
   const coverPath = coverKey ? imageStorage.resolve(coverKey).publicPath : null;
@@ -32,7 +34,7 @@ export function StageCard({
       <div className="stage-book-shell">
         <Link
           className={`stage-book${coverPath ? " stage-book-with-cover" : ""}`}
-          href={`/stages/${stage.id}`}
+          href={`/stages/${stage.id}${museumId ? `?museumId=${encodeURIComponent(museumId)}` : ""}`}
         >
           {coverPath ? (
             <img
@@ -54,7 +56,12 @@ export function StageCard({
           </div>
         </Link>
         {owner ? (
-          <StageDeleteAction mode="menu" stageId={stage.id} stageTitle={stage.title} />
+          <StageDeleteAction
+            mode="menu"
+            stageId={stage.id}
+            stageTitle={stage.title}
+            museumId={museumId}
+          />
         ) : null}
       </div>
     </article>

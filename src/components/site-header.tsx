@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { isNavigationItemActive } from "@/components/site-navigation";
 import { publicSiteUrl } from "@/domain/share-links";
 import { copy } from "@/i18n/zh-CN";
+import { MuseumSwitcher } from "@/components/museum-switcher";
+import type { SwitcherMuseum } from "@/domain/museum-switcher";
 
 const ownerNavigationItems = [
   { href: "/", label: copy.nav.gallery, marker: "◇" },
@@ -22,9 +24,19 @@ const visitorNavigationItems = [
   { href: "/login", label: "馆长登录", marker: "○" },
 ] as const;
 
-export function SiteHeader({ owner }: { owner: boolean }) {
+export function SiteHeader({
+  owner,
+  museums = [],
+}: {
+  owner: boolean;
+  museums?: SwitcherMuseum[];
+}) {
   const pathname = usePathname();
-  const navigationItems = owner ? ownerNavigationItems : visitorNavigationItems;
+  const museumId = useSearchParams().get("museumId");
+  const member = museums.length > 0;
+  const navigationItems = member || owner ? ownerNavigationItems : visitorNavigationItems;
+  const scopedHref = (href: string) =>
+    member && museumId ? `${href}?museumId=${encodeURIComponent(museumId)}` : href;
   const [shareMessage, setShareMessage] = useState("");
   const [manualCopy, setManualCopy] = useState(false);
 
@@ -41,9 +53,10 @@ export function SiteHeader({ owner }: { owner: boolean }) {
 
   return (
     <header className="site-header">
-      <Link className="brand" href="/">
+      <Link className="brand" href={scopedHref("/")}>
         {copy.brand}
       </Link>
+      <MuseumSwitcher museums={museums} />
       <nav aria-label={copy.common.mainNavigation}>
         <button className="site-share-button" type="button" onClick={() => void shareSite()}>
           <span className="site-nav-marker" aria-hidden="true">
@@ -57,7 +70,7 @@ export function SiteHeader({ owner }: { owner: boolean }) {
             <Link
               key={item.href}
               className={active ? "is-active" : undefined}
-              href={item.href}
+              href={scopedHref(item.href)}
               aria-current={active ? "page" : undefined}
             >
               <span className="site-nav-marker" aria-hidden="true">

@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getDataDirectory } from "../config.ts";
 import { getDataset } from "../data/database.ts";
+import { optimizedPhotoKeyPattern } from "./photo-storage-key.ts";
 import type {
   ImageStorage,
   SaveImageInput,
@@ -125,7 +126,7 @@ export class LocalImageStorage implements ImageStorage {
         .map(async (key) => {
           const imagePath = resolveStoredImagePath(key);
           await rm(imagePath, { force: true });
-          if (/^uploads\/(demo|owner)\/optimized\/[0-9a-f-]+\.webp$/.test(key)) {
+          if (optimizedPhotoKeyPattern.test(key)) {
             await Promise.all(
               (["thumbnail", "preview"] as const).map((variant) =>
                 rm(resolveImagePreviewPath(key, variant), { force: true }),

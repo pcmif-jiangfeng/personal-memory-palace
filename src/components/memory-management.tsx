@@ -3,6 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { memoryMuseumUrl } from "@/client/memory-museum-url";
+import { ClientApiError } from "@/client/http-client";
 import {
   addMemoryNote,
   setMemoryPublic,
@@ -22,6 +24,7 @@ export function MemoryManagement({
   exhibits,
   libraryPhotos,
   libraryNextCursor,
+  museumId,
 }: {
   memory: MemoryDetails;
   candidates: MemorySummary[];
@@ -29,11 +32,14 @@ export function MemoryManagement({
   exhibits: ExhibitPhotoView[];
   libraryPhotos: WorkspacePhotoView[];
   libraryNextCursor: string | null;
+  museumId: string;
 }) {
   const router = useRouter();
   const [title, setTitle] = useState(memory.title);
   const [story, setStory] = useState(memory.story);
   const [stageId, setStageId] = useState(memory.stageId ?? "");
+  // The draft keeps its loaded version even if another control refreshes the page data.
+  const [draftVersion, setDraftVersion] = useState(memory.version);
   const [note, setNote] = useState("");
   const [related, setRelated] = useState<string[]>(
     memory.relatedMemories?.map((item) => item.id) ?? [],
@@ -51,8 +57,12 @@ export function MemoryManagement({
       setMessage(successMessage);
       router.refresh();
       return true;
-    } catch {
-      setError(copy.management.failed);
+    } catch (error) {
+      setError(
+        error instanceof ClientApiError && error.code === "MEMORY_VERSION_CONFLICT"
+          ? copy.management.conflict
+          : copy.management.failed,
+      );
       return false;
     } finally {
       setBusy(false);
@@ -87,7 +97,15 @@ export function MemoryManagement({
           onSubmit={(event) => {
             event.preventDefault();
             void send(
-              () => updateMemoryDetails(memory.id, { title, story, stageId: stageId || null }),
+              async () =>
+                setDraftVersion(
+                  await updateMemoryDetails(memory.id, {
+                    title,
+                    story,
+                    stageId: stageId || null,
+                    version: draftVersion,
+                  }),
+                ),
               copy.management.saved,
             );
           }}
@@ -121,7 +139,7 @@ export function MemoryManagement({
               ))}
             </select>
             <small>
-              <Link href="/stages" target="_blank">
+              <Link href={memoryMuseumUrl("/stages", museumId)} target="_blank">
                 {copy.management.manageStages}
               </Link>{" "}
               {copy.management.manageStagesHint}
@@ -136,6 +154,7 @@ export function MemoryManagement({
       <MemoryExhibitManager
         key={`${memory.id}-${memory.updatedAt}`}
         memoryId={memory.id}
+        museumId={museumId}
         exhibits={exhibits}
         libraryPhotos={libraryPhotos}
         initialNextCursor={libraryNextCursor}
@@ -150,6 +169,17 @@ export function MemoryManagement({
       {error ? (
         <p className="form-error memory-management-message" role="alert">
           {error}
+          {error === copy.management.conflict ? (
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => {
+                if (window.confirm(copy.management.reloadConfirm)) window.location.reload();
+              }}
+            >
+              {copy.management.reloadLatest}
+            </button>
+          ) : null}
         </p>
       ) : null}
 

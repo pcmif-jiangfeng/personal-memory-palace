@@ -31,11 +31,15 @@ export function PhotoWorkspace({
   initialSource,
   initialNextCursor,
   stages,
+  museumId,
+  canDeletePhotos = true,
 }: {
   initialPhotos: WorkspacePhotoView[];
   initialSource: PhotoSource;
   initialNextCursor: string | null;
   stages: Array<{ id: string; title: string }>;
+  museumId: string;
+  canDeletePhotos?: boolean;
 }) {
   const { startUpload } = useUploadTasks();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -91,7 +95,7 @@ export function PhotoWorkspace({
 
   function upload(files: FileList | null) {
     if (!files?.length) return;
-    startUpload(Array.from(files));
+    startUpload(Array.from(files), { museumId });
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -153,7 +157,7 @@ export function PhotoWorkspace({
     }
   }
 
-  const createHref = `/memories/new?photos=${encodeURIComponent([...selected].join(","))}`;
+  const createHref = `/memories/new?museumId=${encodeURIComponent(museumId)}&photos=${encodeURIComponent([...selected].join(","))}`;
   return (
     <div className="workspace-panel">
       <div className="upload-bar">
@@ -250,7 +254,7 @@ export function PhotoWorkspace({
             <button
               type="button"
               className="text-button danger"
-              disabled={batchDeleting || selected.size === 0}
+              disabled={!canDeletePhotos || batchDeleting || selected.size === 0}
               onClick={() => void batchDeleteSelectedPhotos()}
             >
               {batchDeleting ? copy.workspace.batchDeleting : copy.workspace.batchDelete}
@@ -354,7 +358,7 @@ export function PhotoWorkspace({
                 <button
                   type="button"
                   className="photo-tile-delete"
-                  disabled={Boolean(deletingPhotoId)}
+                  disabled={!canDeletePhotos || Boolean(deletingPhotoId)}
                   aria-label={copy.workspace.deletePhotoLabel(photo.name)}
                   onClick={() => void deletePhoto(photo)}
                 >

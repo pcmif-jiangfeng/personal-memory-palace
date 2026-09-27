@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { ClientApiError } from "@/client/http-client";
 import { useRouter } from "next/navigation";
 import { StageCoverSelector, type StageCoverPhotoOption } from "@/components/stage-cover-selector";
 import { StageDeleteAction } from "@/components/stage-delete-action";
@@ -19,6 +20,7 @@ export function StageManager({
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [newCoverVersion, setNewCoverVersion] = useState(0);
+  const draftVersions = useRef(new Map(stages.map((stage) => [stage.id, stage.version])));
 
   async function save(event: React.FormEvent<HTMLFormElement>, stageId?: string) {
     event.preventDefault();
@@ -32,7 +34,11 @@ export function StageManager({
         description: String(data.get("description") ?? ""),
         coverPhotoId: String(data.get("coverPhotoId") ?? "") || null,
       };
-      if (stageId) await updateStage(stageId, input);
+      if (stageId)
+        draftVersions.current.set(
+          stageId,
+          await updateStage(stageId, { ...input, version: draftVersions.current.get(stageId)! }),
+        );
       else await createStage(input);
       if (!stageId) {
         form.reset();
@@ -40,8 +46,12 @@ export function StageManager({
       }
       setMessage(copy.stage.saved);
       router.refresh();
-    } catch {
-      setMessage(copy.editor.saveFailed);
+    } catch (error) {
+      setMessage(
+        error instanceof ClientApiError && error.code === "STAGE_VERSION_CONFLICT"
+          ? copy.stage.conflict
+          : copy.editor.saveFailed,
+      );
     } finally {
       setBusy(null);
     }
@@ -98,6 +108,10 @@ export function StageManager({
         {stages.map((stage) => (
           <form
             key={stage.id}
+            ref={(form) => {
+              if (form && !draftVersions.current.has(stage.id))
+                draftVersions.current.set(stage.id, stage.version);
+            }}
             id={`stage-${stage.id}`}
             className="stage-form"
             onSubmit={(event) => void save(event, stage.id)}
@@ -126,6 +140,17 @@ export function StageManager({
       {message ? (
         <p className="form-message" role="status">
           {message}
+          {message === copy.stage.conflict ? (
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => {
+                if (window.confirm(copy.management.reloadConfirm)) window.location.reload();
+              }}
+            >
+              {copy.management.reloadLatest}
+            </button>
+          ) : null}
         </p>
       ) : null}
     </div>

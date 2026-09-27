@@ -88,6 +88,72 @@ export async function parseOwnerLogin(request: Request) {
   };
 }
 
+export async function parseUserRegistration(request: Request) {
+  const input = await readJsonObject(request);
+  const email = stringValue(input, "email", { required: true, maxLength: 254 })!.toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new ApiError("INVALID_EMAIL", 400);
+  }
+  const password = stringValue(input, "password", {
+    required: true,
+    maxLength: MAX_PASSWORD_LENGTH,
+    trim: false,
+  })!;
+  if (password.trim().length < 12) throw new ApiError("PASSWORD_TOO_SHORT", 400);
+  return {
+    email,
+    password,
+    displayName: stringValue(input, "displayName", { required: true, maxLength: 80 })!,
+  };
+}
+
+export async function parseEmailVerification(request: Request) {
+  const input = await readJsonObject(request);
+  if (typeof input.token !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(input.token)) {
+    throw new ApiError("INVALID_VERIFICATION_TOKEN", 400);
+  }
+  return { token: input.token };
+}
+
+export async function parseResendVerification(request: Request) {
+  const input = await readJsonObject(request);
+  const email = stringValue(input, "email", { required: true, maxLength: 254 })!.toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new ApiError("INVALID_EMAIL", 400);
+  }
+  return { email };
+}
+
+export async function parseUserLogin(request: Request) {
+  const input = await readJsonObject(request);
+  const email = stringValue(input, "email", { required: true, maxLength: 254 })!.toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new ApiError("INVALID_EMAIL", 400);
+  }
+  return {
+    email,
+    password: stringValue(input, "password", {
+      required: true,
+      maxLength: MAX_PASSWORD_LENGTH,
+      trim: false,
+    })!,
+  };
+}
+
+export async function parsePasswordResetConfirmation(request: Request) {
+  const input = await readJsonObject(request);
+  if (typeof input.token !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(input.token)) {
+    throw new ApiError("INVALID_RESET_TOKEN", 400);
+  }
+  const password = stringValue(input, "newPassword", {
+    required: true,
+    maxLength: MAX_PASSWORD_LENGTH,
+    trim: false,
+  })!;
+  if (password.trim().length < 12) throw new ApiError("PASSWORD_TOO_SHORT", 400);
+  return { token: input.token, newPassword: password };
+}
+
 export async function parseShareAccess(request: Request) {
   const input = await readJsonObject(request);
   return {
@@ -114,9 +180,12 @@ export async function parseShareConfiguration(request: Request) {
   };
 }
 
-export async function parseStageInput(request: Request) {
+export async function parseStageInput(request: Request, requireVersion = false) {
   const input = await readJsonObject(request);
+  if (requireVersion && (!Number.isSafeInteger(input.version) || (input.version as number) < 1))
+    throw new ApiError("INVALID_STAGE_VERSION", 400);
   return {
+    version: requireVersion ? (input.version as number) : undefined,
     title: stringValue(input, "title", { required: true, maxLength: STAGE_TITLE_MAX_LENGTH })!,
     description:
       stringValue(input, "description", { maxLength: STAGE_DESCRIPTION_MAX_LENGTH }) ?? "",
@@ -147,8 +216,12 @@ export async function parseMemoryAction(request: Request) {
     return { action, isPublic: input.isPublic } as const;
   }
   if (action === "details") {
+    if (!Number.isSafeInteger(input.version) || (input.version as number) < 1) {
+      throw new ApiError("INVALID_MEMORY_VERSION", 400);
+    }
     return {
       action,
+      version: input.version as number,
       title: stringValue(input, "title", { required: true, maxLength: MEMORY_TITLE_MAX_LENGTH })!,
       story: stringValue(input, "story", { required: true, maxLength: MEMORY_STORY_MAX_LENGTH })!,
       stageId: optionalIdentifier(input, "stageId"),

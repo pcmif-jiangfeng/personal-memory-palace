@@ -185,20 +185,21 @@ curl -I http://127.0.0.1/login
 
 ## 6. 手动一致性备份
 
-备份脚本使用 Node SQLite Backup API 创建数据库快照，随后复制 Owner 上传目录、运行 `PRAGMA integrity_check` 并写入 manifest。为了让数据库和图片属于同一个稳定快照，执行时必须短暂停止应用写入。
+备份脚本使用 Node SQLite Backup API 创建数据库快照，随后复制 Owner 上传目录、运行 `PRAGMA integrity_check` 并写入 manifest。为了让数据库和图片属于同一个稳定快照，执行时必须短暂停止应用写入。迁移前请按 [备份与隔离恢复 SOP](MIGRATION_BACKUP_SOP.md) 完成配置备份和恢复验收。
 
 ```bash
 cd /opt/personal-memory-palace/app
-APP_VERSION="$(git rev-parse --short HEAD)"
+APP_VERSION="$(docker image inspect personal-memory-palace:current --format '{{.Id}}')"
 docker stop personal-memory-palace
 
 docker run --rm \
   --entrypoint node \
   -e MEMORY_PALACE_APP_VERSION="$APP_VERSION" \
   -v /opt/personal-memory-palace/data:/app/data:ro \
+  -v /opt/personal-memory-palace/config/app.env:/app/config/app.env:ro \
   -v /opt/personal-memory-palace/backups:/app/backups \
   personal-memory-palace:current \
-  /app/maintenance/backup.mjs /app/data /app/backups --quiesced
+  /app/maintenance/backup.mjs /app/data /app/backups --quiesced --config-file /app/config/app.env
 
 docker start personal-memory-palace
 find /opt/personal-memory-palace/backups -maxdepth 2 -type f -print
@@ -212,6 +213,8 @@ backup-20260916-210000/
 │   └── palace.sqlite
 ├── uploads/
 │   └── owner/
+├── config/
+│   └── app.env
 └── manifest.txt
 ```
 
@@ -219,7 +222,7 @@ backup-20260916-210000/
 
 ## 7. 隔离恢复测试
 
-恢复工具拒绝写入非空目录，并会先检查 SQLite 完整性及所有数据库引用的上传文件。它不会覆盖生产数据。
+恢复工具拒绝写入非空目录，会检查 SQLite 完整性及所有数据库引用的上传文件，并对恢复后的数据库再次运行完整性检查。它不会覆盖生产数据。
 
 ```bash
 LATEST_BACKUP="$(find /opt/personal-memory-palace/backups -mindepth 1 -maxdepth 1 -type d -name 'backup-*' | sort | tail -n 1)"
@@ -235,7 +238,7 @@ docker run --rm \
 
 docker run -d \
   --name memory-palace-restore-test \
-  --env-file /opt/personal-memory-palace/config/app.env \
+  --env-file "$RESTORE_DIR/.migration-config/app.env" \
   -v "$RESTORE_DIR":/app/data \
   -p 127.0.0.1:8081:3000 \
   personal-memory-palace:current

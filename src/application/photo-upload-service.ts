@@ -5,6 +5,7 @@ import type { UploadedPhoto } from "../domain/models.ts";
 import type { SaveOptimizedImageInput, SavedImage } from "../storage/image-storage.ts";
 import { validateWebOptimizedImage } from "../storage/image-processor.ts";
 import { imageStorage } from "../storage/local-image-storage.ts";
+import { ApiError } from "../http/errors.ts";
 
 export interface PhotoUploadDependencies {
   createStorageKey: () => string;
@@ -54,7 +55,8 @@ export async function uploadOptimizedPhoto(
       saved,
     });
     return { ok: true, photo };
-  } catch {
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
     return { ok: false, error: "IMAGE_STORAGE_FAILED" };
   }
 }

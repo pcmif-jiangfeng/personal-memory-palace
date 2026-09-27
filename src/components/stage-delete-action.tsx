@@ -11,6 +11,7 @@ interface StageDeleteActionProps {
   stageTitle: string;
   mode?: "button" | "menu";
   redirectTo?: string;
+  museumId?: string;
 }
 
 export function StageDeleteAction({
@@ -18,6 +19,7 @@ export function StageDeleteAction({
   stageTitle,
   mode = "button",
   redirectTo,
+  museumId,
 }: StageDeleteActionProps) {
   const router = useRouter();
   const deletingRef = useRef(false);
@@ -54,7 +56,11 @@ export function StageDeleteAction({
         <details>
           <summary aria-label={copy.stage.openActions}>···</summary>
           <div className="stage-card-menu-panel">
-            <Link href={"/stages#stage-" + stageId}>{copy.stage.editAction}</Link>
+            <Link
+              href={`/stages${museumId ? `?museumId=${encodeURIComponent(museumId)}` : ""}#stage-${stageId}`}
+            >
+              {copy.stage.editAction}
+            </Link>
             <button type="button" disabled={busy} onClick={() => void deleteStage()}>
               {busy ? copy.stage.deleting : copy.stage.deleteAction}
             </button>

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { cp, mkdir, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, copyFile, cp, mkdir, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { backup, DatabaseSync } from "node:sqlite";
 import { pathToFileURL } from "node:url";
@@ -35,13 +35,17 @@ export async function createBackup({
   now = new Date(),
   applicationVersion = process.env.MEMORY_PALACE_APP_VERSION || "unknown",
   quiesced = false,
+  configFile,
 }) {
   if (!quiesced) {
     throw new Error("Backup requires explicit --quiesced confirmation after writes are stopped");
   }
   const databasePath = path.join(dataDirectory, "palace.sqlite");
-  const uploadSource = path.join(dataDirectory, "images", "uploads", "owner");
+  const uploadSource = path.join(dataDirectory, "images", "uploads");
   if (!(await exists(databasePath))) throw new Error(`Database not found: ${databasePath}`);
+  if (configFile !== undefined && (!configFile || !(await exists(configFile)))) {
+    throw new Error(`Config file not found: ${configFile}`);
+  }
 
   await mkdir(backupRoot, { recursive: true });
   const name = `backup-${timestamp(now)}`;
@@ -50,8 +54,9 @@ export async function createBackup({
   const temporary = path.join(backupRoot, `.${name}-${randomUUID()}.partial`);
 
   try {
+    await mkdir(temporary, { mode: 0o700 });
     const databaseDestination = path.join(temporary, "database", "palace.sqlite");
-    const uploadDestination = path.join(temporary, "uploads", "owner");
+    const uploadDestination = path.join(temporary, "uploads");
     await mkdir(path.dirname(databaseDestination), { recursive: true });
 
     const sourceDatabase = new DatabaseSync(databasePath, { readOnly: true });
@@ -67,6 +72,14 @@ export async function createBackup({
       await mkdir(uploadDestination, { recursive: true });
     }
 
+    if (configFile) {
+      const configDirectory = path.join(temporary, "config");
+      await mkdir(configDirectory, { mode: 0o700 });
+      const configDestination = path.join(configDirectory, "app.env");
+      await copyFile(configFile, configDestination);
+      await chmod(configDestination, 0o600);
+    }
+
     const verifiedDatabase = new DatabaseSync(databaseDestination, { readOnly: true });
     try {
       const result = verifiedDatabase.prepare("PRAGMA integrity_check").get();
@@ -80,6 +93,7 @@ export async function createBackup({
       `backup_time=${now.toISOString()}`,
       `application_version=${applicationVersion}`,
       "database_filename=palace.sqlite",
+      `config_filename=${configFile ? "app.env" : "none"}`,
       `upload_file_count=${uploadFileCount}`,
       `source_database=${databasePath}`,
       `source_uploads=${uploadSource}`,
@@ -101,7 +115,15 @@ if (import.meta.url === invokedPath) {
     process.argv[2] || process.env.MEMORY_PALACE_DATA_DIR || "data",
   );
   const backupRoot = path.resolve(process.argv[3] || "backups");
-  createBackup({ dataDirectory, backupRoot, quiesced: process.argv.includes("--quiesced") })
+  const configIndex = process.argv.indexOf("--config-file");
+  const configArgument = configIndex === -1 ? undefined : process.argv[configIndex + 1] || "";
+  const configFile = configArgument ? path.resolve(configArgument) : configArgument;
+  createBackup({
+    dataDirectory,
+    backupRoot,
+    configFile,
+    quiesced: process.argv.includes("--quiesced"),
+  })
     .then((destination) => console.log(`Backup created: ${destination}`))
     .catch((error) => {
       console.error(error.message);

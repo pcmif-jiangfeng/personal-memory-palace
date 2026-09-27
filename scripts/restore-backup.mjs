@@ -1,4 +1,4 @@
-import { cp, mkdir, readdir, stat } from "node:fs/promises";
+import { chmod, copyFile, cp, mkdir, readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { pathToFileURL } from "node:url";
@@ -35,8 +35,13 @@ export async function restoreBackup({ backupDirectory, targetDataDirectory }) {
   const databaseSource = path.join(backupDirectory, "database", "palace.sqlite");
   const uploadSource = path.join(backupDirectory, "uploads");
   const manifest = path.join(backupDirectory, "manifest.txt");
+  const configSource = path.join(backupDirectory, "config", "app.env");
   if (!(await exists(databaseSource)) || !(await exists(manifest))) {
     throw new Error("Backup is incomplete: database or manifest is missing");
+  }
+  const manifestContents = await readFile(manifest, "utf8");
+  if (manifestContents.includes("config_filename=app.env") && !(await exists(configSource))) {
+    throw new Error("Backup is incomplete: config/app.env is missing");
   }
   if (await exists(targetDataDirectory)) {
     const entries = await readdir(targetDataDirectory);
@@ -70,6 +75,24 @@ export async function restoreBackup({ backupDirectory, targetDataDirectory }) {
       recursive: true,
       force: false,
     });
+  }
+  if (await exists(configSource)) {
+    const configDirectory = path.join(targetDataDirectory, ".migration-config");
+    await mkdir(configDirectory, { mode: 0o700 });
+    const restoredConfig = path.join(configDirectory, "app.env");
+    await copyFile(configSource, restoredConfig);
+    await chmod(restoredConfig, 0o600);
+  }
+
+  const restoredDatabase = new DatabaseSync(path.join(targetDataDirectory, "palace.sqlite"), {
+    readOnly: true,
+  });
+  try {
+    if (restoredDatabase.prepare("PRAGMA integrity_check").get().integrity_check !== "ok") {
+      throw new Error("Restored SQLite integrity check failed");
+    }
+  } finally {
+    restoredDatabase.close();
   }
   return summary;
 }

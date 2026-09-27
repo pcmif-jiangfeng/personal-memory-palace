@@ -1,6 +1,11 @@
 export type Visibility = "private" | "shared";
 
 export interface Stage {
+  version: number;
+  createdByUserId: string | null;
+  lastEditedByUserId: string | null;
+  createdByDisplayName: string | null;
+  lastEditedByDisplayName: string | null;
   id: string;
   title: string;
   description: string;
@@ -25,7 +30,12 @@ export interface UploadedPhoto {
 }
 
 export interface Memory {
+  version: number;
   id: string;
+  createdByUserId: string | null;
+  lastEditedByUserId: string | null;
+  createdByDisplayName: string | null;
+  lastEditedByDisplayName: string | null;
   stageId: string | null;
   title: string;
   story: string;

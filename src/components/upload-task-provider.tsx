@@ -14,6 +14,7 @@ import {
 } from "react";
 import { ImageOptimizationError, optimizeImageForUpload } from "@/upload/client-image-optimizer";
 import { createClientRandomId } from "@/upload/client-random-id";
+import { memoryMuseumUrl } from "@/client/memory-museum-url";
 import { copy } from "@/i18n/zh-CN";
 import { isUploadTaskFinished, summarizeUploadStatuses } from "@/upload/upload-task-model";
 import {
@@ -24,6 +25,7 @@ import {
 } from "@/upload/upload-task-reducer";
 
 interface QueueEntry {
+  uploadUrl: string;
   batchId: string;
   itemId: string;
   file: File;
@@ -39,6 +41,7 @@ interface UploadTaskContextValue {
   startUpload: (
     files: File[],
     options?: {
+      museumId?: string;
       onPhotoUploaded?: (photoId: string) => void | Promise<void>;
     },
   ) => void;
@@ -116,7 +119,7 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
         const formData = new FormData();
         formData.append("photos", optimized, "optimized.webp");
         formData.set("originalName", entry.file.name);
-        const response = await fetch("/api/photos", { method: "POST", body: formData });
+        const response = await fetch(entry.uploadUrl, { method: "POST", body: formData });
         const result = (await response.json().catch(() => ({}))) as {
           error?: string;
           photos?: Array<{ id: string }>;
@@ -185,7 +188,10 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
   }, [pump]);
 
   const startUpload = useCallback(
-    (files: File[], options?: { onPhotoUploaded?: (photoId: string) => void | Promise<void> }) => {
+    (
+      files: File[],
+      options?: { museumId?: string; onPhotoUploaded?: (photoId: string) => void | Promise<void> },
+    ) => {
       if (files.length === 0) return;
       const batchId = createClientRandomId();
       const items = files.map<UploadItem>((file, index) => ({
@@ -195,6 +201,7 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
         error: index < maximumFilesPerBatch ? undefined : copy.uploadTasks.batchLimit,
       }));
       const batch: UploadBatch = {
+        workspaceUrl: memoryMuseumUrl("/workspace", options?.museumId),
         id: batchId,
         createdAt: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
         expanded: false,
@@ -206,6 +213,7 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
           batchId,
           itemId: item.id,
           file: files[index],
+          uploadUrl: memoryMuseumUrl("/api/photos", options?.museumId),
           onPhotoUploaded: options?.onPhotoUploaded,
         })),
       );
@@ -351,7 +359,9 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
                           {copy.uploadTasks.cancelBatch}
                         </button>
                       ) : null}
-                      <Link href="/workspace">{copy.uploadTasks.openWorkspace}</Link>
+                      <Link href={batch.workspaceUrl ?? "/workspace"}>
+                        {copy.uploadTasks.openWorkspace}
+                      </Link>
                     </div>
                   </div>
                 ) : null}

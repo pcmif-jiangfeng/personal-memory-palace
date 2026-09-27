@@ -193,12 +193,17 @@ export const copy = {
     manageStagesHint: "会在新标签页打开；创建后刷新本页即可选择。",
   },
   management: {
+    museumConflict: "博物馆资料已被更新，本次保存未覆盖新内容。草稿仍保留，请复制草稿后重新加载。",
     editDetails: "编辑标题、Original Story 与人生章节",
     originalStory: "Original Story",
     saveDetails: "保存基本信息",
     saving: "正在保存…",
     saved: "基本信息已保存",
     failed: "保存失败，请检查标题、Story 和人生章节。",
+    conflict:
+      "这段 Memory 已被更新，本次保存未覆盖新内容。你的草稿仍保留，请复制草稿后重新加载最新内容。",
+    reloadLatest: "重新加载最新内容",
+    reloadConfirm: "重新加载会丢弃当前未保存的草稿。请先复制需要保留的内容，是否继续？",
     manageStages: "管理人生章节",
     manageStagesHint: "创建新章节后刷新本页。",
     laterNote: "追加 Later Note",
@@ -264,6 +269,7 @@ export const copy = {
     imageNumber: (index: number) => `展品 ${String(index).padStart(2, "0")}`,
   },
   stage: {
+    conflict: "这个人生章节已被更新，本次保存未覆盖新内容。草稿仍保留，请复制草稿后重新加载。",
     label: "LIFE CHAPTER",
     manageTitle: "管理人生章节",
     manageDescription: "Stage 是你自己定义的人生章节，不采用系统预设分类。",

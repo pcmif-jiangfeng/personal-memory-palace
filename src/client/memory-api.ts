@@ -1,4 +1,5 @@
 import { requestJson } from "./http-client.ts";
+import { memoryMuseumUrl } from "./memory-museum-url.ts";
 
 export interface CreateMemoryInput {
   title: string;
@@ -10,6 +11,7 @@ export interface CreateMemoryInput {
 }
 
 export interface MemoryDetailsInput {
+  version: number;
   title: string;
   story: string;
   stageId: string | null;
@@ -40,9 +42,13 @@ function decodeRecall(value: unknown): { id: string } | null {
   return { id: record.id };
 }
 
-function performMemoryAction(memoryId: string, action: Record<string, unknown>): Promise<void> {
+function performMemoryAction(
+  memoryId: string,
+  action: Record<string, unknown>,
+  museumId?: string,
+): Promise<void> {
   return requestJson(
-    `/api/memories/${encodeURIComponent(memoryId)}`,
+    memoryMuseumUrl(`/api/memories/${encodeURIComponent(memoryId)}`, museumId),
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -54,7 +60,7 @@ function performMemoryAction(memoryId: string, action: Record<string, unknown>):
 
 export function createMemory(input: CreateMemoryInput): Promise<{ id: string }> {
   return requestJson(
-    "/api/memories",
+    memoryMuseumUrl("/api/memories"),
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -64,8 +70,22 @@ export function createMemory(input: CreateMemoryInput): Promise<{ id: string }> 
   );
 }
 
-export function updateMemoryDetails(memoryId: string, input: MemoryDetailsInput): Promise<void> {
-  return performMemoryAction(memoryId, { action: "details", ...input });
+export function updateMemoryDetails(memoryId: string, input: MemoryDetailsInput): Promise<number> {
+  return requestJson(
+    memoryMuseumUrl(`/api/memories/${encodeURIComponent(memoryId)}`),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "details", ...input }),
+    },
+    (value) => {
+      const record = readRecord(value);
+      decodeOk(value);
+      if (!Number.isSafeInteger(record.version) || (record.version as number) < 1)
+        throw new TypeError("Expected a Memory version");
+      return record.version as number;
+    },
+  );
 }
 
 export function setMemoryPublic(memoryId: string, isPublic: boolean): Promise<void> {
@@ -84,8 +104,12 @@ export function trashMemory(memoryId: string): Promise<void> {
   return performMemoryAction(memoryId, { action: "trash" });
 }
 
-export function addMemoryPhotos(memoryId: string, photoIds: string[]): Promise<void> {
-  return performMemoryAction(memoryId, { action: "addPhotos", photoIds });
+export function addMemoryPhotos(
+  memoryId: string,
+  photoIds: string[],
+  museumId?: string,
+): Promise<void> {
+  return performMemoryAction(memoryId, { action: "addPhotos", photoIds }, museumId);
 }
 
 export function removeMemoryPhoto(memoryId: string, photoId: string): Promise<void> {
@@ -115,5 +139,5 @@ export function updateMemoryExhibitMetadata(
 }
 
 export function recallMemory(): Promise<{ id: string } | null> {
-  return requestJson("/api/recall", { cache: "no-store" }, decodeRecall);
+  return requestJson(memoryMuseumUrl("/api/recall"), { cache: "no-store" }, decodeRecall);
 }

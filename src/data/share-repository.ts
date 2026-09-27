@@ -2,7 +2,7 @@ import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from
 import type { DatabaseSync } from "node:sqlite";
 import { getSessionSecret } from "../config.ts";
 import { getDatabase } from "./database.ts";
-import { findMemoryDetails } from "./memory-repository.ts";
+import { findMemoryDetailsInDatabase } from "./memory-repository.ts";
 import { withTransaction } from "./transaction.ts";
 import { DomainError } from "../domain/errors.ts";
 import { isMemoryPublicInDatabase } from "./publication-repository.ts";
@@ -15,6 +15,7 @@ type ShareAccessRow = {
   password_hash: string | null;
   visibility: string;
   trashed_at: string | null;
+  museum_id: string | null;
 };
 
 function legacyHash(value: string): string {
@@ -45,7 +46,10 @@ function verifyPassword(value: string, storedHash: string): boolean {
 }
 
 function setMemoryVisibilityInDatabase(database: DatabaseSync, memoryId: string, shared: boolean) {
-  const result = database.prepare("UPDATE memories SET visibility = ?, updated_at = ? WHERE id = ? AND trashed_at IS NULL")
+  const result = database
+    .prepare(
+      "UPDATE memories SET visibility = ?, updated_at = ? WHERE id = ? AND trashed_at IS NULL",
+    )
     .run(shared ? "shared" : "private", new Date().toISOString(), memoryId);
   if (!result.changes) throw new DomainError("MEMORY_NOT_FOUND");
 }
@@ -62,17 +66,44 @@ export function configureShareInDatabase(
   rotate = false,
 ) {
   if (mode === "password" && !password?.trim()) throw new DomainError("PASSWORD_REQUIRED");
-  const memory = database.prepare("SELECT id FROM memories WHERE id = ? AND trashed_at IS NULL").get(memoryId);
+  const memory = database
+    .prepare("SELECT id,museum_id FROM memories WHERE id = ? AND trashed_at IS NULL")
+    .get(memoryId);
   if (!memory) throw new DomainError("MEMORY_NOT_FOUND");
   return withTransaction(database, () => {
     setMemoryVisibilityInDatabase(database, memoryId, true);
-    const existing = database.prepare("SELECT id FROM share_configs WHERE memory_id = ?").get(memoryId) as { id: string } | undefined;
+    const existing = database
+      .prepare("SELECT id FROM share_configs WHERE memory_id = ?")
+      .get(memoryId) as { id: string } | undefined;
     const token = !existing || rotate ? randomBytes(18).toString("base64url") : existing.id;
     const now = new Date().toISOString();
-    if (existing) database.prepare("UPDATE share_configs SET id = ?, enabled = 1, access_mode = ?, password_hash = ?, updated_at = ? WHERE memory_id = ?")
-      .run(token, mode, mode === "password" ? hashPassword(password!) : null, now, memoryId);
-    else database.prepare("INSERT INTO share_configs (id, memory_id, enabled, access_mode, password_hash, created_at, updated_at) VALUES (?, ?, 1, ?, ?, ?, ?)")
-      .run(token, memoryId, mode, mode === "password" ? hashPassword(password!) : null, now, now);
+    if (existing)
+      database
+        .prepare(
+          "UPDATE share_configs SET id = ?, enabled = 1, access_mode = ?, password_hash = ?, updated_at = ?, museum_id=? WHERE memory_id = ?",
+        )
+        .run(
+          token,
+          mode,
+          mode === "password" ? hashPassword(password!) : null,
+          now,
+          memory.museum_id,
+          memoryId,
+        );
+    else
+      database
+        .prepare(
+          "INSERT INTO share_configs (id, memory_id, enabled, access_mode, password_hash, created_at, updated_at, museum_id) VALUES (?, ?, 1, ?, ?, ?, ?, ?)",
+        )
+        .run(
+          token,
+          memoryId,
+          mode,
+          mode === "password" ? hashPassword(password!) : null,
+          now,
+          now,
+          memory.museum_id,
+        );
     return token;
   });
 }
@@ -87,22 +118,34 @@ export function configureShare(
 }
 
 export function disableShare(memoryId: string) {
-  const database = getDatabase();
+  disableShareInDatabase(getDatabase(), memoryId);
+}
+
+export function disableShareInDatabase(database: DatabaseSync, memoryId: string) {
   withTransaction(database, () => {
-    database.prepare("UPDATE share_configs SET enabled = 0, updated_at = ? WHERE memory_id = ?").run(new Date().toISOString(), memoryId);
+    database
+      .prepare("UPDATE share_configs SET enabled = 0, updated_at = ? WHERE memory_id = ?")
+      .run(new Date().toISOString(), memoryId);
     setMemoryVisibilityInDatabase(database, memoryId, false);
   });
 }
 
 function accessDigest(token: string, passwordHash: string): string {
-  return createHmac("sha256", getSessionSecret()).update(`${token}:${passwordHash}`).digest("base64url");
+  return createHmac("sha256", getSessionSecret())
+    .update(`${token}:${passwordHash}`)
+    .digest("base64url");
 }
 
 export function shareAccessCookieName(token: string): string {
   return `memory_palace_share_${token}`;
 }
 
-function hasShareAccess(row: ShareAccessRow, token: string, password?: string, accessCookie?: string): boolean {
+function hasShareAccess(
+  row: ShareAccessRow,
+  token: string,
+  password?: string,
+  accessCookie?: string,
+): boolean {
   if (row.access_mode === "link") return true;
   if (!row.password_hash) return false;
   if (accessCookie === accessDigest(token, row.password_hash)) return true;
@@ -110,17 +153,41 @@ function hasShareAccess(row: ShareAccessRow, token: string, password?: string, a
 }
 
 export function getShareAccessCookieValue(token: string) {
-  const row = getDatabase().prepare("SELECT password_hash FROM share_configs WHERE id = ? AND enabled = 1").get(token) as { password_hash: string | null } | undefined;
+  const row = readAccessibleShare(getDatabase(), token);
   return row?.password_hash ? accessDigest(token, row.password_hash) : null;
 }
 export function getSharedMemory(token: string, password?: string, accessCookie?: string) {
-  const row = getDatabase().prepare(`SELECT share_configs.*, memories.visibility, memories.trashed_at
-    FROM share_configs JOIN memories ON memories.id = share_configs.memory_id
-    WHERE share_configs.id = ? AND share_configs.enabled = 1`).get(token) as ShareAccessRow | undefined;
-  if (!row || row.visibility !== "shared" || row.trashed_at ||
-      !isMemoryPublicInDatabase(getDatabase(), row.memory_id) ||
-      !hasShareAccess(row, token, password, accessCookie)) return null;
-  return findMemoryDetails(row.memory_id);
+  return getSharedMemoryInDatabase(getDatabase(), token, password, accessCookie);
+}
+
+function readAccessibleShare(database: DatabaseSync, token: string) {
+  const row = database
+    .prepare(
+      `SELECT share_configs.*, memories.visibility, memories.trashed_at
+    FROM share_configs JOIN memories ON memories.id=share_configs.memory_id
+    LEFT JOIN museums ON museums.id=memories.museum_id
+    WHERE share_configs.id=? AND share_configs.enabled=1
+      AND share_configs.museum_id IS memories.museum_id
+      AND (memories.museum_id IS NULL OR museums.status='active')`,
+    )
+    .get(token) as ShareAccessRow | undefined;
+  return row &&
+    row.visibility === "shared" &&
+    !row.trashed_at &&
+    isMemoryPublicInDatabase(database, row.memory_id)
+    ? row
+    : undefined;
+}
+
+export function getSharedMemoryInDatabase(
+  database: DatabaseSync,
+  token: string,
+  password?: string,
+  accessCookie?: string,
+) {
+  const row = readAccessibleShare(database, token);
+  if (!row || !hasShareAccess(row, token, password, accessCookie)) return null;
+  return findMemoryDetailsInDatabase(database, row.memory_id, true, row.museum_id ?? undefined);
 }
 
 export function isSharedImageAccessibleInDatabase(
@@ -129,7 +196,9 @@ export function isSharedImageAccessibleInDatabase(
   storageKey: string,
   accessCookie?: string,
 ): boolean {
-  const row = database.prepare(`
+  const row = database
+    .prepare(
+      `
     SELECT share_configs.memory_id, share_configs.access_mode, share_configs.password_hash,
       memories.visibility, memories.trashed_at
     FROM share_configs
@@ -137,24 +206,37 @@ export function isSharedImageAccessibleInDatabase(
     JOIN memory_images ON memory_images.memory_id = memories.id
     WHERE share_configs.id = ?
       AND share_configs.enabled = 1
+      AND share_configs.museum_id IS memories.museum_id
+      AND (memories.museum_id IS NULL OR EXISTS (SELECT 1 FROM museums WHERE museums.id=memories.museum_id AND museums.status='active'))
       AND memory_images.storage_key = ?
-  `).get(token, storageKey) as ShareAccessRow | undefined;
-  return Boolean(row && row.visibility === "shared" && !row.trashed_at &&
+      AND memory_images.museum_id IS memories.museum_id
+      AND (memories.museum_id IS NULL OR EXISTS (SELECT 1 FROM uploaded_photos p WHERE p.optimized_storage_key=memory_images.storage_key AND p.museum_id=memories.museum_id))
+  `,
+    )
+    .get(token, storageKey) as ShareAccessRow | undefined;
+  return Boolean(
+    row &&
+    row.visibility === "shared" &&
+    !row.trashed_at &&
     isMemoryPublicInDatabase(database, row.memory_id) &&
-    hasShareAccess(row, token, undefined, accessCookie));
+    hasShareAccess(row, token, undefined, accessCookie),
+  );
 }
 
-export function isSharedImageAccessible(token: string, storageKey: string, accessCookie?: string): boolean {
+export function isSharedImageAccessible(
+  token: string,
+  storageKey: string,
+  accessCookie?: string,
+): boolean {
   return isSharedImageAccessibleInDatabase(getDatabase(), token, storageKey, accessCookie);
 }
 
 export function getShareConfig(memoryId: string) {
-  return getDatabase().prepare("SELECT id, enabled, access_mode FROM share_configs WHERE memory_id = ?").get(memoryId) as { id: string; enabled: number; access_mode: ShareMode } | undefined;
+  return getDatabase()
+    .prepare("SELECT id, enabled, access_mode FROM share_configs WHERE memory_id = ?")
+    .get(memoryId) as { id: string; enabled: number; access_mode: ShareMode } | undefined;
 }
 
 export function shareTokenExists(token: string) {
-  const row = getDatabase().prepare(
-    "SELECT memory_id FROM share_configs WHERE id = ? AND enabled = 1",
-  ).get(token) as { memory_id: string } | undefined;
-  return Boolean(row && isMemoryPublicInDatabase(getDatabase(), row.memory_id));
+  return Boolean(readAccessibleShare(getDatabase(), token));
 }

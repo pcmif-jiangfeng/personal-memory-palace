@@ -1,4 +1,5 @@
 import { requestJson } from "./http-client.ts";
+import { memoryMuseumUrl } from "./memory-museum-url.ts";
 
 export type TrashType = "memory" | "stage";
 export type TrashAction = "restore" | "permanent";
@@ -40,7 +41,7 @@ export function applyTrashAction(
   action: TrashAction,
 ): Promise<TrashBatchResult> {
   return requestJson(
-    "/api/trash",
+    memoryMuseumUrl("/api/trash"),
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

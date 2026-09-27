@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { recallMemory } from "@/client/memory-api";
+import { memoryMuseumUrl } from "@/client/memory-museum-url";
 import { copy } from "@/i18n/zh-CN";
 
 type RecallStatus = "idle" | "spinning" | "empty" | "error";
@@ -26,7 +27,7 @@ export function TimeGear({ owner = true }: { owner?: boolean }) {
         : new Promise<void>((resolve) => window.setTimeout(resolve, 650));
       const [memory] = await Promise.all([recallMemory(), ritualDelay]);
       if (memory?.id) {
-        router.push(`/memories/${encodeURIComponent(memory.id)}`);
+        router.push(memoryMuseumUrl(`/memories/${encodeURIComponent(memory.id)}`));
         return;
       }
       setStatus("empty");

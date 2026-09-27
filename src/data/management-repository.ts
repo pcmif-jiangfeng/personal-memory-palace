@@ -10,8 +10,10 @@ import {
   MEMORY_TITLE_MAX_LENGTH,
 } from "../domain/rules.ts";
 import { DomainError, type DomainErrorCode } from "../domain/errors.ts";
+import { ApiError } from "../http/errors.ts";
 
 export interface UpdateMemoryDetailsInput {
+  version?: number;
   title: string;
   story: string;
   stageId?: string | null;
@@ -35,16 +37,22 @@ export function updateMemoryDetailsInDatabase(
   if (story.length > MEMORY_STORY_MAX_LENGTH) throw new DomainError("STORY_TOO_LONG");
 
   withTransaction(database, () => {
-    if (!database.prepare(
-      "SELECT id FROM memories WHERE id = ? AND trashed_at IS NULL"
-    ).get(memoryId)) throw new DomainError("MEMORY_NOT_FOUND");
-    if (stageId && !database.prepare(
-      "SELECT id FROM stages WHERE id = ? AND trashed_at IS NULL"
-    ).get(stageId)) throw new DomainError("INVALID_STAGE");
+    if (
+      !database.prepare("SELECT id FROM memories WHERE id = ? AND trashed_at IS NULL").get(memoryId)
+    )
+      throw new DomainError("MEMORY_NOT_FOUND");
+    if (
+      stageId &&
+      !database.prepare("SELECT id FROM stages WHERE id = ? AND trashed_at IS NULL").get(stageId)
+    )
+      throw new DomainError("INVALID_STAGE");
 
-    database.prepare(
-      "UPDATE memories SET title = ?, story = ?, stage_id = ?, updated_at = ? WHERE id = ?"
-    ).run(title, story, stageId, new Date().toISOString(), memoryId);
+    const result = database
+      .prepare(
+        "UPDATE memories SET title = ?, story = ?, stage_id = ?, updated_at = ?, version = version + 1 WHERE id = ? AND (? IS NULL OR version = ?)",
+      )
+      .run(title, story, stageId, new Date().toISOString(), memoryId, input.version ?? null, input.version ?? null);
+    if (!result.changes) throw new ApiError("MEMORY_VERSION_CONFLICT", 409);
   });
 }
 
@@ -52,14 +60,18 @@ export function updateMemoryDetails(memoryId: string, input: UpdateMemoryDetails
   updateMemoryDetailsInDatabase(getDatabase(), memoryId, input);
 }
 
-export function addLaterNote(memoryId: string, content: string) {
+export function addLaterNote(memoryId: string, content: string, database = getDatabase()) {
   const value = content.trim();
   if (!value) throw new DomainError("NOTE_REQUIRED");
   if (value.length > LATER_NOTE_MAX_LENGTH) throw new DomainError("NOTE_TOO_LONG");
-  const database = getDatabase();
-  if (!database.prepare("SELECT id FROM memories WHERE id = ? AND trashed_at IS NULL").get(memoryId)) throw new DomainError("MEMORY_NOT_FOUND");
+  if (
+    !database.prepare("SELECT id FROM memories WHERE id = ? AND trashed_at IS NULL").get(memoryId)
+  )
+    throw new DomainError("MEMORY_NOT_FOUND");
   const id = randomUUID();
-  database.prepare("INSERT INTO later_notes (id, memory_id, content, created_at) VALUES (?, ?, ?, ?)").run(id, memoryId, value, new Date().toISOString());
+  database
+    .prepare("INSERT INTO later_notes (id, memory_id, content, created_at) VALUES (?, ?, ?, ?)")
+    .run(id, memoryId, value, new Date().toISOString());
   return id;
 }
 
@@ -72,17 +84,26 @@ export function updateMemoryRelationsInDatabase(
   memoryId: string,
   relatedMemoryIds: string[],
 ): void {
-  if (!database.prepare("SELECT id FROM memories WHERE id = ? AND trashed_at IS NULL").get(memoryId)) throw new DomainError("MEMORY_NOT_FOUND");
+  if (
+    !database.prepare("SELECT id FROM memories WHERE id = ? AND trashed_at IS NULL").get(memoryId)
+  )
+    throw new DomainError("MEMORY_NOT_FOUND");
   const ids = [...new Set(relatedMemoryIds)].filter((id) => id !== memoryId);
   if (ids.length > MAX_RELATED_MEMORIES) throw new DomainError("INVALID_RELATIONS");
   if (ids.length) {
     const placeholders = ids.map(() => "?").join(",");
-    const valid = database.prepare(`SELECT id FROM memories WHERE id IN (${placeholders}) AND trashed_at IS NULL`).all(...ids);
+    const valid = database
+      .prepare(`SELECT id FROM memories WHERE id IN (${placeholders}) AND trashed_at IS NULL`)
+      .all(...ids);
     if (valid.length !== ids.length) throw new DomainError("INVALID_RELATIONS");
   }
   withTransaction(database, () => {
-    database.prepare("DELETE FROM memory_relations WHERE memory_id = ? OR related_memory_id = ?").run(memoryId, memoryId);
-    const insert = database.prepare("INSERT INTO memory_relations (memory_id, related_memory_id, created_at) VALUES (?, ?, ?)");
+    database
+      .prepare("DELETE FROM memory_relations WHERE memory_id = ? OR related_memory_id = ?")
+      .run(memoryId, memoryId);
+    const insert = database.prepare(
+      "INSERT INTO memory_relations (memory_id, related_memory_id, created_at) VALUES (?, ?, ?)",
+    );
     const now = new Date().toISOString();
     ids.forEach((id) => insert.run(...[memoryId, id].sort(), now));
     database.prepare("UPDATE memories SET updated_at = ? WHERE id = ?").run(now, memoryId);
@@ -123,13 +144,17 @@ export function trashStageInDatabase(database: DatabaseSync, id: string): void {
       .run(now, now, id);
     if (!result.changes) throw new DomainError("STAGE_NOT_FOUND");
 
-    database.prepare(`
+    database
+      .prepare(
+        `
       UPDATE memories
       SET stage_id = NULL,
           is_public = CASE WHEN (SELECT is_public FROM stages WHERE id = ?) = 0 THEN 0 ELSE is_public END,
           updated_at = ?
       WHERE stage_id = ?
-    `).run(id, now, id);
+    `,
+      )
+      .run(id, now, id);
   });
 }
 export function trashStage(id: string) {
@@ -147,7 +172,7 @@ export function restoreStage(id: string) {
 
 function queueUnreferencedPhotos(database: DatabaseSync, photoIds: string[]): void {
   const select = database.prepare(`
-    SELECT id, optimized_storage_key AS optimizedStorageKey,
+    SELECT id, museum_id AS museumId, optimized_storage_key AS optimizedStorageKey,
            original_storage_key AS originalStorageKey
     FROM uploaded_photos
     WHERE id = ?
@@ -162,19 +187,39 @@ function queueUnreferencedPhotos(database: DatabaseSync, photoIds: string[]): vo
   `);
   const insert = database.prepare(`
     INSERT OR IGNORE INTO photo_deletion_jobs
-      (photo_id, optimized_storage_key, original_storage_key, created_at, last_error)
-    VALUES (?, ?, ?, ?, NULL)
+      (photo_id, optimized_storage_key, original_storage_key, created_at, last_error, museum_id)
+    VALUES (?, ?, ?, ?, NULL, ?)
   `);
   for (const photoId of new Set(photoIds)) {
     const photo = select.get(photoId) as
-      | { id: string; optimizedStorageKey: string; originalStorageKey: string | null }
+      | {
+          id: string;
+          museumId: string | null;
+          optimizedStorageKey: string;
+          originalStorageKey: string | null;
+        }
       | undefined;
     if (!photo) continue;
+    const existingJob = database
+      .prepare(
+        "SELECT photo_id,museum_id,optimized_storage_key,original_storage_key FROM photo_deletion_jobs WHERE photo_id=? OR optimized_storage_key=?",
+      )
+      .get(photo.id, photo.optimizedStorageKey);
+    if (
+      existingJob &&
+      (existingJob.photo_id !== photo.id ||
+        existingJob.museum_id !== photo.museumId ||
+        existingJob.optimized_storage_key !== photo.optimizedStorageKey ||
+        existingJob.original_storage_key !== photo.originalStorageKey)
+    ) {
+      throw new DomainError("INVALID_PHOTOS");
+    }
     insert.run(
       photo.id,
       photo.optimizedStorageKey,
       photo.originalStorageKey,
       new Date().toISOString(),
+      photo.museumId,
     );
     database.prepare("DELETE FROM uploaded_photos WHERE id = ?").run(photo.id);
   }
@@ -182,13 +227,18 @@ function queueUnreferencedPhotos(database: DatabaseSync, photoIds: string[]): vo
 
 export function permanentlyDeleteMemoryInDatabase(database: DatabaseSync, id: string): void {
   withTransaction(database, () => {
-    const photoIds = database.prepare(`
+    const photoIds = database
+      .prepare(
+        `
       SELECT uploaded_photos.id
       FROM memory_images
       JOIN uploaded_photos
         ON uploaded_photos.optimized_storage_key = memory_images.storage_key
       WHERE memory_images.memory_id = ?
-    `).all(id).map(readIdRow);
+    `,
+      )
+      .all(id)
+      .map(readIdRow);
     const result = database
       .prepare("DELETE FROM memories WHERE id = ? AND trashed_at IS NOT NULL")
       .run(id);
@@ -203,13 +253,18 @@ export function permanentlyDeleteMemory(id: string) {
 
 export function permanentlyDeleteStageInDatabase(database: DatabaseSync, id: string): void {
   withTransaction(database, () => {
-    const photoIds = database.prepare(`
+    const photoIds = database
+      .prepare(
+        `
       SELECT uploaded_photos.id
       FROM stage_covers
       JOIN uploaded_photos
         ON uploaded_photos.optimized_storage_key = stage_covers.storage_key
       WHERE stage_covers.stage_id = ?
-    `).all(id).map(readIdRow);
+    `,
+      )
+      .all(id)
+      .map(readIdRow);
     const result = database
       .prepare("DELETE FROM stages WHERE id = ? AND trashed_at IS NOT NULL")
       .run(id);

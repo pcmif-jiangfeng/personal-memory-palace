@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createMemory } from "@/client/memory-api";
+import { memoryMuseumUrl } from "@/client/memory-museum-url";
 import type { MemorySummary, Stage } from "@/domain/models";
 import { copy } from "@/i18n/zh-CN";
 import { imageVariantUrl } from "@/components/image-variant-url";
@@ -18,10 +19,12 @@ export function MemoryEditor({
   photos,
   stages,
   memories,
+  museumId,
 }: {
   photos: EditorPhoto[];
   stages: Stage[];
   memories: MemorySummary[];
+  museumId: string;
 }) {
   const router = useRouter();
   const [coverPhotoId, setCoverPhotoId] = useState(photos[0]?.id ?? "");
@@ -33,7 +36,7 @@ export function MemoryEditor({
     return (
       <div className="empty-state">
         <p>{copy.editor.noPhotos}</p>
-        <Link className="text-link" href="/workspace">
+        <Link className="text-link" href={memoryMuseumUrl("/workspace", museumId)}>
           {copy.editor.backToWorkspace}
         </Link>
       </div>
@@ -63,7 +66,7 @@ export function MemoryEditor({
         coverPhotoId,
         relatedMemoryIds: [...relatedIds],
       });
-      router.push(`/memories/${result.id}`);
+      router.push(memoryMuseumUrl(`/memories/${result.id}`, museumId));
       router.refresh();
     } catch {
       setError(copy.editor.saveFailed);
@@ -117,7 +120,7 @@ export function MemoryEditor({
           ))}
         </select>
         <small>
-          <Link href="/stages" target="_blank">
+          <Link href={memoryMuseumUrl("/stages", museumId)} target="_blank">
             {copy.editor.manageStages}
           </Link>{" "}
           {copy.editor.manageStagesHint}

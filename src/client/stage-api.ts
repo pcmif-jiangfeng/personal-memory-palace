@@ -1,4 +1,5 @@
 import { requestJson } from "./http-client.ts";
+import { memoryMuseumUrl } from "./memory-museum-url.ts";
 
 export interface StageInput {
   title: string;
@@ -29,7 +30,7 @@ function decodeDeleteResponse(value: unknown): void {
 
 export function createStage(input: StageInput): Promise<void> {
   return requestJson(
-    "/api/stages",
+    memoryMuseumUrl("/api/stages"),
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -39,21 +40,30 @@ export function createStage(input: StageInput): Promise<void> {
   );
 }
 
-export function updateStage(stageId: string, input: StageInput): Promise<void> {
+export function updateStage(
+  stageId: string,
+  input: StageInput & { version: number },
+): Promise<number> {
   return requestJson(
-    `/api/stages/${encodeURIComponent(stageId)}`,
+    memoryMuseumUrl(`/api/stages/${encodeURIComponent(stageId)}`),
     {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
     },
-    decodeStageResponse,
+    (value) => {
+      decodeStageResponse(value);
+      const stage = (value as { stage: { version: unknown } }).stage;
+      if (!Number.isSafeInteger(stage.version) || (stage.version as number) < 1)
+        throw new TypeError("Expected a Stage version");
+      return stage.version as number;
+    },
   );
 }
 
 export function deleteStage(stageId: string): Promise<void> {
   return requestJson(
-    `/api/stages/${encodeURIComponent(stageId)}`,
+    memoryMuseumUrl(`/api/stages/${encodeURIComponent(stageId)}`),
     { method: "DELETE" },
     decodeDeleteResponse,
   );
@@ -61,7 +71,7 @@ export function deleteStage(stageId: string): Promise<void> {
 
 export function setStagePublic(stageId: string, isPublic: boolean): Promise<void> {
   return requestJson(
-    `/api/stages/${encodeURIComponent(stageId)}/publication`,
+    memoryMuseumUrl(`/api/stages/${encodeURIComponent(stageId)}/publication`),
     {
       method: "PUT",
       headers: { "Content-Type": "application/json" },

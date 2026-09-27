@@ -1,4 +1,5 @@
 import { ClientApiError, requestJson } from "./http-client.ts";
+import { memoryMuseumUrl } from "./memory-museum-url.ts";
 import type {
   PhotoBatchDeleteResult,
   PhotoCatalogPage,
@@ -105,7 +106,8 @@ function photoCatalogUrl(query: PhotoCatalogQuery, selection?: "ids"): string {
   }
   if (query.cursor) parameters.set("cursor", query.cursor);
   if (selection) parameters.set("selection", selection);
-  return `/api/photos?${parameters}`;
+  const endpoint = memoryMuseumUrl("/api/photos");
+  return `${endpoint}${endpoint.includes("?") ? "&" : "?"}${parameters}`;
 }
 
 export function listPhotos(
@@ -124,7 +126,7 @@ export function listPhotoIds(query: PhotoCatalogQuery): Promise<string[]> {
 
 export function deletePhotos(ids: string[]): Promise<PhotoBatchDeleteResult> {
   return requestJson(
-    "/api/photos",
+    memoryMuseumUrl("/api/photos"),
     {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
@@ -156,7 +158,7 @@ export function deletePhotos(ids: string[]): Promise<PhotoBatchDeleteResult> {
 
 export function archivePhoto(photoId: string): Promise<void> {
   return requestJson(
-    `/api/photos/${encodeURIComponent(photoId)}/archive`,
+    memoryMuseumUrl(`/api/photos/${encodeURIComponent(photoId)}/archive`),
     { method: "POST" },
     (value) => {
       const result = readRecord(value);
@@ -167,7 +169,7 @@ export function archivePhoto(photoId: string): Promise<void> {
 
 export function deletePhoto(photoId: string): Promise<void> {
   return requestJson(
-    `/api/photos/${encodeURIComponent(photoId)}`,
+    memoryMuseumUrl(`/api/photos/${encodeURIComponent(photoId)}`),
     { method: "DELETE" },
     (value) => {
       const result = readRecord(value);

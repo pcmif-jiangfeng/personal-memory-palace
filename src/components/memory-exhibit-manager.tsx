@@ -28,8 +28,10 @@ export function MemoryExhibitManager({
   libraryPhotos,
   initialNextCursor,
   stages,
+  museumId,
 }: {
   memoryId: string;
+  museumId: string;
   exhibits: ExhibitPhotoView[];
   libraryPhotos: WorkspacePhotoView[];
   initialNextCursor: string | null;
@@ -127,8 +129,9 @@ export function MemoryExhibitManager({
     const selectedFiles = Array.from(files).slice(0, remainingSlots);
     if (files.length > remainingSlots) setError(copy.exhibits.uploadLimit(remainingSlots));
     startUpload(selectedFiles, {
+      museumId,
       onPhotoUploaded: async (photoId) => {
-        await addMemoryPhotos(memoryId, [photoId]);
+        await addMemoryPhotos(memoryId, [photoId], museumId);
         router.refresh();
       },
     });

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { isOwner } from "@/auth";
 import { LoginForm } from "@/components/login-form";
@@ -13,6 +14,9 @@ export default async function LoginPage() {
         <h1>{copy.auth.title}</h1>
         <p>{copy.auth.description}</p>
         <LoginForm />
+        <p>
+          <Link href="/account/login">使用邮箱账号登录</Link>
+        </p>
       </div>
     </section>
   );

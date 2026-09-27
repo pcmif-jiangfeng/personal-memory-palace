@@ -1,7 +1,13 @@
 import { readFile, stat } from "node:fs/promises";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { isOwner } from "@/auth";
+import { currentUser } from "@/user-auth";
+import { getDatabase } from "@/data/database";
+import {
+  canReadMuseumPhoto,
+  optimizedPhotoKeyPattern,
+  isPhotoMediaAvailable,
+} from "@/data/photo-access";
 import { isSharedImageAccessible, shareAccessCookieName } from "@/data/share-repository";
 import { isPublicImageAccessible } from "@/data/publication-repository";
 import {
@@ -15,7 +21,7 @@ export const runtime = "nodejs";
 export async function GET(request: Request, { params }: { params: Promise<{ key: string[] }> }) {
   const { key: segments } = await params;
   const key = segments.join("/");
-  if (!/^uploads\/(demo|owner)\/optimized\/[0-9a-f-]+\.webp$/.test(key)) {
+  if (!optimizedPhotoKeyPattern.test(key) || !isPhotoMediaAvailable(getDatabase(), key)) {
     return new NextResponse(null, { status: 404 });
   }
   const variant = new URL(request.url).searchParams.get("variant");
@@ -23,7 +29,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ key:
     return new NextResponse(null, { status: 404 });
   }
 
-  if (!(await isOwner())) {
+  const user = await currentUser();
+  if (!canReadMuseumPhoto(getDatabase(), user?.id ?? null, key)) {
     const token = new URL(request.url).searchParams.get("share");
     const publicImage = isPublicImageAccessible(key);
     const sharedImage =
@@ -44,7 +51,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ key:
     const source = await stat(imagePath);
     const etag = `W/"${source.mtimeMs}-${source.size}-${variant ?? "full"}"`;
     const headers = {
-      "Cache-Control": "private, no-cache",
+      "Cache-Control": "private, no-store",
       "Content-Type": "image/webp",
       ETag: etag,
       "X-Content-Type-Options": "nosniff",

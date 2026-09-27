@@ -10,6 +10,7 @@ export interface UploadItem {
 }
 
 export interface UploadBatch {
+  workspaceUrl?: string;
   id: string;
   createdAt: string;
   expanded: boolean;

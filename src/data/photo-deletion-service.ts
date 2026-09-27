@@ -2,11 +2,10 @@ import type { DatabaseSync } from "node:sqlite";
 import { withTransaction } from "./transaction.ts";
 import { DomainError } from "../domain/errors.ts";
 import type { ImageStorage } from "../storage/image-storage.ts";
-import {
-  readBooleanFlag,
-  readNullableString,
-  readString,
-} from "./row-readers.ts";
+import type { MemoryScope } from "./scoped-memory.ts";
+import { requirePhotoAccess, requirePhotoMuseum } from "./photo-access.ts";
+import { ApiError } from "../http/errors.ts";
+import { readBooleanFlag, readNullableString, readString } from "./row-readers.ts";
 
 export interface PhotoMemoryReference {
   id: string;
@@ -84,7 +83,8 @@ function findPhotoReferences(database: DatabaseSync, storageKey: string): PhotoR
        GROUP BY memories.id, memories.title
        ORDER BY memories.created_at DESC, memories.id`,
     )
-    .all(storageKey).map(readPhotoMemoryReference);
+    .all(storageKey)
+    .map(readPhotoMemoryReference);
   const stages = database
     .prepare(
       `SELECT stages.id, stages.title
@@ -93,7 +93,8 @@ function findPhotoReferences(database: DatabaseSync, storageKey: string): PhotoR
        WHERE stage_covers.storage_key = ?
        ORDER BY stages.created_at DESC, stages.id`,
     )
-    .all(storageKey).map(readPhotoStageReference);
+    .all(storageKey)
+    .map(readPhotoStageReference);
 
   return {
     memories,
@@ -101,8 +102,19 @@ function findPhotoReferences(database: DatabaseSync, storageKey: string): PhotoR
   };
 }
 
-function prepareDeletion(database: DatabaseSync, photoId: string): PhotoRow | null {
+function prepareDeletion(
+  database: DatabaseSync,
+  photoId: string,
+  scope?: MemoryScope,
+): PhotoRow | null {
   return withTransaction(database, () => {
+    if (scope) {
+      requirePhotoMuseum(database, scope, true);
+      const pending = Boolean(
+        database.prepare("SELECT photo_id FROM photo_deletion_jobs WHERE photo_id=?").get(photoId),
+      );
+      requirePhotoAccess(database, scope, photoId, pending);
+    }
     const pendingRow = database
       .prepare(
         `SELECT optimized_storage_key AS optimizedStorageKey,
@@ -123,6 +135,20 @@ function prepareDeletion(database: DatabaseSync, photoId: string): PhotoRow | nu
     const photo = photoRow ? readPhotoRow(photoRow) : undefined;
     if (!photo) return null;
 
+    if (scope) {
+      const foreignMemory = database
+        .prepare(
+          `SELECT 1 FROM memory_images i JOIN memories m ON m.id=i.memory_id WHERE i.storage_key=? AND (m.museum_id IS NOT ? OR i.museum_id IS NOT ?)`,
+        )
+        .get(photo.optimizedStorageKey, scope.museumId, scope.museumId);
+      const foreignStage = database
+        .prepare(
+          `SELECT 1 FROM stage_covers c JOIN stages s ON s.id=c.stage_id WHERE c.storage_key=? AND (s.museum_id IS NOT ? OR c.museum_id IS NOT ?)`,
+        )
+        .get(photo.optimizedStorageKey, scope.museumId, scope.museumId);
+      if (foreignMemory || foreignStage) throw new ApiError("INVALID_PHOTO_BINDING", 400);
+    }
+
     const references = findPhotoReferences(database, photo.optimizedStorageKey);
     if (references.memories.length > 0 || references.stages.length > 0) {
       throw new DomainError("PHOTO_IN_USE", { references });
@@ -131,10 +157,16 @@ function prepareDeletion(database: DatabaseSync, photoId: string): PhotoRow | nu
     database
       .prepare(
         `INSERT INTO photo_deletion_jobs
-         (photo_id, optimized_storage_key, original_storage_key, created_at, last_error)
-         VALUES (?, ?, ?, ?, NULL)`,
+         (photo_id, optimized_storage_key, original_storage_key, created_at, last_error, museum_id)
+         VALUES (?, ?, ?, ?, NULL, ?)`,
       )
-      .run(photoId, photo.optimizedStorageKey, photo.originalStorageKey, new Date().toISOString());
+      .run(
+        photoId,
+        photo.optimizedStorageKey,
+        photo.originalStorageKey,
+        new Date().toISOString(),
+        scope?.museumId ?? null,
+      );
     database.prepare("DELETE FROM uploaded_photos WHERE id = ?").run(photoId);
     return photo;
   });
@@ -144,8 +176,9 @@ export async function deleteUploadedPhotoInDatabase(
   database: DatabaseSync,
   storage: Pick<ImageStorage, "remove">,
   photoId: string,
+  scope?: MemoryScope,
 ): Promise<{ deleted: boolean; alreadyDeleted: boolean }> {
-  const plan = prepareDeletion(database, photoId);
+  const plan = prepareDeletion(database, photoId, scope);
   if (!plan) return { deleted: false, alreadyDeleted: true };
 
   try {
@@ -178,16 +211,18 @@ export async function deleteUploadedPhotosInDatabase(
   database: DatabaseSync,
   storage: Pick<ImageStorage, "remove">,
   photoIds: string[],
+  scope?: MemoryScope,
 ): Promise<PhotoBatchDeleteResult> {
   const result: PhotoBatchDeleteResult = { deletedIds: [], failures: [] };
   for (const photoId of new Set(photoIds)) {
     try {
-      await deleteUploadedPhotoInDatabase(database, storage, photoId);
+      await deleteUploadedPhotoInDatabase(database, storage, photoId, scope);
       result.deletedIds.push(photoId);
     } catch (error) {
       result.failures.push({
         photoId,
-        error: error instanceof DomainError ? error.code : "INTERNAL_ERROR",
+        error:
+          error instanceof DomainError || error instanceof ApiError ? error.code : "INTERNAL_ERROR",
         ...(error instanceof DomainError && error.details ? { details: error.details } : {}),
       });
     }
@@ -205,7 +240,8 @@ export async function recoverPendingPhotoDeletions(
               original_storage_key AS originalStorageKey
        FROM photo_deletion_jobs ORDER BY created_at, photo_id`,
     )
-    .all().map(readPendingDeletionRow);
+    .all()
+    .map(readPendingDeletionRow);
   let recovered = 0;
   let failed = 0;
   for (const job of pending) {
@@ -229,7 +265,8 @@ export async function recoverPendingUploads(
 ): Promise<{ recovered: number; failed: number }> {
   const pending = database
     .prepare("SELECT id, storage_key AS storageKey FROM pending_uploads ORDER BY created_at, id")
-    .all().map(readPendingUploadRow);
+    .all()
+    .map(readPendingUploadRow);
   let recovered = 0;
   let failed = 0;
   for (const job of pending) {

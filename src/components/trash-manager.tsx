@@ -12,10 +12,12 @@ function TrashSelectionSection({
   type,
   title,
   items,
+  canDeletePermanently = true,
 }: {
   type: TrashType;
   title: string;
   items: TrashItem[];
+  canDeletePermanently?: boolean;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -86,7 +88,7 @@ function TrashSelectionSection({
             <button
               type="button"
               className="text-button danger"
-              disabled={busy || selected.size === 0}
+              disabled={!canDeletePermanently || busy || selected.size === 0}
               onClick={() => void act("permanent")}
             >
               {copy.trash.deletePermanently}
@@ -115,11 +117,31 @@ function TrashSelectionSection({
   );
 }
 
-export function TrashManager({ memories, stages }: { memories: MemorySummary[]; stages: Stage[] }) {
+export function TrashManager({
+  memories,
+  stages,
+  canDeleteMemoriesPermanently = true,
+  canDeleteStagesPermanently = true,
+}: {
+  memories: MemorySummary[];
+  stages: Stage[];
+  canDeleteMemoriesPermanently?: boolean;
+  canDeleteStagesPermanently?: boolean;
+}) {
   return (
     <div className="trash-list">
-      <TrashSelectionSection type="memory" title="Memory" items={memories} />
-      <TrashSelectionSection type="stage" title="Stage" items={stages} />
+      <TrashSelectionSection
+        type="memory"
+        title="Memory"
+        items={memories}
+        canDeletePermanently={canDeleteMemoriesPermanently}
+      />
+      <TrashSelectionSection
+        type="stage"
+        title="Stage"
+        items={stages}
+        canDeletePermanently={canDeleteStagesPermanently}
+      />
     </div>
   );
 }

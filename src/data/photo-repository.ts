@@ -74,11 +74,12 @@ export interface PhotoCatalogPage {
 export function prepareOptimizedUploadInDatabase(
   database: ReturnType<typeof getDatabase>,
   storageKey: string,
+  museumId?: string,
 ): string {
   const id = randomUUID();
   database
-    .prepare("INSERT INTO pending_uploads (id, storage_key, created_at) VALUES (?, ?, ?)")
-    .run(id, storageKey, new Date().toISOString());
+    .prepare("INSERT INTO pending_uploads (id, storage_key, created_at, museum_id) VALUES (?, ?, ?, ?)")
+    .run(id, storageKey, new Date().toISOString(), museumId ?? null);
   return id;
 }
 
@@ -90,24 +91,25 @@ export function commitOptimizedUploadInDatabase(
   database: ReturnType<typeof getDatabase>,
   operationId: string,
   item: { originalName: string; mimeType: string; saved: SavedImage },
+  museumId?: string,
 ): UploadedPhoto {
   return withTransaction(database, () => {
     const pendingRow = database
-      .prepare("SELECT storage_key AS storageKey FROM pending_uploads WHERE id = ?")
+      .prepare("SELECT storage_key AS storageKey, museum_id AS museumId FROM pending_uploads WHERE id = ?")
       .get(operationId);
     const pending = pendingRow
       ? { storageKey: readString(pendingRow, "storageKey") }
       : undefined;
-    if (!pending || pending.storageKey !== item.saved.optimizedStorageKey) {
+    if (!pending || pending.storageKey !== item.saved.optimizedStorageKey || (museumId && pendingRow?.museumId !== museumId)) {
       throw new Error("UPLOAD_OPERATION_NOT_FOUND");
     }
     const id = randomUUID();
     const createdAt = new Date().toISOString();
     database.prepare(`INSERT INTO uploaded_photos
-      (id, original_name, mime_type, optimized_storage_key, original_storage_key, width, height, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      (id, original_name, mime_type, optimized_storage_key, original_storage_key, width, height, created_at, museum_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
         id, item.originalName, item.mimeType, item.saved.optimizedStorageKey,
-        item.saved.originalStorageKey, item.saved.width, item.saved.height, createdAt,
+        item.saved.originalStorageKey, item.saved.width, item.saved.height, createdAt, museumId ?? null,
       );
     database.prepare("DELETE FROM pending_uploads WHERE id = ?").run(operationId);
     return {
@@ -179,20 +181,20 @@ export function listWorkspacePhotos(): UploadedPhoto[] {
   return rows.map(mapPhoto);
 }
 
-export function listAllUploadedPhotos(): UploadedPhoto[] {
+export function listAllUploadedPhotos(museumId?: string): UploadedPhoto[] {
   const rows = getDatabase().prepare(
-    "SELECT * FROM uploaded_photos ORDER BY created_at DESC"
-  ).all().map(readPhotoRow);
+    "SELECT * FROM uploaded_photos WHERE (? IS NULL OR museum_id=?) ORDER BY created_at DESC"
+  ).all(museumId ?? null, museumId ?? null).map(readPhotoRow);
   return rows.map(mapPhoto);
 }
 
-export function listUploadedPhotosByIds(ids: string[]): UploadedPhoto[] {
+export function listUploadedPhotosByIds(ids: string[], museumId?: string): UploadedPhoto[] {
   const uniqueIds = [...new Set(ids)];
   if (uniqueIds.length === 0) return [];
   const placeholders = uniqueIds.map(() => "?").join(",");
   const rows = getDatabase()
-    .prepare(`SELECT * FROM uploaded_photos WHERE id IN (${placeholders})`)
-    .all(...uniqueIds).map(readPhotoRow);
+    .prepare(`SELECT * FROM uploaded_photos WHERE id IN (${placeholders}) AND (? IS NULL OR museum_id=?)`)
+    .all(...uniqueIds, museumId ?? null, museumId ?? null).map(readPhotoRow);
   const photosById = new Map(rows.map((row) => [row.id, mapPhoto(row)]));
   return uniqueIds.flatMap((id) => {
     const photo = photosById.get(id);
@@ -221,6 +223,7 @@ function decodePhotoCursor(cursor?: string): { createdAt: string; id: string } |
 export function queryWorkspacePhotoCatalogInDatabase(
   database: ReturnType<typeof getDatabase>,
   query: PhotoCatalogQuery,
+  museumId?: string,
 ): PhotoCatalogPage {
   const limit = Math.min(Math.max(query.limit ?? 40, 1), 60);
   const cursor = decodePhotoCursor(query.cursor);
@@ -229,10 +232,12 @@ export function queryWorkspacePhotoCatalogInDatabase(
     SELECT 1 FROM memory_images
     JOIN memories ON memories.id = memory_images.memory_id AND memories.trashed_at IS NULL
     WHERE memory_images.storage_key = uploaded_photos.optimized_storage_key
+      AND memories.museum_id IS uploaded_photos.museum_id AND memory_images.museum_id IS uploaded_photos.museum_id
   )`;
   const libraryMember = `(used_at IS NOT NULL OR library_archived_at IS NOT NULL OR ${activeReference})`;
   const where = [query.source === "library" ? libraryMember : `NOT ${libraryMember}`];
   const parameters: Array<string | number> = [];
+  if (museumId) { where.push("uploaded_photos.museum_id=?"); parameters.push(museumId); }
   if (query.source === "library" && query.usage === "used") where.push(activeReference);
   if (query.source === "library" && query.usage === "unused") where.push(`NOT ${activeReference}`);
   if (query.stageId) {
@@ -241,6 +246,8 @@ export function queryWorkspacePhotoCatalogInDatabase(
       JOIN memories ON memories.id = memory_images.memory_id AND memories.trashed_at IS NULL
       WHERE memory_images.storage_key = uploaded_photos.optimized_storage_key
         AND memories.stage_id = ?
+        AND EXISTS (SELECT 1 FROM stages s WHERE s.id=memories.stage_id AND s.museum_id IS uploaded_photos.museum_id)
+        AND memories.museum_id IS uploaded_photos.museum_id AND memory_images.museum_id IS uploaded_photos.museum_id
     )`);
     parameters.push(query.stageId);
   }
@@ -251,6 +258,7 @@ export function queryWorkspacePhotoCatalogInDatabase(
       JOIN memories ON memories.id = memory_images.memory_id AND memories.trashed_at IS NULL
       WHERE memory_images.storage_key = uploaded_photos.optimized_storage_key
         AND lower(memories.title) LIKE ?
+        AND memories.museum_id IS uploaded_photos.museum_id AND memory_images.museum_id IS uploaded_photos.museum_id
     )`);
     parameters.push(`%${normalizedQuery}%`);
   }
@@ -269,11 +277,12 @@ export function queryWorkspacePhotoCatalogInDatabase(
   const references = ids.length
     ? database.prepare(`
         SELECT uploaded_photos.id AS photo_id, memories.id AS memory_id,
-               memories.title AS memory_title, memories.stage_id
+               memories.title AS memory_title, CASE WHEN EXISTS (SELECT 1 FROM stages s WHERE s.id=memories.stage_id AND s.museum_id IS uploaded_photos.museum_id) THEN memories.stage_id ELSE NULL END AS stage_id
         FROM uploaded_photos
         JOIN memory_images ON memory_images.storage_key = uploaded_photos.optimized_storage_key
         JOIN memories ON memories.id = memory_images.memory_id AND memories.trashed_at IS NULL
         WHERE uploaded_photos.id IN (${ids.map(() => "?").join(",")})
+          AND memories.museum_id IS uploaded_photos.museum_id AND memory_images.museum_id IS uploaded_photos.museum_id
       `).all(...ids).map(readPhotoReferenceRow)
     : [];
   const referencesByPhoto = new Map<string, { memoryIds: Set<string>; memoryTitles: Set<string>; stageIds: Set<string> }>();
@@ -304,8 +313,8 @@ export function queryWorkspacePhotoCatalogInDatabase(
   };
 }
 
-export function queryWorkspacePhotoCatalog(query: PhotoCatalogQuery): PhotoCatalogPage {
-  return queryWorkspacePhotoCatalogInDatabase(getDatabase(), query);
+export function queryWorkspacePhotoCatalog(query: PhotoCatalogQuery, museumId?: string): PhotoCatalogPage {
+  return queryWorkspacePhotoCatalogInDatabase(getDatabase(), query, museumId);
 }
 
 export function listWorkspacePhotoCatalogInDatabase(

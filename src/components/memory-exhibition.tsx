@@ -4,6 +4,7 @@ import { MemoryCard } from "@/components/memory-card";
 import { copy } from "@/i18n/zh-CN";
 import { imageStorage } from "@/storage/local-image-storage";
 import { PhotoViewer } from "@/components/photo-viewer";
+import { MemoryAttribution } from "@/components/memory-attribution";
 
 export function MemoryExhibition({
   memory,
@@ -31,6 +32,7 @@ export function MemoryExhibition({
           <p className="eyebrow">{visitor ? "VISITOR EXHIBITION" : copy.exhibition.label}</p>
           <p className="exhibition-stage">{memory.stageTitle ?? copy.common.uncategorized}</p>
           <h1>{memory.title}</h1>
+          <MemoryAttribution memory={memory} />
         </div>
         {imagePath ? (
           <figure className="exhibition-hero">

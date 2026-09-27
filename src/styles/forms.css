@@ -284,6 +284,9 @@
   font: inherit;
   cursor: pointer;
 }
+.stage-manager .form-message .text-button {
+  color: inherit;
+}
 .text-button.danger {
   color: #9a4439;
 }

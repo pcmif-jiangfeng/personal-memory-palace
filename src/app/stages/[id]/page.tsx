@@ -5,16 +5,34 @@ import { StageDeleteAction } from "@/components/stage-delete-action";
 import { findStageById, listMemoriesByStage } from "@/data/memory-repository";
 import { copy } from "@/i18n/zh-CN";
 import { imageStorage } from "@/storage/local-image-storage";
-import { isOwner } from "@/auth";
+import { readScopedStage } from "@/data/scoped-stage";
+import { memoryPageScope } from "@/memory-page-scope";
+import { getDatabase } from "@/data/database";
+import { listScopedMemories } from "@/data/scoped-memory";
 
 export const dynamic = "force-dynamic";
 
-export default async function StageViewPage({ params }: { params: Promise<{ id: string }> }) {
-  const owner = await isOwner();
+export default async function StageViewPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ museumId?: string }>;
+}) {
   const { id } = await params;
-  const stage = findStageById(id, !owner);
+  let scope;
+  let stage;
+  try {
+    scope = await memoryPageScope((await searchParams).museumId);
+    stage = scope ? readScopedStage(getDatabase(), scope, id) : findStageById(id, true);
+  } catch {
+    notFound();
+  }
   if (!stage) notFound();
-  const memories = listMemoriesByStage(id, !owner);
+  const owner = Boolean(scope);
+  const memories = scope
+    ? listScopedMemories(getDatabase(), scope).filter((memory) => memory.stageId === id)
+    : listMemoriesByStage(id, true);
   const coverKey = stage.coverKey ?? memories.find((memory) => memory.coverKey)?.coverKey ?? null;
 
   return (
@@ -29,7 +47,11 @@ export default async function StageViewPage({ params }: { params: Promise<{ id: 
           <p className="stage-view-count">{copy.stage.memoryCount(memories.length)}</p>
           {owner ? (
             <div className="stage-view-actions">
-              <StageDeleteAction stageId={stage.id} stageTitle={stage.title} redirectTo="/" />
+              <StageDeleteAction
+                stageId={stage.id}
+                stageTitle={stage.title}
+                redirectTo={scope ? `/?museumId=${encodeURIComponent(scope.museumId)}` : "/"}
+              />
             </div>
           ) : null}
         </div>
@@ -42,7 +64,7 @@ export default async function StageViewPage({ params }: { params: Promise<{ id: 
       {memories.length > 0 ? (
         <div className="memory-grid stage-memory-grid">
           {memories.map((memory) => (
-            <MemoryCard key={memory.id} memory={memory} />
+            <MemoryCard key={memory.id} memory={memory} museumId={scope?.museumId} />
           ))}
         </div>
       ) : (

@@ -4,6 +4,8 @@ import { findMemoryByIdInDatabase } from "./memory-repository.ts";
 import { readString } from "./row-readers.ts";
 import { withTransaction } from "./transaction.ts";
 import { DomainError } from "../domain/errors.ts";
+import { requireMuseumAccessInDatabase } from "./museum-access.ts";
+import { ApiError } from "../http/errors.ts";
 import type { MemorySummary } from "../domain/models.ts";
 import {
   MAX_MEMORY_PHOTOS,
@@ -21,7 +23,10 @@ export interface CreateMemoryInput {
   relatedMemoryIds?: string[];
 }
 
-interface PhotoKeyRow { id: string; storage_key: string }
+interface PhotoKeyRow {
+  id: string;
+  storage_key: string;
+}
 
 function readPhotoKeyRow(row: Record<string, unknown>): PhotoKeyRow {
   return {
@@ -37,6 +42,7 @@ export function createMemory(input: CreateMemoryInput): MemorySummary {
 export function createMemoryInDatabase(
   database: ReturnType<typeof getDatabase>,
   input: CreateMemoryInput,
+  scope?: { userId: string; museumId: string },
 ): MemorySummary {
   const title = input.title.trim();
   const story = input.story.trim();
@@ -55,6 +61,33 @@ export function createMemoryInDatabase(
   const id = randomUUID();
   const now = new Date().toISOString();
   withTransaction(database, () => {
+    if (scope) {
+      const access = requireMuseumAccessInDatabase(database, scope.userId, scope.museumId);
+      if (access.status !== "active") throw new ApiError("MUSEUM_NOT_FOUND", 404);
+      for (const photoId of photoIds) {
+        if (
+          !database
+            .prepare("SELECT id FROM uploaded_photos WHERE id=? AND museum_id=?")
+            .get(photoId, scope.museumId)
+        )
+          throw new DomainError("INVALID_PHOTOS");
+      }
+      if (
+        input.stageId &&
+        !database
+          .prepare("SELECT id FROM stages WHERE id=? AND museum_id=? AND trashed_at IS NULL")
+          .get(input.stageId, scope.museumId)
+      )
+        throw new DomainError("INVALID_STAGE");
+      for (const relatedId of relatedIds) {
+        if (
+          !database
+            .prepare("SELECT id FROM memories WHERE id=? AND museum_id=? AND trashed_at IS NULL")
+            .get(relatedId, scope.museumId)
+        )
+          throw new DomainError("INVALID_RELATIONS");
+      }
+    }
     const photos = database
       .prepare(
         `SELECT id, optimized_storage_key AS storage_key
@@ -82,20 +115,42 @@ export function createMemoryInDatabase(
       if (rows.length !== relatedIds.length) throw new DomainError("INVALID_RELATIONS");
     }
 
-    database.prepare(`INSERT INTO memories
-      (id, stage_id, title, story, visibility, created_at, updated_at)
-      VALUES (?, ?, ?, ?, 'private', ?, ?)`
-    ).run(id, input.stageId || null, title, story, now, now);
+    database
+      .prepare(
+        `INSERT INTO memories
+      (id, museum_id, stage_id, title, story, visibility, created_at, updated_at, created_by_user_id, last_edited_by_user_id)
+      VALUES (?, ?, ?, ?, ?, 'private', ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        scope?.museumId ?? null,
+        input.stageId || null,
+        title,
+        story,
+        now,
+        now,
+        scope?.userId ?? null,
+        scope?.userId ?? null,
+      );
     const insertImage = database.prepare(`INSERT INTO memory_images
-      (id, memory_id, storage_key, alt_text, sort_order, is_cover, created_at)
-      VALUES (?, ?, ?, '', ?, ?, ?)`);
+      (id, museum_id, memory_id, storage_key, alt_text, sort_order, is_cover, created_at)
+      VALUES (?, ?, ?, ?, '', ?, ?, ?)`);
     photoIds.forEach((photoId, index) => {
-      insertImage.run(randomUUID(), id, photoById.get(photoId)!.storage_key, index,
-        photoId === input.coverPhotoId ? 1 : 0, now);
+      insertImage.run(
+        randomUUID(),
+        scope?.museumId ?? null,
+        id,
+        photoById.get(photoId)!.storage_key,
+        index,
+        photoId === input.coverPhotoId ? 1 : 0,
+        now,
+      );
     });
     const insertRelation = database.prepare(`INSERT INTO memory_relations
-      (memory_id, related_memory_id, created_at) VALUES (?, ?, ?)`);
-    relatedIds.forEach((relatedId) => insertRelation.run(...[id, relatedId].sort(), now));
+      (memory_id, related_memory_id, museum_id, created_at) VALUES (?, ?, ?, ?)`);
+    relatedIds.forEach((relatedId) =>
+      insertRelation.run(...[id, relatedId].sort(), scope?.museumId ?? null, now),
+    );
     database
       .prepare(
         `UPDATE uploaded_photos
