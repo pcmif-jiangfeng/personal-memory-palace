@@ -29,7 +29,12 @@ function fixture() {
   );
   db.prepare("UPDATE users SET email_verified=1").run();
   const museums = [users[0], users[2]].map((user, i) =>
-    createMuseumInDatabase(db, { ownerId: user.id, name: "Museum", slug: `photo-${i}` }),
+    createMuseumInDatabase(db, {
+      ownerId: user.id,
+      name: "Museum",
+      slug: `photo-${i}`,
+      storageQuotaBytes: 1024 * 1024,
+    }),
   );
   db.prepare(
     "INSERT INTO museum_memberships (museum_id,user_id,created_at,updated_at) VALUES (?,?,'now','now')",

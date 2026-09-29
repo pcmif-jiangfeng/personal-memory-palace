@@ -37,6 +37,7 @@ test("profile changes only own museum and rejects foreign, missing and deleting 
         displayName: name,
       }),
     );
+    db.exec("UPDATE users SET email_verified=1");
     const one = createMuseumInDatabase(db, { ownerId: users[0].id, name: "一", slug: "one" });
     const two = createMuseumInDatabase(db, { ownerId: users[1].id, name: "二", slug: "two" });
     for (const [id, museumId] of [

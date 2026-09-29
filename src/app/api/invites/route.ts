@@ -4,6 +4,7 @@ import { createOwnInviteInDatabase, listOwnInvitesInDatabase } from "@/data/invi
 import { apiErrorResponse, sameOriginRequiredResponse } from "@/http/api-error";
 import { parseCreateInvite, readInvitePage } from "@/http/invite-management";
 import { currentUser } from "@/user-auth";
+import { requestMuseumSelection } from "@/http/museum-selection";
 
 export const runtime = "nodejs";
 
@@ -12,9 +13,12 @@ export async function GET(request: Request) {
     const user = await currentUser();
     if (!user) return NextResponse.json({ error: "USER_REQUIRED" }, { status: 401 });
     const page = readInvitePage(new URL(request.url).searchParams.get("page"));
-    return NextResponse.json(listOwnInvitesInDatabase(getDatabase(), user.id, page), {
-      headers: { "Cache-Control": "private, no-store" },
-    });
+    return NextResponse.json(
+      listOwnInvitesInDatabase(getDatabase(), user.id, page, requestMuseumSelection(request)),
+      {
+        headers: { "Cache-Control": "private, no-store" },
+      },
+    );
   } catch (error) {
     return apiErrorResponse(error, "invite-list");
   }
@@ -27,10 +31,13 @@ export async function POST(request: Request) {
     const user = await currentUser();
     if (!user) return NextResponse.json({ error: "USER_REQUIRED" }, { status: 401 });
     const input = await parseCreateInvite(request);
-    return NextResponse.json(createOwnInviteInDatabase(getDatabase(), user.id, input), {
-      status: 201,
-      headers: { "Cache-Control": "private, no-store" },
-    });
+    return NextResponse.json(
+      createOwnInviteInDatabase(getDatabase(), user.id, input, requestMuseumSelection(request)),
+      {
+        status: 201,
+        headers: { "Cache-Control": "private, no-store" },
+      },
+    );
   } catch (error) {
     return apiErrorResponse(error, "invite-create");
   }

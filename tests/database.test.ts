@@ -44,6 +44,7 @@ test("initializes the core schema and isolated demo data", () => {
     database.close();
 
     assert.deepEqual(tables, [
+      "audit_logs",
       "email_verification_tokens",
       "invite_links",
       "later_notes",
@@ -54,6 +55,7 @@ test("initializes the core schema and isolated demo data", () => {
       "museums",
       "password_reset_tokens",
       "pending_uploads",
+      "photo_asset_usage",
       "photo_deletion_jobs",
       "schema_migrations",
       "share_configs",
@@ -171,7 +173,10 @@ test("adds photo library membership to an existing owner database without losing
       .prepare("SELECT version FROM schema_migrations ORDER BY version")
       .all()
       .map((row) => (row as { version: number }).version);
-    assert.deepEqual(versions, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
+    assert.deepEqual(
+      versions,
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+    );
     database.close();
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -368,7 +373,10 @@ test("records each database migration once", () => {
       .map((row) => (row as { version: number }).version);
     database.close();
 
-    assert.deepEqual(versions, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
+    assert.deepEqual(
+      versions,
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+    );
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

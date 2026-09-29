@@ -142,6 +142,11 @@ test("isolated migration assigns every legacy row atomically and refuses a secon
     seedLegacyData(database);
     const result = migrateLegacyOwnerInDatabase(database, owner);
     assert.equal(result.email, owner.email);
+    assert.equal(
+      database.prepare("SELECT storage_usage_ready FROM museums WHERE id=?").get(result.museumId)!
+        .storage_usage_ready,
+      0,
+    );
     assert.notEqual(
       database.prepare("SELECT password_hash FROM users").get()?.password_hash,
       owner.password,

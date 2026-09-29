@@ -5,7 +5,15 @@ import { useState } from "react";
 import { requestJson } from "@/client/http-client";
 import type { InviteSummary } from "@/domain/invites";
 
-export function InviteManagement({ invites, now }: { invites: InviteSummary[]; now: string }) {
+export function InviteManagement({
+  invites,
+  now,
+  museumId,
+}: {
+  invites: InviteSummary[];
+  now: string;
+  museumId: string;
+}) {
   const router = useRouter();
   const [mode, setMode] = useState("single-use");
   const [busy, setBusy] = useState("");
@@ -24,7 +32,7 @@ export function InviteManagement({ invites, now }: { invites: InviteSummary[]; n
     setCreatedLink("");
     try {
       const result = await requestJson(
-        "/api/invites",
+        `/api/invites?museumId=${encodeURIComponent(museumId)}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -73,7 +81,7 @@ export function InviteManagement({ invites, now }: { invites: InviteSummary[]; n
     setMessage("");
     try {
       await requestJson(
-        `/api/invites/${encodeURIComponent(id)}`,
+        `/api/invites/${encodeURIComponent(id)}?museumId=${encodeURIComponent(museumId)}`,
         { method: "DELETE" },
         (payload) => {
           if (

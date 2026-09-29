@@ -1,5 +1,7 @@
+import { auditLogSchemaSql } from "./audit-log-schema.ts";
 import { inviteLinkSchemaSql } from "./invite-link-schema.ts";
 import { museumMembershipSchemaSql } from "./museum-membership-schema.ts";
+import { photoStorageUsageSchemaSql } from "./photo-storage-quota.ts";
 
 export const schemaSql = `
 PRAGMA foreign_keys = ON;
@@ -50,13 +52,19 @@ CREATE TABLE IF NOT EXISTS museums (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'active',
+  deletion_scheduled_at TEXT,
   storage_quota_bytes INTEGER NOT NULL DEFAULT 0 CHECK (storage_quota_bytes >= 0),
-  storage_used_bytes INTEGER NOT NULL DEFAULT 0 CHECK (storage_used_bytes >= 0)
+  storage_used_bytes INTEGER NOT NULL DEFAULT 0 CHECK (storage_used_bytes >= 0),
+  storage_usage_ready INTEGER NOT NULL DEFAULT 0 CHECK (storage_usage_ready IN (0,1))
 );
 
 ${museumMembershipSchemaSql}
 
 ${inviteLinkSchemaSql}
+
+${auditLogSchemaSql}
+
+${photoStorageUsageSchemaSql}
 
 CREATE TABLE IF NOT EXISTS stages (
   id TEXT PRIMARY KEY,

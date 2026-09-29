@@ -17,6 +17,7 @@ test("migration 18 gives legacy Memories version 1 without changing their conten
     );
     const record = db.prepare("INSERT INTO schema_migrations VALUES (?,'now')");
     db.exec("CREATE TABLE stages (id TEXT PRIMARY KEY)");
+    db.exec("CREATE TABLE museums (id TEXT PRIMARY KEY)");
     for (let version = 1; version <= 17; version++) record.run(version);
     runDatabaseMigrations(db);
     runDatabaseMigrations(db);

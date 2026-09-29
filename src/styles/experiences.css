@@ -377,6 +377,38 @@
   gap: 1rem;
   margin-top: 2rem;
 }
+.audit-panel {
+  max-width: 960px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.audit-list {
+  padding: 0;
+  margin: 2rem 0;
+  list-style: none;
+}
+.audit-list li {
+  padding: 1.25rem 0;
+  border-top: 1px solid var(--line);
+}
+.audit-list h2 {
+  font-size: 1.2rem;
+}
+.audit-list summary {
+  cursor: pointer;
+}
+.audit-list pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.85rem;
+}
+.audit-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
 .exhibition-section {
   margin-top: 6rem;
 }
@@ -395,4 +427,25 @@
   height: 100%;
   max-height: 600px;
   object-fit: cover;
+}
+
+.admin-dashboard section {
+  margin-top: 2rem;
+}
+.admin-metadata-card {
+  display: grid;
+  grid-template-columns: minmax(5rem, 1fr) minmax(0, 3fr);
+  gap: 0.5rem 1rem;
+  margin: 1.5rem 0;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid currentColor;
+}
+.admin-metadata-card dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.admin-dashboard nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
 }

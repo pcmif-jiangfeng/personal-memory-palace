@@ -211,14 +211,22 @@ export async function parseCreateMemory(request: Request) {
 export async function parseMemoryAction(request: Request) {
   const input = await readJsonObject(request);
   const action = stringValue(input, "action", { required: true, maxLength: 30 })!;
+  const versionRequired = [
+    "details",
+    "addPhotos",
+    "removePhoto",
+    "reorderPhotos",
+    "setCover",
+    "exhibitMetadata",
+  ].includes(action);
+  if (versionRequired && (!Number.isSafeInteger(input.version) || (input.version as number) < 1)) {
+    throw new ApiError("INVALID_MEMORY_VERSION", 400);
+  }
   if (action === "publication") {
     if (typeof input.isPublic !== "boolean") throw new ApiError("INVALID_IS_PUBLIC", 400);
     return { action, isPublic: input.isPublic } as const;
   }
   if (action === "details") {
-    if (!Number.isSafeInteger(input.version) || (input.version as number) < 1) {
-      throw new ApiError("INVALID_MEMORY_VERSION", 400);
-    }
     return {
       action,
       version: input.version as number,
@@ -242,6 +250,7 @@ export async function parseMemoryAction(request: Request) {
   if (action === "addPhotos") {
     return {
       action,
+      version: input.version as number,
       photoIds: stringArray(input, "photoIds", {
         required: true,
         min: 1,
@@ -252,6 +261,7 @@ export async function parseMemoryAction(request: Request) {
   if (action === "removePhoto" || action === "setCover") {
     return {
       action,
+      version: input.version as number,
       photoId: stringValue(input, "photoId", {
         required: true,
         maxLength: MAX_IDENTIFIER_LENGTH,
@@ -261,12 +271,14 @@ export async function parseMemoryAction(request: Request) {
   if (action === "reorderPhotos") {
     return {
       action,
+      version: input.version as number,
       photoIds: stringArray(input, "photoIds", { max: MAX_MEMORY_PHOTOS }),
     } as const;
   }
   if (action === "exhibitMetadata") {
     return {
       action,
+      version: input.version as number,
       photoId: stringValue(input, "photoId", {
         required: true,
         maxLength: MAX_IDENTIFIER_LENGTH,

@@ -48,7 +48,7 @@ test("Museum requires an existing owner, keeps slugs unique, and starts with ver
         slug: "MY-MUSEUM",
       }),
     );
-    assert.throws(() =>
+    assert.doesNotThrow(() =>
       createMuseumInDatabase(database, {
         ownerId: owner.id,
         name: "第二座自有博物馆",

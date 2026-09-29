@@ -10,6 +10,7 @@ import { parseUpdateMuseumSlug } from "@/http/museum-slug";
 import { readJsonObject } from "@/http/schemas";
 import { ApiError } from "@/http/errors";
 import { currentUser } from "@/user-auth";
+import { requestMuseumSelection } from "@/http/museum-selection";
 
 export const runtime = "nodejs";
 
@@ -41,11 +42,21 @@ export async function PATCH(request: Request) {
     ) {
       if ("slug" in input) throw new ApiError("SEPARATE_SLUG_UPDATE_REQUIRED", 400);
       const profile = await parseUpdateMuseumProfile(request);
-      const museum = updateOwnMuseumProfileInDatabase(getDatabase(), user.id, profile);
+      const museum = updateOwnMuseumProfileInDatabase(
+        getDatabase(),
+        user.id,
+        profile,
+        requestMuseumSelection(request),
+      );
       return NextResponse.json({ id: museum.id, slug: museum.slug, version: museum.version });
     }
     const { slug } = await parseUpdateMuseumSlug(request);
-    const museum = updateOwnMuseumSlugInDatabase(getDatabase(), user.id, slug);
+    const museum = updateOwnMuseumSlugInDatabase(
+      getDatabase(),
+      user.id,
+      slug,
+      requestMuseumSelection(request),
+    );
     return NextResponse.json({ id: museum.id, slug: museum.slug });
   } catch (error) {
     return apiErrorResponse(error, "museum-slug-update");

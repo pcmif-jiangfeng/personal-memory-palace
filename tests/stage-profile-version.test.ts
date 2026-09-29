@@ -18,6 +18,7 @@ test("Stage migration 19 is additive and idempotent", () => {
       "CREATE TABLE stages (id TEXT PRIMARY KEY,title TEXT); INSERT INTO stages VALUES ('legacy','Keep Chapter'); CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY,applied_at TEXT NOT NULL)",
     );
     const record = db.prepare("INSERT INTO schema_migrations VALUES (?,'now')");
+    db.exec("CREATE TABLE museums (id TEXT PRIMARY KEY)");
     for (let version = 1; version <= 18; version++) record.run(version);
     runDatabaseMigrations(db);
     runDatabaseMigrations(db);
@@ -119,6 +120,7 @@ test("Museum Profile requires the loaded version even when stale values equal cu
       name: "Museum",
       slug: "profile-version",
     });
+    db.exec("UPDATE users SET email_verified=1");
     const input = {
       name: "A saved",
       description: "About",

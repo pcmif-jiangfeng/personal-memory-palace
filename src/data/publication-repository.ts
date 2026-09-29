@@ -6,6 +6,9 @@ export const publicMemoryPredicate = `memories.is_public = 1 AND memories.trashe
   AND (memories.museum_id IS NULL OR EXISTS (SELECT 1 FROM museums WHERE museums.id=memories.museum_id AND museums.status='active'))
   AND (memories.stage_id IS NULL OR (stages.is_public = 1 AND stages.trashed_at IS NULL))`;
 
+export const publicStagePredicate = `stages.is_public = 1 AND stages.trashed_at IS NULL
+  AND (stages.museum_id IS NULL OR EXISTS (SELECT 1 FROM museums WHERE museums.id=stages.museum_id AND museums.status='active'))`;
+
 export function setMemoryPublicInDatabase(
   database: DatabaseSync,
   id: string,
@@ -67,7 +70,7 @@ export function isPublicImageAccessibleInDatabase(database: DatabaseSync, key: s
     UNION ALL
     SELECT 1 FROM stage_covers
     JOIN stages ON stages.id = stage_covers.stage_id
-    WHERE stage_covers.storage_key = ? AND stages.is_public = 1 AND stages.trashed_at IS NULL
+    WHERE stage_covers.storage_key = ? AND ${publicStagePredicate}
       AND stage_covers.museum_id IS stages.museum_id
       AND (stages.museum_id IS NULL OR EXISTS (SELECT 1 FROM uploaded_photos p WHERE p.optimized_storage_key=stage_covers.storage_key AND p.museum_id=stages.museum_id))
     LIMIT 1

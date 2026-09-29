@@ -205,11 +205,20 @@ test("Memory exhibits retain order, cover and metadata while rejecting foreign p
       db.prepare("SELECT museum_id FROM memories WHERE id='other'").get()!.museum_id,
       "foreign.webp",
     );
-    manageScopedMemory(db, member, "own", { action: "addPhotos", photoIds: ["p1", "p2"] });
-    manageScopedMemory(db, member, "own", { action: "reorderPhotos", photoIds: ["p2", "p1"] });
-    manageScopedMemory(db, member, "own", { action: "setCover", photoId: "p2" });
+    manageScopedMemory(db, member, "own", {
+      action: "addPhotos",
+      version: 1,
+      photoIds: ["p1", "p2"],
+    });
+    manageScopedMemory(db, member, "own", {
+      action: "reorderPhotos",
+      version: 2,
+      photoIds: ["p2", "p1"],
+    });
+    manageScopedMemory(db, member, "own", { action: "setCover", version: 3, photoId: "p2" });
     manageScopedMemory(db, member, "own", {
       action: "exhibitMetadata",
+      version: 4,
       photoId: "p2",
       title: "Exhibit",
       description: "Description",
@@ -222,16 +231,22 @@ test("Memory exhibits retain order, cover and metadata while rejecting foreign p
     assert.equal(detail.images[0].isCover, true);
     assert.equal(detail.images[0].exhibitTitle, "Exhibit");
     for (const action of [
-      { action: "addPhotos", photoIds: ["foreign"] },
-      { action: "setCover", photoId: "foreign" },
-      { action: "removePhoto", photoId: "foreign" },
-      { action: "exhibitMetadata", photoId: "foreign", title: "Attack", description: "" },
-      { action: "reorderPhotos", photoIds: ["p1", "foreign"] },
+      { action: "addPhotos", version: 5, photoIds: ["foreign"] },
+      { action: "setCover", version: 5, photoId: "foreign" },
+      { action: "removePhoto", version: 5, photoId: "foreign" },
+      {
+        action: "exhibitMetadata",
+        version: 5,
+        photoId: "foreign",
+        title: "Attack",
+        description: "",
+      },
+      { action: "reorderPhotos", version: 5, photoIds: ["p1", "foreign"] },
     ] satisfies MemoryAction[]) {
       assert.throws(() => manageScopedMemory(db, member, "own", action));
     }
     assert.equal(readScopedMemory(db, member, "own").images.length, 2);
-    manageScopedMemory(db, member, "own", { action: "removePhoto", photoId: "p2" });
+    manageScopedMemory(db, member, "own", { action: "removePhoto", version: 5, photoId: "p2" });
     assert.equal(readScopedMemory(db, member, "own").images[0].isCover, true);
     assert.equal(
       db.prepare("SELECT used_at FROM uploaded_photos WHERE id='foreign'").get()?.used_at,

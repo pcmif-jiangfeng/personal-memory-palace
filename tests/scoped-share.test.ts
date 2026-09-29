@@ -126,7 +126,7 @@ test("Memory permanent deletion queues photos with Museum ownership and refuses 
     db.prepare(
       "INSERT INTO uploaded_photos (id,museum_id,original_name,mime_type,optimized_storage_key,width,height,created_at) VALUES ('photo',?,'Photo','image/webp',?,1,1,'now')",
     ).run(owner.museumId, key);
-    manageScopedMemory(db, owner, "own", { action: "addPhotos", photoIds: ["photo"] });
+    manageScopedMemory(db, owner, "own", { action: "addPhotos", version: 1, photoIds: ["photo"] });
     manageScopedMemory(db, owner, "own", { action: "trash" });
     db.prepare(
       "INSERT INTO photo_deletion_jobs (photo_id,museum_id,optimized_storage_key,created_at) VALUES ('photo',?,'foreign-key','now')",

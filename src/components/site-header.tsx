@@ -7,7 +7,7 @@ import { isNavigationItemActive } from "@/components/site-navigation";
 import { publicSiteUrl } from "@/domain/share-links";
 import { copy } from "@/i18n/zh-CN";
 import { MuseumSwitcher } from "@/components/museum-switcher";
-import type { SwitcherMuseum } from "@/domain/museum-switcher";
+import { currentSwitcherMuseum, type SwitcherMuseum } from "@/domain/museum-switcher";
 
 const ownerNavigationItems = [
   { href: "/", label: copy.nav.gallery, marker: "◇" },
@@ -32,7 +32,10 @@ export function SiteHeader({
   museums?: SwitcherMuseum[];
 }) {
   const pathname = usePathname();
-  const museumId = useSearchParams().get("museumId");
+  const queryMuseumId = useSearchParams().get("museumId");
+  const museumId = pathname.startsWith("/account")
+    ? (currentSwitcherMuseum(museums, pathname, queryMuseumId)?.id ?? null)
+    : queryMuseumId;
   const member = museums.length > 0;
   const navigationItems = member || owner ? ownerNavigationItems : visitorNavigationItems;
   const scopedHref = (href: string) =>
@@ -56,7 +59,7 @@ export function SiteHeader({
       <Link className="brand" href={scopedHref("/")}>
         {copy.brand}
       </Link>
-      <MuseumSwitcher museums={museums} />
+      <MuseumSwitcher museums={museums} selectedMuseumId={museumId} />
       <nav aria-label={copy.common.mainNavigation}>
         <button className="site-share-button" type="button" onClick={() => void shareSite()}>
           <span className="site-nav-marker" aria-hidden="true">

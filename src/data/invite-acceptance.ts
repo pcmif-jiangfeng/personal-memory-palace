@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
+import { writeAuditLogInDatabase } from "./audit-log.ts";
+import { readString } from "./row-readers.ts";
 import { ApiError } from "../http/errors.ts";
 import { findMuseumByOwnerIdInDatabase } from "./museum-repository.ts";
 import { withTransaction } from "./transaction.ts";
@@ -31,6 +33,18 @@ export function acceptInviteInDatabase(database: DatabaseSync, userId: string, t
       VALUES (?,?,'collaborator','active',?,?) ON CONFLICT(museum_id,user_id)
       DO UPDATE SET status='active', updated_at=excluded.updated_at`).run(museum.id, userId, now, now);
     database.prepare("UPDATE invite_links SET usage_count=usage_count+1 WHERE id=?").run(invite.id);
+    writeAuditLogInDatabase(database, {
+      actorUserId: userId,
+      museumId: museum.id,
+      action: "membership.join",
+      objectType: "membership",
+      // Membership is identified by museum + user; the audit row already carries museumId.
+      objectId: userId,
+      diff: {
+        inviteId: readString(invite, "id"),
+        status: { before: membership ? readString(membership, "status") : null, after: "active" },
+      },
+    });
     return { museum, alreadyMember: false };
   });
 }

@@ -44,6 +44,7 @@ test("only Museum Owner can create/list/revoke invites and token is not stored o
         passwordHash: "hash",
       }),
     );
+    db.exec("UPDATE users SET email_verified=1");
     const one = createMuseumInDatabase(db, { ownerId: users[0].id, name: "一", slug: "one" });
     createMuseumInDatabase(db, { ownerId: users[1].id, name: "二", slug: "two" });
     db.prepare(

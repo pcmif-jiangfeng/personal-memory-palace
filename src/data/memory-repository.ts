@@ -1,5 +1,5 @@
 import { getDatabase } from "./database.ts";
-import { publicMemoryPredicate } from "./publication-repository.ts";
+import { publicMemoryPredicate, publicStagePredicate } from "./publication-repository.ts";
 import { readBooleanFlag, readNullableString, readNumber, readString } from "./row-readers.ts";
 import type {
   LaterNote,
@@ -234,14 +234,12 @@ const stageSql = `SELECT stages.*, stage_covers.storage_key AS cover_key,
     ))`;
 
 export function listActiveStages(publicOnly = false, museumId?: string): Stage[] {
-  if (museumId)
-    return listStagesInMuseumInDatabase(getDatabase(), museumId).filter(
-      (stage) => !publicOnly || stage.isPublic,
-    );
+  if (museumId && !publicOnly)
+    return listStagesInMuseumInDatabase(getDatabase(), museumId);
   const rows = getDatabase()
     .prepare(
       `${stageSql}
-     WHERE stages.trashed_at IS NULL ${publicOnly ? "AND stages.is_public = 1" : ""}
+     WHERE stages.trashed_at IS NULL ${publicOnly ? `AND ${publicStagePredicate}` : ""}
        AND (? IS NULL OR stages.museum_id = ?)
      ORDER BY stages.created_at`,
     )
@@ -399,7 +397,7 @@ export function findStageByIdInDatabase(
     .prepare(
       `${stageSql}
      WHERE stages.id = ? AND stages.trashed_at IS NULL
-       ${publicOnly ? "AND stages.is_public = 1" : ""}`,
+       ${publicOnly ? `AND ${publicStagePredicate}` : ""}`,
     )
     .get(id);
   return row ? mapStage(readStageRow(row)) : null;

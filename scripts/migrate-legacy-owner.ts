@@ -96,6 +96,8 @@ export function migrateLegacyOwnerInDatabase(
     for (const table of legacyOwnedTables) {
       database.prepare(`UPDATE ${table} SET museum_id = ? WHERE museum_id IS NULL`).run(museum.id);
     }
+    // This Museum adopts existing files, unlike a genuinely empty newly created Museum.
+    database.prepare("UPDATE museums SET storage_usage_ready=0 WHERE id=?").run(museum.id);
     if (countOrphans(database)) throw new Error("Migration produced orphan foreign keys");
     return { email: user.email, userId: user.id, museumId: museum.id };
   });

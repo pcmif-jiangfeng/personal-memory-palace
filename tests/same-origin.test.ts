@@ -89,11 +89,62 @@ test("every mutation route applies same-origin checks before authorization", () 
     const source = readFileSync(file, "utf8");
     const originCheck = source.indexOf("sameOriginRequiredResponse(request)");
     assert.notEqual(originCheck, -1, `${path.relative(apiDirectory, file)} lacks origin checking`);
+    if (path.relative(apiDirectory, file).startsWith(`admin${path.sep}`)) {
+      const userCheck = source.indexOf("await currentUser()", originCheck);
+      const adminCheck = source.indexOf(
+        "requirePlatformAdminInDatabase(database, user?.id ?? null)",
+        userCheck,
+      );
+      const parseCheck = source.indexOf("await parseQuotaAdjustment(request)", adminCheck);
+      assert.ok(userCheck > originCheck && adminCheck > userCheck && parseCheck > adminCheck);
+      assert.match(
+        source,
+        /adjustMuseumQuotaInDatabase\(database, actorUserId, id, input\)/,
+        "Admin mutations must derive the actor from the session and recheck authorization in the transaction",
+      );
+      continue;
+    }
     const isInviteRoute = path.relative(apiDirectory, file).startsWith(`invites${path.sep}`);
+    if (file.endsWith(path.join("deletion", "route.ts"))) {
+      const userCheck = source.indexOf("await currentUser()", originCheck);
+      const ownerCheck = source.indexOf(
+        "requireMuseumOwnerInDatabase(database, user.id, id)",
+        userCheck,
+      );
+      assert.ok(userCheck > originCheck && ownerCheck > userCheck);
+      assert.ok(
+        source.indexOf("await parseMuseumDeletionConfirmation(request)", ownerCheck) > ownerCheck,
+      );
+      assert.match(source, /scheduleMuseumDeletionInDatabase\(database, user.id, id, input\)/);
+      assert.match(source, /cancelMuseumDeletionInDatabase\(database, user.id, id, input\)/);
+      continue;
+    }
+    if (file.endsWith(path.join("transfer", "route.ts"))) {
+      const userCheck = source.indexOf("await currentUser()", originCheck);
+      const ownerCheck = source.indexOf(
+        "requireMuseumOwnerInDatabase(database, user.id, id)",
+        userCheck,
+      );
+      assert.ok(userCheck > originCheck && ownerCheck > userCheck);
+      assert.ok(source.indexOf("await parseMuseumOwnerTransfer(request)", ownerCheck) > ownerCheck);
+      assert.match(source, /transferMuseumOwnerInDatabase\(database, user.id, id, input\)/);
+      continue;
+    }
+    if (file.endsWith(path.join("collaborators", "[userId]", "route.ts"))) {
+      const userCheck = source.indexOf("await currentUser()", originCheck);
+      const ownerCheck = source.indexOf(
+        "requireMuseumOwnerInDatabase(database, user.id, id)",
+        userCheck,
+      );
+      assert.ok(userCheck > originCheck && ownerCheck > userCheck);
+      assert.match(source, /removeMuseumCollaboratorInDatabase\(database, user.id, id, userId\)/);
+      assert.ok(source.indexOf("await readJsonObject(request)", ownerCheck) > ownerCheck);
+      continue;
+    }
     if (isInviteRoute) {
       assert.match(
         source,
-        /(createOwnInviteInDatabase|revokeOwnInviteInDatabase|acceptInviteInDatabase)\(getDatabase\(\), user.id/,
+        /(createOwnInviteInDatabase|revokeOwnInviteInDatabase|acceptInviteInDatabase)\(\s*getDatabase\(\),\s*user.id/,
         "Invite mutations must derive the acting User from the authenticated session",
       );
     }

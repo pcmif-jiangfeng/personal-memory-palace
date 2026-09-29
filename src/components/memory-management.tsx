@@ -152,8 +152,9 @@ export function MemoryManagement({
       </details>
 
       <MemoryExhibitManager
-        key={`${memory.id}-${memory.updatedAt}`}
+        key={memory.id}
         memoryId={memory.id}
+        initialVersion={memory.version}
         museumId={museumId}
         exhibits={exhibits}
         libraryPhotos={libraryPhotos}

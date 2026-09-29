@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { writeAuditLogInDatabase } from "./audit-log.ts";
 import { getDatabase } from "./database.ts";
 import { findMemoryByIdInDatabase } from "./memory-repository.ts";
 import { readString } from "./row-readers.ts";
@@ -158,6 +159,16 @@ export function createMemoryInDatabase(
          WHERE id IN (${placeholders})`,
       )
       .run(now, ...photoIds);
+    if (scope) {
+      writeAuditLogInDatabase(database, {
+        actorUserId: scope.userId,
+        museumId: scope.museumId,
+        action: "memory.create",
+        objectType: "memory",
+        objectId: id,
+        diff: { stageId: input.stageId || null, photoIds, coverPhotoId: input.coverPhotoId },
+      });
+    }
   });
   return findMemoryByIdInDatabase(database, id)!;
 }

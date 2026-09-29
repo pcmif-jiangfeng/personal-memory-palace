@@ -1,4 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
+import { writeAuditLogInDatabase } from "./audit-log.ts";
+import { readNumber } from "./row-readers.ts";
 import { requireMuseumAccessInDatabase } from "./museum-access.ts";
 import { withTransaction } from "./transaction.ts";
 import { createStage, updateStage, type StageInput } from "./stage-repository.ts";
@@ -48,6 +50,14 @@ export function createScopedStage(db: DatabaseSync, scope: MemoryScope, input: S
     requireCover(db, scope, input.coverPhotoId);
     const stage = createStage(input, db, scope.museumId);
     db.prepare("UPDATE stages SET created_by_user_id=?, last_edited_by_user_id=? WHERE id=?").run(scope.userId, scope.userId, stage.id);
+    writeAuditLogInDatabase(db, {
+      actorUserId: scope.userId,
+      museumId: scope.museumId,
+      action: "stage.create",
+      objectType: "stage",
+      objectId: stage.id,
+      diff: { coverPhotoId: input.coverPhotoId || null },
+    });
     return readScopedStage(db, scope, stage.id);
   });
 }
@@ -88,13 +98,15 @@ export function manageScopedStage(
       .prepare("SELECT 1 FROM memories WHERE stage_id=? AND museum_id IS NOT ?")
       .get(id, scope.museumId);
     if (foreignCover || foreignMemory) throw new ApiError("INVALID_STAGE_BINDING", 400);
+    const beforeVersion = readNumber(
+      db.prepare("SELECT version FROM stages WHERE id=?").get(id)!, "version",
+    );
     switch (action.action) {
       case "details":
         if (!Number.isSafeInteger(action.input.version) || (action.input.version as number) < 1) throw new ApiError("INVALID_STAGE_VERSION", 400);
         requireCover(db, scope, action.input.coverPhotoId);
         updateStage(id, action.input, db, scope.museumId);
-        db.prepare("UPDATE stages SET last_edited_by_user_id=? WHERE id=?").run(scope.userId, id);
-        return readScopedStage(db, scope, id);
+        break;
       case "publication":
         setStagePublicInDatabase(db, id, action.isPublic);
         break;
@@ -109,6 +121,22 @@ export function manageScopedStage(
         break;
     }
     db.prepare("UPDATE stages SET last_edited_by_user_id=? WHERE id=?").run(scope.userId, id);
-    db.prepare("UPDATE stages SET version=version+1 WHERE id=?").run(id);
+    if (action.action !== "details") db.prepare("UPDATE stages SET version=version+1 WHERE id=?").run(id);
+    const savedVersion = action.action === "permanent"
+      ? null
+      : readNumber(db.prepare("SELECT version FROM stages WHERE id=?").get(id)!, "version");
+    writeAuditLogInDatabase(db, {
+      actorUserId: scope.userId,
+      museumId: scope.museumId,
+      action: `stage.${action.action}`,
+      objectType: "stage",
+      objectId: id,
+      diff: {
+        version: { before: beforeVersion, after: savedVersion },
+        ...(action.action === "details" ? { coverPhotoId: action.input.coverPhotoId || null } : {}),
+        ...(action.action === "publication" ? { isPublic: action.isPublic } : {}),
+      },
+    });
+    if (action.action === "details") return readScopedStage(db, scope, id);
   });
 }

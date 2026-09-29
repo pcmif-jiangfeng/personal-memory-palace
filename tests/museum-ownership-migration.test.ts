@@ -26,7 +26,7 @@ function versionTenDatabase(): DatabaseSync {
   return database;
 }
 
-test("migration 11 keeps existing Museums and prevents a second Museum for one owner", () => {
+test("migration 11 keeps existing Museums and migration 22 permits multiple owned Museums", () => {
   const database = versionTenDatabase();
   try {
     database.exec(
@@ -34,17 +34,17 @@ test("migration 11 keeps existing Museums and prevents a second Museum for one o
     );
     runDatabaseMigrations(database);
     runDatabaseMigrations(database);
-    assert.throws(() =>
+    assert.doesNotThrow(() =>
       database.exec(
         "INSERT INTO museums (id, owner_id, slug) VALUES ('museum-2', 'owner-1', 'second')",
       ),
     );
     database.exec(
-      "INSERT INTO museums (id, owner_id, slug) VALUES ('museum-2', 'owner-2', 'second')",
+      "INSERT INTO museums (id, owner_id, slug) VALUES ('museum-3', 'owner-2', 'third')",
     );
     assert.equal(
       (database.prepare("SELECT COUNT(*) AS count FROM museums").get() as { count: number }).count,
-      2,
+      3,
     );
     assert.equal(
       (

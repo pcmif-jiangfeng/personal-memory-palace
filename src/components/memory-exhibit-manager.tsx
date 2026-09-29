@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ClientApiError } from "@/client/http-client";
 import {
   addMemoryPhotos,
   removeMemoryPhoto,
@@ -24,13 +25,15 @@ export type { ExhibitPhotoView } from "@/components/use-exhibit-editor";
 
 export function MemoryExhibitManager({
   memoryId,
-  exhibits,
+  initialVersion,
+  exhibits: incomingExhibits,
   libraryPhotos,
   initialNextCursor,
   stages,
   museumId,
 }: {
   memoryId: string;
+  initialVersion: number;
   museumId: string;
   exhibits: ExhibitPhotoView[];
   libraryPhotos: WorkspacePhotoView[];
@@ -40,6 +43,16 @@ export function MemoryExhibitManager({
   const router = useRouter();
   const { startUpload } = useUploadTasks();
   const inputRef = useRef<HTMLInputElement>(null);
+  const versionRef = useRef(initialVersion);
+  const mutationQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const pendingCount = useRef(0);
+  const [savedVersion, setSavedVersion] = useState(initialVersion);
+  const [snapshot, setSnapshot] = useState({ version: initialVersion, exhibits: incomingExhibits });
+  // Only adopt the snapshot produced by our own acknowledged save, never silently rebase a draft.
+  if (snapshot.version !== savedVersion && initialVersion === savedVersion) {
+    setSnapshot({ version: initialVersion, exhibits: incomingExhibits });
+  }
+  const exhibits = snapshot.exhibits;
 
   const {
     loadFailed: libraryLoadFailed,
@@ -59,9 +72,11 @@ export function MemoryExhibitManager({
     initialNextCursor,
     pageSize: PAGE_SIZE,
   });
-  const [busy, setBusy] = useState(false);
+  const [requestBusy, setRequestBusy] = useState(false);
+  const busy = requestBusy || snapshot.version !== savedVersion;
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const conflict = error === copy.management.conflict || initialVersion > savedVersion;
 
   const currentPhotoIds = useMemo(
     () => new Set(exhibits.map((photo) => photo.photoId)),
@@ -69,21 +84,45 @@ export function MemoryExhibitManager({
   );
   const filteredLibrary = availableLibraryPhotos.filter((photo) => !currentPhotoIds.has(photo.id));
 
-  async function perform(request: () => Promise<void>, successMessage: string): Promise<boolean> {
-    if (busy) return false;
-    setBusy(true);
+  async function save(request: (version: number) => Promise<number>, successMessage: string) {
+    pendingCount.current += 1;
+    setRequestBusy(true);
     setMessage("");
     setError("");
-    try {
-      await request();
+    // Uploads can finish in parallel; serialize only their relation writes, not the uploads.
+    const pending = mutationQueue.current.then(async () => {
+      const version = await request(versionRef.current);
+      versionRef.current = version;
+      setSavedVersion(version);
       setMessage(successMessage);
       router.refresh();
+    });
+    mutationQueue.current = pending.catch(() => undefined);
+    try {
+      await pending;
+    } catch (error) {
+      setError(
+        error instanceof ClientApiError && error.code === "MEMORY_VERSION_CONFLICT"
+          ? copy.management.conflict
+          : copy.exhibits.failed,
+      );
+      throw error;
+    } finally {
+      pendingCount.current -= 1;
+      setRequestBusy(pendingCount.current > 0);
+    }
+  }
+
+  async function perform(
+    request: (version: number) => Promise<number>,
+    successMessage: string,
+  ): Promise<boolean> {
+    if (busy || pendingCount.current > 0) return false;
+    try {
+      await save(request, successMessage);
       return true;
     } catch {
-      setError(copy.exhibits.failed);
       return false;
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -97,12 +136,26 @@ export function MemoryExhibitManager({
           : copy.exhibits.removeConfirm(photo.name),
       ),
     reorderPhotos: (photoIds) =>
-      perform(() => reorderMemoryPhotos(memoryId, photoIds), copy.exhibits.orderSaved),
+      perform(
+        (version) => reorderMemoryPhotos(memoryId, photoIds, version, museumId),
+        copy.exhibits.orderSaved,
+      ),
     removePhoto: (photoId) =>
-      perform(() => removeMemoryPhoto(memoryId, photoId), copy.exhibits.removed),
+      perform(
+        (version) => removeMemoryPhoto(memoryId, photoId, version, museumId),
+        copy.exhibits.removed,
+      ),
     updateMetadata: (photoId, metadata) =>
       perform(
-        () => updateMemoryExhibitMetadata(memoryId, photoId, metadata.title, metadata.description),
+        (version) =>
+          updateMemoryExhibitMetadata(
+            memoryId,
+            photoId,
+            metadata.title,
+            metadata.description,
+            version,
+            museumId,
+          ),
         copy.exhibits.metadataSaved,
       ),
   });
@@ -115,7 +168,10 @@ export function MemoryExhibitManager({
   } = useExhibitLibrarySelection({
     exhibitCount: exhibits.length,
     addPhotos: (photoIds) =>
-      perform(() => addMemoryPhotos(memoryId, photoIds), copy.exhibits.photosAdded),
+      perform(
+        (version) => addMemoryPhotos(memoryId, photoIds, version, museumId),
+        copy.exhibits.photosAdded,
+      ),
   });
 
   function selectExhibit(photo: ExhibitPhotoView) {
@@ -125,14 +181,16 @@ export function MemoryExhibitManager({
   }
 
   function upload(files: FileList | null) {
-    if (!files?.length || remainingSlots === 0) return;
+    if (!files?.length || remainingSlots === 0 || busy || pendingCount.current > 0) return;
     const selectedFiles = Array.from(files).slice(0, remainingSlots);
     if (files.length > remainingSlots) setError(copy.exhibits.uploadLimit(remainingSlots));
     startUpload(selectedFiles, {
       museumId,
       onPhotoUploaded: async (photoId) => {
-        await addMemoryPhotos(memoryId, [photoId], museumId);
-        router.refresh();
+        await save(
+          (version) => addMemoryPhotos(memoryId, [photoId], version, museumId),
+          copy.exhibits.photosAdded,
+        );
       },
     });
     if (inputRef.current) inputRef.current.value = "";
@@ -149,7 +207,10 @@ export function MemoryExhibitManager({
         busy={busy}
         onSelect={selectExhibit}
         onSetCover={(photoId) =>
-          void perform(() => setMemoryCover(memoryId, photoId), copy.exhibits.coverSaved)
+          void perform(
+            (version) => setMemoryCover(memoryId, photoId, version, museumId),
+            copy.exhibits.coverSaved,
+          )
         }
       />
 
@@ -165,6 +226,7 @@ export function MemoryExhibitManager({
                 <input
                   ref={inputRef}
                   type="file"
+                  disabled={busy}
                   multiple
                   accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
                   onChange={(event) => upload(event.target.files)}
@@ -251,11 +313,33 @@ export function MemoryExhibitManager({
       {message ? (
         <p className="memory-management-message" role="status">
           {message}
+          {snapshot.version !== savedVersion && !requestBusy && !conflict ? (
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => {
+                if (window.confirm(copy.management.reloadConfirm)) window.location.reload();
+              }}
+            >
+              {copy.management.reloadLatest}
+            </button>
+          ) : null}
         </p>
       ) : null}
-      {error || libraryLoadFailed ? (
+      {error || libraryLoadFailed || conflict ? (
         <p className="form-error memory-management-message" role="alert">
-          {error || copy.exhibits.failed}
+          {conflict ? copy.management.conflict : error || copy.exhibits.failed}
+          {conflict ? (
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => {
+                if (window.confirm(copy.management.reloadConfirm)) window.location.reload();
+              }}
+            >
+              {copy.management.reloadLatest}
+            </button>
+          ) : null}
         </p>
       ) : null}
     </details>

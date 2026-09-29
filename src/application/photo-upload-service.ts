@@ -10,7 +10,7 @@ import { ApiError } from "../http/errors.ts";
 export interface PhotoUploadDependencies {
   createStorageKey: () => string;
   validate: (data: Buffer) => Promise<SaveOptimizedImageInput>;
-  prepare: (storageKey: string) => string;
+  prepare: (storageKey: string, image: SaveOptimizedImageInput) => string;
   save: (image: SaveOptimizedImageInput, storageKey: string) => Promise<SavedImage>;
   commit: (
     operationId: string,
@@ -47,7 +47,7 @@ export async function uploadOptimizedPhoto(
 
   try {
     const storageKey = dependencies.createStorageKey();
-    const operationId = dependencies.prepare(storageKey);
+    const operationId = dependencies.prepare(storageKey, validated);
     const saved = await dependencies.save(validated, storageKey);
     const photo = dependencies.commit(operationId, {
       originalName: normalizeOriginalName(input.requestedName),

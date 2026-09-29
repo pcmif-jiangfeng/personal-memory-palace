@@ -117,6 +117,7 @@ test("Museum settings record the owner on changes but preserve attribution on no
       name: "Museum",
       slug: "settings",
     });
+    db.exec("UPDATE users SET email_verified=1");
     assert.equal(museum.lastEditedByUserId, null);
     const unchanged = updateOwnMuseumProfileInDatabase(db, owner.id, {
       name: "Museum",

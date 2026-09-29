@@ -1,7 +1,9 @@
 import type { DatabaseSync } from "node:sqlite";
+import { auditLogSchemaSql } from "./audit-log-schema.ts";
 import { inviteLinkSchemaSql } from "./invite-link-schema.ts";
 import { museumMembershipSchemaSql } from "./museum-membership-schema.ts";
 import { withTransaction } from "./transaction.ts";
+import { photoStorageUsageSchemaSql } from "./photo-storage-quota.ts";
 
 type Migration = {
   version: number;
@@ -278,6 +280,39 @@ const migrations: readonly Migration[] = [
     version: 19,
     migrate(database) {
       if (!hasColumn(database, "stages", "version")) database.exec("ALTER TABLE stages ADD COLUMN version INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1)");
+    },
+  },
+  {
+    version: 20,
+    migrate(database) {
+      database.exec(auditLogSchemaSql);
+    },
+  },
+  {
+    version: 21,
+    migrate(database) {
+      if (!hasColumn(database, "museums", "storage_usage_ready")) {
+        database.exec("ALTER TABLE museums ADD COLUMN storage_usage_ready INTEGER NOT NULL DEFAULT 0 CHECK (storage_usage_ready IN (0,1))");
+      }
+      database.exec(photoStorageUsageSchemaSql);
+    },
+  },
+  {
+    version: 22,
+    migrate(database) {
+      // Transfers may add another Museum to an Owner; each Museum still has one owner_id.
+      database.exec("DROP INDEX IF EXISTS museums_owner_unique");
+      if (hasColumn(database, "museums", "owner_id")) {
+        database.exec("CREATE INDEX IF NOT EXISTS museums_owner_index ON museums(owner_id)");
+      }
+    },
+  },
+  {
+    version: 23,
+    migrate(database) {
+      if (!hasColumn(database, "museums", "deletion_scheduled_at")) {
+        database.exec("ALTER TABLE museums ADD COLUMN deletion_scheduled_at TEXT");
+      }
     },
   },
 ];

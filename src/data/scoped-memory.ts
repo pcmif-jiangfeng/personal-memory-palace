@@ -1,4 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
+import { writeAuditLogInDatabase } from "./audit-log.ts";
+import { readNumber } from "./row-readers.ts";
 import { requireMemoryAccessInDatabase } from "./memory-access.ts";
 import { requireMuseumAccessInDatabase } from "./museum-access.ts";
 import { withTransaction } from "./transaction.ts";
@@ -58,7 +60,12 @@ export function manageScopedMemory(
         ? input.action
         : "update";
     requireMemoryAccessInDatabase(db, scope.userId, scope.museumId, id, operation);
-    if (input.action === "details" && (!Number.isSafeInteger(input.version) || input.version < 1)) {
+    const beforeVersion = readNumber(
+      db.prepare("SELECT version FROM memories WHERE id=?").get(id)!, "version",
+    );
+    const exhibitWrite = input.action === "addPhotos" || input.action === "removePhoto" ||
+      input.action === "reorderPhotos" || input.action === "setCover" || input.action === "exhibitMetadata";
+    if ((input.action === "details" || exhibitWrite) && (!Number.isSafeInteger(input.version) || input.version < 1)) {
       throw new ApiError("INVALID_MEMORY_VERSION", 400);
     }
     if (input.action === "details" && input.stageId)
@@ -92,6 +99,11 @@ export function manageScopedMemory(
         .get(id, scope.museumId)
     )
       throw new ApiError("INVALID_MEMORY_BINDING", 400);
+    // The compare-and-increment belongs to the same transaction as every relation side effect.
+    if (exhibitWrite && !db.prepare("UPDATE memories SET version=version+1 WHERE id=? AND museum_id=? AND version=?")
+      .run(id, scope.museumId, input.version).changes) {
+      throw new ApiError("MEMORY_VERSION_CONFLICT", 409);
+    }
     switch (input.action) {
       case "details":
         updateMemoryDetailsInDatabase(db, id, input);
@@ -131,7 +143,7 @@ export function manageScopedMemory(
         break;
     }
     db.prepare("UPDATE memories SET last_edited_by_user_id=? WHERE id=?").run(scope.userId, id);
-    if (input.action !== "details") db.prepare("UPDATE memories SET version=version+1 WHERE id=?").run(id);
+    if (input.action !== "details" && !exhibitWrite) db.prepare("UPDATE memories SET version=version+1 WHERE id=?").run(id);
     for (const table of ["memory_images", "later_notes"])
       db.prepare(`UPDATE ${table} SET museum_id=? WHERE memory_id=? AND museum_id IS NULL`).run(
         scope.museumId,
@@ -140,7 +152,23 @@ export function manageScopedMemory(
     db.prepare(
       "UPDATE memory_relations SET museum_id=? WHERE (memory_id=? OR related_memory_id=?) AND museum_id IS NULL",
     ).run(scope.museumId, id, id);
-    if (input.action === "details") return (db.prepare("SELECT version FROM memories WHERE id=?").get(id) as {version: number}).version;
+    const savedVersion = input.action === "permanent"
+      ? null
+      : readNumber(db.prepare("SELECT version FROM memories WHERE id=?").get(id)!, "version");
+    writeAuditLogInDatabase(db, {
+      actorUserId: scope.userId,
+      museumId: scope.museumId,
+      action: `memory.${input.action}`,
+      objectType: "memory",
+      objectId: id,
+      diff: {
+        version: { before: beforeVersion, after: savedVersion },
+        ...("photoId" in input ? { photoId: input.photoId } : {}),
+        ...("photoIds" in input ? { photoIds: input.photoIds } : {}),
+        ...(input.action === "publication" ? { isPublic: input.isPublic } : {}),
+      },
+    });
+    if (input.action === "details" || exhibitWrite) return savedVersion!;
   });
 }
 

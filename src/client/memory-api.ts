@@ -28,6 +28,31 @@ function decodeOk(value: unknown): void {
   if (readRecord(value).ok !== true) throw new TypeError("Expected a successful response");
 }
 
+function decodeMemoryVersion(value: unknown): number {
+  const record = readRecord(value);
+  decodeOk(value);
+  if (!Number.isSafeInteger(record.version) || (record.version as number) < 1)
+    throw new TypeError("Expected a Memory version");
+  return record.version as number;
+}
+
+function performExhibitAction(
+  memoryId: string,
+  action: Record<string, unknown>,
+  version: number,
+  museumId?: string,
+): Promise<number> {
+  return requestJson(
+    memoryMuseumUrl(`/api/memories/${encodeURIComponent(memoryId)}`, museumId),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...action, version }),
+    },
+    decodeMemoryVersion,
+  );
+}
+
 function decodeCreatedMemory(value: unknown): { id: string } {
   const memory = readRecord(readRecord(value).memory);
   if (typeof memory.id !== "string") throw new TypeError("Expected a created memory");
@@ -78,13 +103,7 @@ export function updateMemoryDetails(memoryId: string, input: MemoryDetailsInput)
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "details", ...input }),
     },
-    (value) => {
-      const record = readRecord(value);
-      decodeOk(value);
-      if (!Number.isSafeInteger(record.version) || (record.version as number) < 1)
-        throw new TypeError("Expected a Memory version");
-      return record.version as number;
-    },
+    decodeMemoryVersion,
   );
 }
 
@@ -107,21 +126,37 @@ export function trashMemory(memoryId: string): Promise<void> {
 export function addMemoryPhotos(
   memoryId: string,
   photoIds: string[],
+  version: number,
   museumId?: string,
-): Promise<void> {
-  return performMemoryAction(memoryId, { action: "addPhotos", photoIds }, museumId);
+): Promise<number> {
+  return performExhibitAction(memoryId, { action: "addPhotos", photoIds }, version, museumId);
 }
 
-export function removeMemoryPhoto(memoryId: string, photoId: string): Promise<void> {
-  return performMemoryAction(memoryId, { action: "removePhoto", photoId });
+export function removeMemoryPhoto(
+  memoryId: string,
+  photoId: string,
+  version: number,
+  museumId?: string,
+): Promise<number> {
+  return performExhibitAction(memoryId, { action: "removePhoto", photoId }, version, museumId);
 }
 
-export function reorderMemoryPhotos(memoryId: string, photoIds: string[]): Promise<void> {
-  return performMemoryAction(memoryId, { action: "reorderPhotos", photoIds });
+export function reorderMemoryPhotos(
+  memoryId: string,
+  photoIds: string[],
+  version: number,
+  museumId?: string,
+): Promise<number> {
+  return performExhibitAction(memoryId, { action: "reorderPhotos", photoIds }, version, museumId);
 }
 
-export function setMemoryCover(memoryId: string, photoId: string): Promise<void> {
-  return performMemoryAction(memoryId, { action: "setCover", photoId });
+export function setMemoryCover(
+  memoryId: string,
+  photoId: string,
+  version: number,
+  museumId?: string,
+): Promise<number> {
+  return performExhibitAction(memoryId, { action: "setCover", photoId }, version, museumId);
 }
 
 export function updateMemoryExhibitMetadata(
@@ -129,13 +164,20 @@ export function updateMemoryExhibitMetadata(
   photoId: string,
   title: string,
   description: string,
-): Promise<void> {
-  return performMemoryAction(memoryId, {
-    action: "exhibitMetadata",
-    photoId,
-    title,
-    description,
-  });
+  version: number,
+  museumId?: string,
+): Promise<number> {
+  return performExhibitAction(
+    memoryId,
+    {
+      action: "exhibitMetadata",
+      photoId,
+      title,
+      description,
+    },
+    version,
+    museumId,
+  );
 }
 
 export function recallMemory(): Promise<{ id: string } | null> {

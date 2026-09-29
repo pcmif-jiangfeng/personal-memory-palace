@@ -4,7 +4,13 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ClientApiError, requestJson } from "@/client/http-client";
 
-export function MuseumSlugForm({ currentSlug }: { currentSlug: string }) {
+export function MuseumSlugForm({
+  currentSlug,
+  museumId,
+}: {
+  currentSlug: string;
+  museumId: string;
+}) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -18,7 +24,7 @@ export function MuseumSlugForm({ currentSlug }: { currentSlug: string }) {
     const values = new FormData(event.currentTarget);
     try {
       await requestJson(
-        "/api/museums",
+        `/api/museums?museumId=${encodeURIComponent(museumId)}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },

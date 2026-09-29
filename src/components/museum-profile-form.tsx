@@ -6,12 +6,14 @@ import { ClientApiError, requestJson } from "@/client/http-client";
 import { copy } from "@/i18n/zh-CN";
 
 export function MuseumProfileForm({
+  museumId,
   name,
   description,
   coverPhotoId,
   photos,
   version,
 }: {
+  museumId: string;
   name: string;
   description: string;
   coverPhotoId: string | null;
@@ -31,7 +33,7 @@ export function MuseumProfileForm({
     setMessage("");
     try {
       const savedVersion = await requestJson(
-        "/api/museums",
+        `/api/museums?museumId=${encodeURIComponent(museumId)}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -47,7 +49,7 @@ export function MuseumProfileForm({
             !payload ||
             typeof payload !== "object" ||
             !("id" in payload) ||
-            typeof payload.id !== "string"
+            payload.id !== museumId
           )
             throw new TypeError("Invalid museum response");
           if (

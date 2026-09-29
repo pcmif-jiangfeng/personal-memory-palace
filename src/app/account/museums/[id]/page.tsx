@@ -17,7 +17,7 @@ export default async function JoinedMuseumPage({ params }: { params: Promise<{ i
     (museum) => museum.id === id,
   );
   if (!choice) notFound();
-  if (choice.role === "owner") redirect("/account");
+  if (choice.role === "owner") redirect(`/account?museumId=${encodeURIComponent(id)}`);
   const museum = findMuseumByIdInDatabase(database, id);
   if (!museum) notFound();
   return (
@@ -35,6 +35,11 @@ export default async function JoinedMuseumPage({ params }: { params: Promise<{ i
           <Link href={`/workspace?museumId=${encodeURIComponent(id)}`}>进入照片整理台</Link>
         </p>
         <MuseumLeaveForm museumId={museum.id} museumName={museum.name} />
+        <p>
+          <Link href={`/account/museums/${encodeURIComponent(id)}/activity`} prefetch={false}>
+            查看协作动态
+          </Link>
+        </p>
         <Link href="/account">返回自己的 Museum</Link>
       </div>
     </section>

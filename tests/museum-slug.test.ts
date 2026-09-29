@@ -25,6 +25,7 @@ test("changing slug keeps museum ID, content and all museum-id foreign keys inta
       passwordHash: "hash",
       displayName: "馆长",
     });
+    db.exec("UPDATE users SET email_verified=1");
     const museum = createMuseumInDatabase(db, {
       ownerId: owner.id,
       name: "人生馆",
@@ -105,6 +106,7 @@ test("slug conflicts preserve both Museums and users without a Museum cannot edi
         displayName: name,
       }),
     );
+    db.exec("UPDATE users SET email_verified=1");
     const one = createMuseumInDatabase(db, { ownerId: owners[0].id, name: "一", slug: "one" });
     const two = createMuseumInDatabase(db, { ownerId: owners[1].id, name: "二", slug: "TWO" });
     assert.throws(() => updateOwnMuseumSlugInDatabase(db, owners[0].id, "two"), /SLUG_TAKEN/);

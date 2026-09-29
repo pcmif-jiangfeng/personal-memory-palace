@@ -31,6 +31,7 @@ try {
       ownerId: user.id,
       name: `Museum ${index}`,
       slug: `test-${index}`,
+      storageQuotaBytes: 1024 * 1024,
     }),
   );
   const museumA = museums[0].id;

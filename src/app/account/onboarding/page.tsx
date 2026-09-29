@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { MuseumOnboardingForm } from "@/components/museum-onboarding-form";
 import { getDatabase } from "@/data/database";
 import { findMuseumByOwnerIdInDatabase } from "@/data/museum-repository";
@@ -17,6 +18,9 @@ export default async function MuseumOnboardingPage() {
         <h1>为回忆建一座馆</h1>
         <p>给它一个名字和馆址。故事与照片可以留待日后慢慢陈列。</p>
         <MuseumOnboardingForm />
+        <Link href="/account/deletion" prefetch={false}>
+          检查账号删除条件
+        </Link>
       </div>
     </section>
   );

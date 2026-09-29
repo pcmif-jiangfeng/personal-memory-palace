@@ -28,6 +28,15 @@ export function getOwnerPassword(): string | null {
   return password || null;
 }
 
+export function getPlatformAdminUserId(): string | null {
+  const id = process.env.MEMORY_PALACE_PLATFORM_ADMIN_USER_ID?.trim();
+  if (!id) return null;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)) {
+    throw new ConfigurationError("MEMORY_PALACE_PLATFORM_ADMIN_USER_ID must be one User UUID");
+  }
+  return id;
+}
+
 export function getSessionSecret(): string {
   const secret = process.env.MEMORY_PALACE_SESSION_SECRET?.trim();
   if (secret && secret.length >= 32) return secret;

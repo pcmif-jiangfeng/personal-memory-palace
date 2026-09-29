@@ -1,4 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
+import { writeAuditLogInDatabase } from "./audit-log.ts";
+import { readNullableString } from "./row-readers.ts";
 import type { MemoryScope } from "./scoped-memory.ts";
 import { requireMuseumAccessInDatabase } from "./museum-access.ts";
 import { archiveUploadedPhotoInDatabase } from "./photo-repository.ts";
@@ -63,7 +65,19 @@ export function requirePhotoAccess(
 export function archiveScopedPhoto(db: DatabaseSync, scope: MemoryScope, id: string) {
   return withTransaction(db, () => {
     requirePhotoAccess(db, scope, id);
-    return archiveUploadedPhotoInDatabase(db, id);
+    const photo = db.prepare("SELECT library_archived_at FROM uploaded_photos WHERE id=?").get(id)!;
+    const alreadyArchived = readNullableString(photo, "library_archived_at") !== null;
+    const result = archiveUploadedPhotoInDatabase(db, id);
+    if (!alreadyArchived) {
+      writeAuditLogInDatabase(db, {
+        actorUserId: scope.userId,
+        museumId: scope.museumId,
+        action: "photo.archive",
+        objectType: "photo",
+        objectId: id,
+      });
+    }
+    return result;
   });
 }
 

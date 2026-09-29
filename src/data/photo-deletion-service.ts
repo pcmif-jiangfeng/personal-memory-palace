@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { writeAuditLogInDatabase } from "./audit-log.ts";
 import { withTransaction } from "./transaction.ts";
 import { DomainError } from "../domain/errors.ts";
 import type { ImageStorage } from "../storage/image-storage.ts";
@@ -6,6 +7,7 @@ import type { MemoryScope } from "./scoped-memory.ts";
 import { requirePhotoAccess, requirePhotoMuseum } from "./photo-access.ts";
 import { ApiError } from "../http/errors.ts";
 import { readBooleanFlag, readNullableString, readString } from "./row-readers.ts";
+import { releasePhotoStorageInDatabase } from "./photo-storage-quota.ts";
 
 export interface PhotoMemoryReference {
   id: string;
@@ -128,7 +130,7 @@ function prepareDeletion(
     const photoRow = database
       .prepare(
         `SELECT optimized_storage_key AS optimizedStorageKey,
-                original_storage_key AS originalStorageKey
+                original_storage_key AS originalStorageKey, museum_id AS museumId
          FROM uploaded_photos WHERE id = ?`,
       )
       .get(photoId);
@@ -165,9 +167,20 @@ function prepareDeletion(
         photo.optimizedStorageKey,
         photo.originalStorageKey,
         new Date().toISOString(),
-        scope?.museumId ?? null,
+        readNullableString(photoRow!, "museumId"),
       );
     database.prepare("DELETE FROM uploaded_photos WHERE id = ?").run(photoId);
+    // The DB deletion is committed before asynchronous file cleanup; do not claim cleanup succeeded.
+    // Existing jobs return above, so retries and startup recovery cannot duplicate this event.
+    if (scope) {
+      writeAuditLogInDatabase(database, {
+        actorUserId: scope.userId,
+        museumId: scope.museumId,
+        action: "photo.deleteQueued",
+        objectType: "photo",
+        objectId: photoId,
+      });
+    }
     return photo;
   });
 }
@@ -191,7 +204,10 @@ export async function deleteUploadedPhotoInDatabase(
   }
 
   try {
-    database.prepare("DELETE FROM photo_deletion_jobs WHERE photo_id = ?").run(photoId);
+    withTransaction(database, () => {
+      releasePhotoStorageInDatabase(database, [plan.optimizedStorageKey, plan.originalStorageKey]);
+      database.prepare("DELETE FROM photo_deletion_jobs WHERE photo_id = ?").run(photoId);
+    });
   } catch {
     throw new DomainError("PHOTO_DELETE_INCOMPLETE", { retryable: true });
   }
@@ -247,7 +263,10 @@ export async function recoverPendingPhotoDeletions(
   for (const job of pending) {
     try {
       await storage.remove([job.optimizedStorageKey, job.originalStorageKey]);
-      database.prepare("DELETE FROM photo_deletion_jobs WHERE photo_id = ?").run(job.photoId);
+      withTransaction(database, () => {
+        releasePhotoStorageInDatabase(database, [job.optimizedStorageKey, job.originalStorageKey]);
+        database.prepare("DELETE FROM photo_deletion_jobs WHERE photo_id = ?").run(job.photoId);
+      });
       recovered += 1;
     } catch (error) {
       database
@@ -272,7 +291,10 @@ export async function recoverPendingUploads(
   for (const job of pending) {
     try {
       await storage.remove([job.storageKey]);
-      database.prepare("DELETE FROM pending_uploads WHERE id = ?").run(job.id);
+      withTransaction(database, () => {
+        releasePhotoStorageInDatabase(database, [job.storageKey]);
+        database.prepare("DELETE FROM pending_uploads WHERE id = ?").run(job.id);
+      });
       recovered += 1;
     } catch (error) {
       database

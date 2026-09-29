@@ -15,6 +15,7 @@ import {
 import { ImageOptimizationError, optimizeImageForUpload } from "@/upload/client-image-optimizer";
 import { createClientRandomId } from "@/upload/client-random-id";
 import { memoryMuseumUrl } from "@/client/memory-museum-url";
+import { uploadResponseErrorMessage } from "@/upload/upload-response-error";
 import { copy } from "@/i18n/zh-CN";
 import { isUploadTaskFinished, summarizeUploadStatuses } from "@/upload/upload-task-model";
 import {
@@ -66,14 +67,6 @@ function optimizationErrorMessage(error: unknown): string {
   return copy.uploadTasks.optimizationErrors.invalid;
 }
 
-function responseErrorMessage(status: number, code?: string): string {
-  if (status === 401) return copy.uploadTasks.responseErrors.unauthorized;
-  if (status === 413 || code === "OPTIMIZED_IMAGE_TOO_LARGE")
-    return copy.uploadTasks.responseErrors.tooLarge;
-  if (code === "INVALID_OPTIMIZED_IMAGE") return copy.uploadTasks.responseErrors.invalid;
-  return copy.uploadTasks.responseErrors.failed;
-}
-
 function statusText(item: UploadItem): string {
   if (item.status === "waiting") return copy.uploadTasks.statuses.waiting;
   if (item.status === "compressing") return copy.uploadTasks.statuses.compressing;
@@ -122,6 +115,7 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
         const response = await fetch(entry.uploadUrl, { method: "POST", body: formData });
         const result = (await response.json().catch(() => ({}))) as {
           error?: string;
+          details?: unknown;
           photos?: Array<{ id: string }>;
         };
         const photoId = result.photos?.[0]?.id;
@@ -147,7 +141,7 @@ export function UploadTaskProvider({ children }: { children: ReactNode }) {
         } else {
           patchItem(entry.batchId, entry.itemId, {
             status: "failed",
-            error: responseErrorMessage(response.status, result.error),
+            error: uploadResponseErrorMessage(response.status, result.error, result.details),
             cancelRequested: false,
           });
         }
