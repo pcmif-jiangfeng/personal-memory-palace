@@ -5,6 +5,7 @@ import { requireMuseumOwnerInDatabase } from "./museum-access.ts";
 import { findMuseumByIdInDatabase } from "./museum-repository.ts";
 import { withTransaction } from "./transaction.ts";
 import { writeAuditLogInDatabase } from "./audit-log.ts";
+import { queueCollaborationNotificationInDatabase } from "./museum-notifications.ts";
 
 export function transferMuseumOwnerInDatabase(
   database: DatabaseSync,
@@ -40,6 +41,8 @@ export function transferMuseumOwnerInDatabase(
       )
       .run(input.targetUserId, now, access.userId, museumId, access.userId, input.version);
     if (!result.changes) throw new ApiError("MUSEUM_VERSION_CONFLICT", 409);
+    database.prepare("UPDATE museum_support_access SET revoked_at=? WHERE museum_id=? AND revoked_at IS NULL")
+      .run(now, museumId);
     database
       .prepare("DELETE FROM museum_memberships WHERE museum_id=? AND user_id=?")
       .run(museumId, input.targetUserId);
@@ -58,7 +61,7 @@ export function transferMuseumOwnerInDatabase(
         )
         .run(now, museumId, access.userId);
     }
-    writeAuditLogInDatabase(database, {
+    const event = writeAuditLogInDatabase(database, {
       actorUserId: access.userId,
       museumId,
       action: "museum.ownerTransfer",
@@ -69,6 +72,7 @@ export function transferMuseumOwnerInDatabase(
         oldOwnerDisposition: input.oldOwnerDisposition,
       },
     });
+    queueCollaborationNotificationInDatabase(database, event.id, museumId, "ownerTransfer", input.targetUserId, access.userId);
     return {
       ok: true as const,
       museumId,

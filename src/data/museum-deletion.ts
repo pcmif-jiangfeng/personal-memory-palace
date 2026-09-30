@@ -5,6 +5,7 @@ import { writeAuditLogInDatabase } from "./audit-log.ts";
 import { requireMuseumOwnerInDatabase } from "./museum-access.ts";
 import { findMuseumByIdInDatabase } from "./museum-repository.ts";
 import { withTransaction } from "./transaction.ts";
+import { queueMuseumDeletionNotificationInDatabase } from "./museum-deletion-notifications.ts";
 
 export interface MuseumDeletionConfirmation {
   confirm: true;
@@ -52,7 +53,7 @@ export function scheduleMuseumDeletionInDatabase(
       )
       .run(deadline, now.toISOString(), access.userId, museumId, access.userId, input.version);
     if (!result.changes) throw new ApiError("MUSEUM_VERSION_CONFLICT", 409);
-    writeAuditLogInDatabase(database, {
+    const event = writeAuditLogInDatabase(database, {
       actorUserId: access.userId,
       museumId,
       action: "museum.deletionScheduled",
@@ -63,6 +64,7 @@ export function scheduleMuseumDeletionInDatabase(
         deletionScheduledAt: { before: museum.deletionScheduledAt, after: deadline },
       },
     });
+    queueMuseumDeletionNotificationInDatabase(database, event.id, museumId, "initiated", deadline);
     return readMuseumDeletionInDatabase(database, access.userId, museumId);
   });
 }
@@ -86,7 +88,7 @@ export function cancelMuseumDeletionInDatabase(
       )
       .run(new Date().toISOString(), access.userId, museumId, access.userId, input.version);
     if (!result.changes) throw new ApiError("MUSEUM_VERSION_CONFLICT", 409);
-    writeAuditLogInDatabase(database, {
+    const event = writeAuditLogInDatabase(database, {
       actorUserId: access.userId,
       museumId,
       action: "museum.deletionCancelled",
@@ -97,6 +99,9 @@ export function cancelMuseumDeletionInDatabase(
         deletionScheduledAt: { before: museum.deletionScheduledAt, after: null },
       },
     });
+    database.prepare(`UPDATE museum_notifications SET status='cancelled'
+      WHERE museum_id=? AND status='pending' AND kind IN ('deletion.initiated','deletion.approachingExpiry')`).run(museumId);
+    queueMuseumDeletionNotificationInDatabase(database, event.id, museumId, "cancelled", null);
     return readMuseumDeletionInDatabase(database, access.userId, museumId);
   });
 }

@@ -6,6 +6,7 @@ import { apiErrorResponse, sameOriginRequiredResponse } from "@/http/api-error";
 import { ApiError } from "@/http/errors";
 import { parseMuseumOwnerTransfer } from "@/http/museum-owner-transfer";
 import { currentUser } from "@/user-auth";
+import { scheduleMuseumNotificationDelivery } from "@/email/after-museum-notifications";
 
 export const runtime = "nodejs";
 
@@ -20,7 +21,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const database = getDatabase();
     requireMuseumOwnerInDatabase(database, user.id, id);
     const input = await parseMuseumOwnerTransfer(request);
-    return NextResponse.json(transferMuseumOwnerInDatabase(database, user.id, id, input), {
+    const result = transferMuseumOwnerInDatabase(database, user.id, id, input);
+    scheduleMuseumNotificationDelivery(database, id);
+    return NextResponse.json(result, {
       headers: { "Cache-Control": "private, no-store" },
     });
   } catch (error) {

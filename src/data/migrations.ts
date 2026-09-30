@@ -4,6 +4,8 @@ import { inviteLinkSchemaSql } from "./invite-link-schema.ts";
 import { museumMembershipSchemaSql } from "./museum-membership-schema.ts";
 import { withTransaction } from "./transaction.ts";
 import { photoStorageUsageSchemaSql } from "./photo-storage-quota.ts";
+import { museumNotificationSchemaSql } from "./museum-notifications.ts";
+import { supportAccessSchemaSql } from "./platform-admin-support.ts";
 
 type Migration = {
   version: number;
@@ -313,6 +315,18 @@ const migrations: readonly Migration[] = [
       if (!hasColumn(database, "museums", "deletion_scheduled_at")) {
         database.exec("ALTER TABLE museums ADD COLUMN deletion_scheduled_at TEXT");
       }
+    },
+  },
+  {
+    version: 24,
+    migrate(database) {
+      database.exec(museumNotificationSchemaSql);
+    },
+  },
+  {
+    version: 25,
+    migrate(database) {
+      database.exec(supportAccessSchemaSql);
     },
   },
 ];

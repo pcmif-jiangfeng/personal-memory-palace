@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import { ApiError } from "../http/errors.ts";
-import { isMuseumPhotoKey } from "../storage/photo-storage-key.ts";
+import { isMuseumPhotoAssetKey } from "../storage/photo-storage-key.ts";
 import { readBooleanFlag, readNumber, readString } from "./row-readers.ts";
 import { withTransaction } from "./transaction.ts";
 
@@ -22,7 +22,7 @@ function safeBytes(value: number) {
 // Must be part of the same transaction as the upload journal insertion.
 export function reservePhotoStorageInDatabase(db: DatabaseSync, museumId: string, key: string, bytes: number) {
   if (!db.isTransaction) throw new Error("Photo reservation requires a transaction");
-  if (!isMuseumPhotoKey(key, museumId) || safeBytes(bytes) === 0) throw new Error("Invalid photo reservation");
+  if (!isMuseumPhotoAssetKey(key, museumId) || safeBytes(bytes) === 0) throw new Error("Invalid photo reservation");
   const museum = db.prepare("SELECT storage_used_bytes,storage_quota_bytes,storage_usage_ready FROM museums WHERE id=?").get(museumId);
   if (!museum) throw new ApiError("MUSEUM_NOT_FOUND", 404);
   if (!readBooleanFlag(museum, "storage_usage_ready")) throw new ApiError("STORAGE_USAGE_NOT_READY", 503);

@@ -5,6 +5,17 @@ export const optimizedPhotoKeyPattern = new RegExp(
   `^uploads/(?:(?:demo|owner)|museums/${photoUuidPattern})/optimized/${photoUuidPattern}\\.webp$`,
 );
 
+export const originalPhotoKeyPattern = new RegExp(
+  `^uploads/(?:(?:demo|owner)|museums/${photoUuidPattern})/original/${photoUuidPattern}\\.(?:jpg|jpeg|png|webp)$`,
+);
+
+export function isMuseumPhotoAssetKey(key: string, museumId: string) {
+  return (
+    (optimizedPhotoKeyPattern.test(key) || originalPhotoKeyPattern.test(key)) &&
+    key.startsWith(`uploads/museums/${museumId}/`)
+  );
+}
+
 export function museumPhotoStorageKey(museumId: string) {
   if (!new RegExp(`^${photoUuidPattern}$`).test(museumId))
     throw new Error("Invalid Museum storage ID");

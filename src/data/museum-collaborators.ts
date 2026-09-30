@@ -4,6 +4,7 @@ import { requireMuseumOwnerInDatabase } from "./museum-access.ts";
 import { withTransaction } from "./transaction.ts";
 import { writeAuditLogInDatabase } from "./audit-log.ts";
 import { readNumber, readString } from "./row-readers.ts";
+import { queueCollaborationNotificationInDatabase } from "./museum-notifications.ts";
 
 export const collaboratorsPageSize = 25;
 
@@ -67,7 +68,7 @@ export function removeMuseumCollaboratorInDatabase(
           "UPDATE museum_memberships SET status='revoked',updated_at=? WHERE museum_id=? AND user_id=?",
         )
         .run(new Date().toISOString(), museumId, collaboratorUserId);
-      writeAuditLogInDatabase(database, {
+      const event = writeAuditLogInDatabase(database, {
         actorUserId: owner.userId,
         museumId,
         action: "membership.remove",
@@ -75,6 +76,7 @@ export function removeMuseumCollaboratorInDatabase(
         objectId: collaboratorUserId,
         diff: { status: { before: "active", after: "revoked" } },
       });
+      queueCollaborationNotificationInDatabase(database, event.id, museumId, "removed", collaboratorUserId);
     }
     return { ok: true as const };
   });

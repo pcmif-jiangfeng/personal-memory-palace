@@ -52,6 +52,8 @@ test("initializes the core schema and isolated demo data", () => {
       "memory_images",
       "memory_relations",
       "museum_memberships",
+      "museum_notifications",
+      "museum_support_access",
       "museums",
       "password_reset_tokens",
       "pending_uploads",
@@ -135,6 +137,7 @@ test("owner database starts without demo records", () => {
 test("adds photo library membership to an existing owner database without losing photos", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "memory-palace-migrate-"));
   const databasePath = path.join(directory, "owner.sqlite");
+  let database: ReturnType<typeof initializeDatabase> | undefined;
 
   try {
     const legacyDatabase = new DatabaseSync(databasePath);
@@ -158,7 +161,7 @@ test("adds photo library membership to an existing owner database without losing
     `);
     legacyDatabase.close();
 
-    const database = initializeDatabase(databasePath, false);
+    database = initializeDatabase(databasePath, false);
     const columns = database
       .prepare("PRAGMA table_info(uploaded_photos)")
       .all()
@@ -175,10 +178,10 @@ test("adds photo library membership to an existing owner database without losing
       .map((row) => (row as { version: number }).version);
     assert.deepEqual(
       versions,
-      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25],
     );
-    database.close();
   } finally {
+    database?.close();
     rmSync(directory, { recursive: true, force: true });
   }
 });
@@ -375,7 +378,7 @@ test("records each database migration once", () => {
 
     assert.deepEqual(
       versions,
-      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25],
     );
   } finally {
     rmSync(directory, { recursive: true, force: true });

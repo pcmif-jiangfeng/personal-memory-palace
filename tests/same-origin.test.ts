@@ -95,12 +95,38 @@ test("every mutation route applies same-origin checks before authorization", () 
         "requirePlatformAdminInDatabase(database, user?.id ?? null)",
         userCheck,
       );
-      const parseCheck = source.indexOf("await parseQuotaAdjustment(request)", adminCheck);
+      const supportRead = file.endsWith(path.join("support-read", "route.ts"));
+      const parseCheck = source.indexOf(
+        supportRead ? "await parseSupportRead(request)" : "await parseQuotaAdjustment(request)",
+        adminCheck,
+      );
       assert.ok(userCheck > originCheck && adminCheck > userCheck && parseCheck > adminCheck);
       assert.match(
         source,
-        /adjustMuseumQuotaInDatabase\(database, actorUserId, id, input\)/,
+        supportRead
+          ? /readSupportMemoryInDatabase\(\s*database,\s*actorUserId,\s*id,\s*input.memoryId,\s*input.grantId,?\s*\)/
+          : /adjustMuseumQuotaInDatabase\(database, actorUserId, id, input\)/,
         "Admin mutations must derive the actor from the session and recheck authorization in the transaction",
+      );
+      continue;
+    }
+    if (file.endsWith(path.join("support-access", "route.ts"))) {
+      const userCheck = source.indexOf("await currentUser()", originCheck);
+      const ownerCheck = source.indexOf(
+        "requireMuseumOwnerInDatabase(database, user?.id ?? null, id)",
+        userCheck,
+      );
+      assert.ok(userCheck > originCheck && ownerCheck > userCheck);
+      assert.ok(
+        source.indexOf("await parseOwnerSupportAccess(request, revoke)", ownerCheck) > ownerCheck,
+      );
+      assert.match(
+        source,
+        /grantOwnerSupportAccessInDatabase\(database, user\?\.id \?\? null, id, input.id, input.confirm\)/,
+      );
+      assert.match(
+        source,
+        /revokeOwnerSupportAccessInDatabase\(database, user\?\.id \?\? null, id, input.id\)/,
       );
       continue;
     }
@@ -144,9 +170,11 @@ test("every mutation route applies same-origin checks before authorization", () 
     if (isInviteRoute) {
       assert.match(
         source,
-        /(createOwnInviteInDatabase|revokeOwnInviteInDatabase|acceptInviteInDatabase)\(\s*getDatabase\(\),\s*user.id/,
+        /(createOwnInviteInDatabase|revokeOwnInviteInDatabase|acceptInviteInDatabase)\(\s*(getDatabase\(\)|database),\s*user.id/,
         "Invite mutations must derive the acting User from the authenticated session",
       );
+      if (/acceptInviteInDatabase\(database,/.test(source))
+        assert.match(source, /const database = getDatabase\(\);/);
     }
     const isLeaveRoute =
       file.endsWith(path.join("leave", "route.ts")) &&
@@ -154,9 +182,11 @@ test("every mutation route applies same-origin checks before authorization", () 
     if (isLeaveRoute) {
       assert.match(
         source,
-        /leaveMuseumInDatabase\(getDatabase\(\), user.id, id\)/,
+        /leaveMuseumInDatabase\((getDatabase\(\)|database), user.id, id\)/,
         "Leaving must only change the authenticated User's own membership",
       );
+      if (/leaveMuseumInDatabase\(database,/.test(source))
+        assert.match(source, /const database = getDatabase\(\);/);
     }
     const isMuseumMemoryRoute = file.endsWith(path.join("[id]", "memories", "route.ts"));
     if (isMuseumMemoryRoute) {

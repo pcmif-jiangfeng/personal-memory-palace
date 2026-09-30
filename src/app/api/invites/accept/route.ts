@@ -5,6 +5,7 @@ import { apiErrorResponse, sameOriginRequiredResponse } from "@/http/api-error";
 import { ApiError } from "@/http/errors";
 import { readJsonObject } from "@/http/schemas";
 import { currentUser } from "@/user-auth";
+import { scheduleMuseumNotificationDelivery } from "@/email/after-museum-notifications";
 
 export const runtime = "nodejs";
 
@@ -17,7 +18,10 @@ export async function POST(request: Request) {
     const input = await readJsonObject(request);
     if (typeof input.token !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(input.token))
       throw new ApiError("INVALID_INVITE_TOKEN", 400);
-    return NextResponse.json(acceptInviteInDatabase(getDatabase(), user.id, input.token), {
+    const database = getDatabase();
+    const result = acceptInviteInDatabase(database, user.id, input.token);
+    scheduleMuseumNotificationDelivery(database, result.museum.id);
+    return NextResponse.json(result, {
       headers: { "Cache-Control": "private, no-store" },
     });
   } catch (error) {

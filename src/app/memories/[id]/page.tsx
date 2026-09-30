@@ -14,6 +14,8 @@ import { listScopedMemories } from "@/data/scoped-memory";
 import { PhotoViewer } from "@/components/photo-viewer";
 import { MemoryExhibition } from "@/components/memory-exhibition";
 import { MemoryAttribution } from "@/components/memory-attribution";
+import { MuseumCopyForm } from "@/components/museum-copy-form";
+import { listSwitcherMuseumsInDatabase } from "@/data/museum-switcher";
 
 export const dynamic = "force-dynamic";
 
@@ -168,6 +170,20 @@ export default async function MemoryExhibitionPage({
         </div>
       </footer>
       <section className="section-shell exhibition-management">
+        <details className="relation-editor">
+          <summary>{copy.museumCopy.memory}</summary>
+          <p className="field-help">{copy.museumCopy.memoryHint}</p>
+          <MuseumCopyForm
+            memoryId={memory.id}
+            museumId={scope!.museumId}
+            targets={listSwitcherMuseumsInDatabase(getDatabase(), scope!.userId).filter(
+              (museum) =>
+                museum.id !== scope!.museumId &&
+                getDatabase().prepare("SELECT status FROM museums WHERE id=?").get(museum.id)
+                  ?.status === "active",
+            )}
+          />
+        </details>
         <MemoryManagement
           memory={memory}
           museumId={scope!.museumId}

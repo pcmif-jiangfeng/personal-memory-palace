@@ -5,6 +5,7 @@ import { readString } from "./row-readers.ts";
 import { ApiError } from "../http/errors.ts";
 import { findMuseumByOwnerIdInDatabase } from "./museum-repository.ts";
 import { withTransaction } from "./transaction.ts";
+import { queueCollaborationNotificationInDatabase } from "./museum-notifications.ts";
 
 export function acceptInviteInDatabase(database: DatabaseSync, userId: string, token: string) {
   if (!/^[A-Za-z0-9_-]{43}$/.test(token)) throw new ApiError("INVALID_INVITE_TOKEN", 400);
@@ -33,7 +34,7 @@ export function acceptInviteInDatabase(database: DatabaseSync, userId: string, t
       VALUES (?,?,'collaborator','active',?,?) ON CONFLICT(museum_id,user_id)
       DO UPDATE SET status='active', updated_at=excluded.updated_at`).run(museum.id, userId, now, now);
     database.prepare("UPDATE invite_links SET usage_count=usage_count+1 WHERE id=?").run(invite.id);
-    writeAuditLogInDatabase(database, {
+    const event = writeAuditLogInDatabase(database, {
       actorUserId: userId,
       museumId: museum.id,
       action: "membership.join",
@@ -45,6 +46,7 @@ export function acceptInviteInDatabase(database: DatabaseSync, userId: string, t
         status: { before: membership ? readString(membership, "status") : null, after: "active" },
       },
     });
+    queueCollaborationNotificationInDatabase(database, event.id, museum.id, "join", userId);
     return { museum, alreadyMember: false };
   });
 }

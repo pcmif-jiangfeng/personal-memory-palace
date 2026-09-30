@@ -1,4 +1,18 @@
 export const copy = {
+  museumCopy: {
+    target: "复制到另一座博物馆",
+    choose: "选择目标博物馆",
+    photo: "复制这张照片",
+    memory: "复制这段 Memory",
+    memoryHint:
+      "复制已保存的标题、Story、照片展陈和追加文字。副本默认为私人、未归类，原馆的章节、关联和分享设置不复制。",
+    memorySuccess: "已生成独立 Memory，后续修改不会自动同步。",
+    busy: "正在复制…",
+    quota: "目标博物馆空间不足，未创建副本。",
+    failed: "复制结果未确认，请先到目标馆检查。权限或馆状态可能已改变，请勿直接重复提交。",
+    success: "已生成独立副本，原照片不受影响。",
+    open: "查看目标博物馆",
+  },
   metadata: {
     title: "人生博物馆",
     description: "一座保存自己人生的现代数字博物馆。",

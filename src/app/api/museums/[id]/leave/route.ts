@@ -5,6 +5,7 @@ import { apiErrorResponse, sameOriginRequiredResponse } from "@/http/api-error";
 import { ApiError } from "@/http/errors";
 import { readJsonObject } from "@/http/schemas";
 import { currentUser } from "@/user-auth";
+import { scheduleMuseumNotificationDelivery } from "@/email/after-museum-notifications";
 
 export const runtime = "nodejs";
 
@@ -18,7 +19,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) throw new ApiError("INVALID_MUSEUM_ID", 400);
     const input = await readJsonObject(request);
     if (input.confirm !== true) throw new ApiError("LEAVE_CONFIRMATION_REQUIRED", 400);
-    return NextResponse.json(leaveMuseumInDatabase(getDatabase(), user.id, id), {
+    const database = getDatabase();
+    const result = leaveMuseumInDatabase(database, user.id, id);
+    scheduleMuseumNotificationDelivery(database, id);
+    return NextResponse.json(result, {
       headers: { "Cache-Control": "private, no-store" },
     });
   } catch (error) {

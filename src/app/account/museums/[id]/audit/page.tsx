@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 
 const actions: Record<string, string> = {
   "memory.create": "创建记忆",
+  "memory.copy": "复制记忆",
   "memory.details": "修改记忆",
   "memory.publication": "修改记忆公开范围",
   "memory.trash": "移入记忆回收站",
@@ -29,6 +30,7 @@ const actions: Record<string, string> = {
   "stage.restore": "恢复 Stage",
   "stage.permanent": "永久删除 Stage",
   "photo.upload": "上传照片",
+  "photo.copy": "复制照片",
   "photo.archive": "归档照片",
   "photo.deleteQueued": "照片进入删除队列",
   "invite.create": "创建邀请",
@@ -39,6 +41,9 @@ const actions: Record<string, string> = {
   "museum.ownerTransfer": "转移馆长身份",
   "museum.deletionScheduled": "发起 30 天待删除",
   "museum.deletionCancelled": "取消待删除",
+  "support.accessGranted": "签发临时支持访问",
+  "support.accessRevoked": "撤销临时支持访问",
+  "support.privateRead": "管理员读取授权记忆文本",
 };
 
 function auditHref(id: string, filter: AuditLogFilter) {

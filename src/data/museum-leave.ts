@@ -2,6 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { writeAuditLogInDatabase } from "./audit-log.ts";
 import { ApiError } from "../http/errors.ts";
 import { withTransaction } from "./transaction.ts";
+import { queueCollaborationNotificationInDatabase } from "./museum-notifications.ts";
 
 export function leaveMuseumInDatabase(database: DatabaseSync, userId: string, museumId: string) {
   return withTransaction(database, () => {
@@ -14,7 +15,7 @@ export function leaveMuseumInDatabase(database: DatabaseSync, userId: string, mu
     if (membership.status === "active") {
       database.prepare("UPDATE museum_memberships SET status='revoked',updated_at=? WHERE museum_id=? AND user_id=?")
         .run(new Date().toISOString(),museumId,userId);
-      writeAuditLogInDatabase(database, {
+      const event = writeAuditLogInDatabase(database, {
         actorUserId: userId,
         museumId,
         action: "membership.leave",
@@ -22,6 +23,7 @@ export function leaveMuseumInDatabase(database: DatabaseSync, userId: string, mu
         objectId: userId,
         diff: { status: { before: "active", after: "revoked" } },
       });
+      queueCollaborationNotificationInDatabase(database, event.id, museumId, "leave", userId);
     }
     return { ok: true as const };
   });

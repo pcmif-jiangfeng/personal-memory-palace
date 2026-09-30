@@ -6,6 +6,7 @@ import { apiErrorResponse, sameOriginRequiredResponse } from "@/http/api-error";
 import { ApiError } from "@/http/errors";
 import { readJsonObject } from "@/http/schemas";
 import { currentUser } from "@/user-auth";
+import { scheduleMuseumNotificationDelivery } from "@/email/after-museum-notifications";
 
 export const runtime = "nodejs";
 
@@ -26,7 +27,9 @@ export async function DELETE(
     const input = await readJsonObject(request);
     if (input.confirm !== true || Object.keys(input).some((key) => key !== "confirm"))
       throw new ApiError("REMOVE_CONFIRMATION_REQUIRED", 400);
-    return NextResponse.json(removeMuseumCollaboratorInDatabase(database, user.id, id, userId), {
+    const result = removeMuseumCollaboratorInDatabase(database, user.id, id, userId);
+    scheduleMuseumNotificationDelivery(database, id);
+    return NextResponse.json(result, {
       headers: { "Cache-Control": "private, no-store" },
     });
   } catch (error) {

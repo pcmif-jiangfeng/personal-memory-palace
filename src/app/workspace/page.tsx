@@ -6,6 +6,8 @@ import { copy } from "@/i18n/zh-CN";
 import { imageStorage } from "@/storage/local-image-storage";
 import { memoryPageScope } from "@/memory-page-scope";
 import { notFound } from "next/navigation";
+import { getDatabase } from "@/data/database";
+import { listSwitcherMuseumsInDatabase } from "@/data/museum-switcher";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +49,12 @@ export default async function PhotoWorkspacePage({
         initialNextCursor={page.nextCursor}
         museumId={scope.museumId}
         canDeletePhotos={scope.role === "owner"}
+        copyTargets={listSwitcherMuseumsInDatabase(getDatabase(), scope.userId).filter(
+          (museum) =>
+            museum.id !== scope.museumId &&
+            getDatabase().prepare("SELECT status FROM museums WHERE id=?").get(museum.id)
+              ?.status === "active",
+        )}
         stages={listActiveStages(false, scope.museumId).map((stage) => ({
           id: stage.id,
           title: stage.title,

@@ -10,6 +10,7 @@ import { apiErrorResponse, sameOriginRequiredResponse } from "@/http/api-error";
 import { ApiError } from "@/http/errors";
 import { parseMuseumDeletionConfirmation } from "@/http/museum-deletion";
 import { currentUser } from "@/user-auth";
+import { scheduleMuseumNotificationDelivery } from "@/email/after-museum-notifications";
 
 export const runtime = "nodejs";
 const noStore = { "Cache-Control": "private, no-store" };
@@ -51,6 +52,7 @@ async function mutate(request: Request, { params }: Context, cancel: boolean) {
     const result = cancel
       ? cancelMuseumDeletionInDatabase(database, user.id, id, input)
       : scheduleMuseumDeletionInDatabase(database, user.id, id, input);
+    scheduleMuseumNotificationDelivery(database, id);
     return NextResponse.json(result, { headers: noStore });
   } catch (error) {
     return apiErrorResponse(error, "museum-deletion-write");
