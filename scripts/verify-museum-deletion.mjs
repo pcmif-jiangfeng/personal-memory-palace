@@ -247,5 +247,6 @@ try {
     });
   db.close();
   // Exact disposable directory created above; never a repository or production data path.
-  rmSync(directory, { recursive: true, force: true });
+  // Windows can briefly retain SQLite file handles after the server exits.
+  rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 }
