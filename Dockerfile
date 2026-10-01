@@ -21,6 +21,7 @@ COPY --from=builder /app/scripts/restore-backup.mjs ./maintenance/restore-backup
 COPY --from=builder /app/scripts/recover-file-operations.ts ./maintenance/recover-file-operations.ts
 COPY --from=builder /app/scripts/send-museum-notifications.ts ./maintenance/send-museum-notifications.ts
 COPY --from=builder /app/scripts/grant-support-access.ts ./maintenance/grant-support-access.ts
+COPY --from=builder /app/scripts/finalize-museum-deletion.ts ./maintenance/finalize-museum-deletion.ts
 COPY --from=builder /app/src ./src
 EXPOSE 3000
 CMD ["node", "server.js"]
