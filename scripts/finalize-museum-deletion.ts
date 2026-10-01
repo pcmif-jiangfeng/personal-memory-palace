@@ -64,6 +64,23 @@ function requireExternalBackupRoot(data: string, candidate: string) {
     throw new Error("Backup root must be outside the data directory");
 }
 
+async function resolvePendingDirectory(candidate: string): Promise<string> {
+  // Resolve the existing parent before mkdir: Windows short aliases and symlink parents can hide containment.
+  let parent = candidate;
+  const missing: string[] = [];
+  while (true) {
+    try {
+      return path.join(await realpath(parent), ...missing);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      const next = path.dirname(parent);
+      if (next === parent) throw error;
+      missing.unshift(path.basename(parent));
+      parent = next;
+    }
+  }
+}
+
 export async function finalizeMuseumDeletion(options: {
   dataDirectory: string;
   museumId: string;
@@ -103,7 +120,7 @@ export async function finalizeMuseumDeletion(options: {
         .get()
     )
       throw new Error("Deploy migration 26 before running permanent deletion");
-    const backupRootCandidate = path.resolve(options.backupRoot!);
+    const backupRootCandidate = await resolvePendingDirectory(path.resolve(options.backupRoot!));
     requireExternalBackupRoot(data, backupRootCandidate);
     await mkdir(backupRootCandidate, { recursive: true, mode: 0o700 });
     const backupRoot = await realpath(backupRootCandidate);
