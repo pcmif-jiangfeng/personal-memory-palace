@@ -11,7 +11,11 @@ export async function parseMuseumOwnerTransfer(
     throw new ApiError("INVALID_TRANSFER_TARGET", 400);
   if (input.oldOwnerDisposition !== "stay" && input.oldOwnerDisposition !== "leave")
     throw new ApiError("INVALID_OWNER_DISPOSITION", 400);
-  if (!Number.isSafeInteger(input.version) || (input.version as number) < 1)
+  if (
+    typeof input.version !== "number" ||
+    !Number.isSafeInteger(input.version) ||
+    input.version < 1
+  )
     throw new ApiError("INVALID_MUSEUM_VERSION", 400);
   if (
     Object.keys(input).some(
@@ -19,5 +23,10 @@ export async function parseMuseumOwnerTransfer(
     )
   )
     throw new ApiError("INVALID_TRANSFER_INPUT", 400);
-  return input as unknown as MuseumOwnerTransferInput;
+  return {
+    confirm: input.confirm,
+    targetUserId: input.targetUserId,
+    oldOwnerDisposition: input.oldOwnerDisposition,
+    version: input.version,
+  };
 }

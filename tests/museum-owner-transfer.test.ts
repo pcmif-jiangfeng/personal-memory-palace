@@ -323,6 +323,9 @@ test("transfer payload and Museum selection reject ambiguity, forged actors and 
     { ...valid, targetUserId: "../target" },
     { ...valid, version: 1.5 },
     { ...valid, version: 0 },
+    { ...valid, version: "1" },
+    { ...valid, version: null },
+    { ...valid, version: Number.MAX_SAFE_INTEGER + 1 },
     { ...valid, oldOwnerDisposition: "unknown" },
   ])
     await assert.rejects(parseMuseumOwnerTransfer(request(body)), ApiError);
