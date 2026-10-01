@@ -105,3 +105,38 @@ test("only Museum Owner can create/list/revoke invites and token is not stored o
     db.close();
   }
 });
+
+test("invite summaries reject malformed SQLite columns and roll back revocation", (t) => {
+  const db = initializeDatabase(":memory:", false);
+  t.after(() => db.close());
+  const owner = createUserInDatabase(db, {
+    email: "summary@example.com",
+    displayName: "Owner",
+    passwordHash: "hash",
+  });
+  db.exec("UPDATE users SET email_verified=1");
+  createMuseumInDatabase(db, { ownerId: owner.id, name: "Summary", slug: "summary" });
+  const { invite } = createOwnInviteInDatabase(db, owner.id, {
+    useMode: "multi-use",
+    maxUses: null,
+    expiresAt: null,
+  });
+  assert.deepEqual(listOwnInvitesInDatabase(db, owner.id, 1).invites, [invite]);
+  assert.equal(invite.maxUses, null);
+  assert.equal(invite.usageCount, 0);
+  // SQLite can hold a BLOB in a TEXT column; do not send it to the client as a string.
+  db.prepare("UPDATE invite_links SET created_at=? WHERE id=?").run(
+    new Uint8Array([1, 2, 3]),
+    invite.id,
+  );
+  assert.throws(() => listOwnInvitesInDatabase(db, owner.id, 1), /createdAt/);
+  assert.throws(() => revokeOwnInviteInDatabase(db, owner.id, invite.id), /createdAt/);
+  assert.equal(
+    db.prepare("SELECT revoked_at FROM invite_links WHERE id=?").get(invite.id)!.revoked_at,
+    null,
+  );
+  assert.equal(
+    db.prepare("SELECT COUNT(*) AS n FROM audit_logs WHERE action='invite.revoke'").get()!.n,
+    0,
+  );
+});

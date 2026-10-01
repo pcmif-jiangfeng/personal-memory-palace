@@ -5,6 +5,7 @@ import { withTransaction } from "./transaction.ts";
 import type { CreateInviteInput, InviteSummary } from "../domain/invites.ts";
 import { ApiError } from "../http/errors.ts";
 import { selectOwnedMuseumInDatabase } from "./museum-owner-selection.ts";
+import { readNullableString, readNumber, readString } from "./row-readers.ts";
 
 function ownMuseumId(database: DatabaseSync, ownerId: string, selectedId?: string | null) {
   try {
@@ -19,12 +20,27 @@ function ownMuseumId(database: DatabaseSync, ownerId: string, selectedId?: strin
 const summaryColumns = `id, use_mode AS useMode, max_uses AS maxUses, expires_at AS expiresAt,
   usage_count AS usageCount, revoked_at AS revokedAt, created_at AS createdAt`;
 
+function readInviteSummaryRow(row: Record<string, unknown>): InviteSummary {
+  const useMode = readString(row, "useMode");
+  if (useMode !== "single-use" && useMode !== "multi-use")
+    throw new TypeError("Invalid database column useMode; expected invite mode");
+  return {
+    id: readString(row, "id"),
+    useMode,
+    maxUses: row.maxUses === null ? null : readNumber(row, "maxUses"),
+    expiresAt: readNullableString(row, "expiresAt"),
+    usageCount: readNumber(row, "usageCount"),
+    revokedAt: readNullableString(row, "revokedAt"),
+    createdAt: readString(row, "createdAt"),
+  };
+}
+
 function readSummary(database: DatabaseSync, museumId: string, id: string): InviteSummary {
   const row = database
     .prepare(`SELECT ${summaryColumns} FROM invite_links WHERE id = ? AND museum_id = ?`)
     .get(id, museumId);
   if (!row) throw new ApiError("INVITE_NOT_FOUND", 404);
-  return { ...row } as unknown as InviteSummary;
+  return readInviteSummaryRow(row);
 }
 
 export function createOwnInviteInDatabase(
@@ -75,12 +91,12 @@ export function listOwnInvitesInDatabase(
       `SELECT ${summaryColumns} FROM invite_links WHERE museum_id = ? ORDER BY created_at DESC, id DESC LIMIT 20 OFFSET ?`,
     )
     .all(museumId, (page - 1) * 20);
-  const total = database
+  const totalRow = database
     .prepare("SELECT COUNT(*) AS count FROM invite_links WHERE museum_id = ?")
-    .get(museumId)!.count as number;
+    .get(museumId)!;
   return {
-    invites: rows.map((row) => ({ ...row }) as unknown as InviteSummary),
-    total,
+    invites: rows.map(readInviteSummaryRow),
+    total: readNumber(totalRow, "count"),
     page,
     pageSize: 20,
   };
