@@ -20,7 +20,8 @@
     "museums:delete-final": "node --experimental-strip-types scripts/finalize-museum-deletion.ts",
     "backup:manual": "node scripts/backup.mjs",
     "backup:restore-test": "node scripts/restore-backup.mjs",
-    "test": "node --experimental-strip-types --test tests/*.test.ts"
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "test:file": "node --experimental-strip-types --test"
   },
   "dependencies": {
     "next": "16.3.5",
