@@ -80,6 +80,8 @@ export function cancelMuseumDeletionInDatabase(
     const museum = readMuseumDeletionInDatabase(database, access.userId, museumId);
     validateConfirmation(input, museum.version);
     if (museum.status === "active") return museum;
+    if (database.prepare("SELECT 1 FROM museum_permanent_deletion_jobs WHERE museum_id=?").get(museumId))
+      throw new ApiError("MUSEUM_DELETE_IN_PROGRESS", 409);
     const result = database
       .prepare(
         `UPDATE museums SET status='active',deletion_scheduled_at=NULL,

@@ -6,6 +6,7 @@ import { withTransaction } from "./transaction.ts";
 import { photoStorageUsageSchemaSql } from "./photo-storage-quota.ts";
 import { museumNotificationSchemaSql } from "./museum-notifications.ts";
 import { supportAccessSchemaSql } from "./platform-admin-support.ts";
+import { museumPermanentDeletionSchemaSql } from "./museum-permanent-deletion.ts";
 
 type Migration = {
   version: number;
@@ -327,6 +328,12 @@ const migrations: readonly Migration[] = [
     version: 25,
     migrate(database) {
       database.exec(supportAccessSchemaSql);
+    },
+  },
+  {
+    version: 26,
+    migrate(database) {
+      database.exec(museumPermanentDeletionSchemaSql);
     },
   },
 ];

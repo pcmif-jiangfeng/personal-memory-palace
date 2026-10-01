@@ -53,6 +53,7 @@ test("initializes the core schema and isolated demo data", () => {
       "memory_relations",
       "museum_memberships",
       "museum_notifications",
+      "museum_permanent_deletion_jobs",
       "museum_support_access",
       "museums",
       "password_reset_tokens",
@@ -178,7 +179,10 @@ test("adds photo library membership to an existing owner database without losing
       .map((row) => (row as { version: number }).version);
     assert.deepEqual(
       versions,
-      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25],
+      [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+        26,
+      ],
     );
   } finally {
     database?.close();
@@ -378,7 +382,10 @@ test("records each database migration once", () => {
 
     assert.deepEqual(
       versions,
-      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25],
+      [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+        26,
+      ],
     );
   } finally {
     rmSync(directory, { recursive: true, force: true });
