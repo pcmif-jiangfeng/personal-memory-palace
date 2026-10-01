@@ -11,6 +11,20 @@ function confirmationRequest(value: unknown): Request {
   });
 }
 
+test("reset confirmation accepts eight-character passwords and rejects seven non-padding characters", async () => {
+  const token = "a".repeat(43);
+  assert.deepEqual(
+    await parsePasswordResetConfirmation(confirmationRequest({ token, newPassword: "abcdefgh" })),
+    { token, newPassword: "abcdefgh" },
+  );
+  for (const newPassword of ["abcdefg", " abcdefg "]) {
+    await assert.rejects(
+      parsePasswordResetConfirmation(confirmationRequest({ token, newPassword })),
+      (error: unknown) => error instanceof ApiError && error.code === "PASSWORD_TOO_SHORT",
+    );
+  }
+});
+
 test("reset confirmation validates a token and preserves the new password", async () => {
   const token = "a".repeat(43);
   assert.deepEqual(

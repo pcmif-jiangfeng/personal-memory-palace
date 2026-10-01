@@ -6,7 +6,7 @@ export default function ResetPasswordPage() {
       <div className="login-panel">
         <p className="eyebrow">PERSONAL MEMORY PALACE</p>
         <h1>设置新密码</h1>
-        <p>新密码至少需要 12 个字符。更新后，所有已登录设备都需要重新登录。</p>
+        <p>新密码至少需要 8 个字符。更新后，所有已登录设备都需要重新登录。</p>
         <ResetPasswordForm />
       </div>
     </section>

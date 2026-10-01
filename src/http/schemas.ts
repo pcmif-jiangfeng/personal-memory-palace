@@ -7,6 +7,7 @@ import {
   MAX_IDENTIFIER_LENGTH,
   MAX_MEMORY_PHOTOS,
   MAX_PASSWORD_LENGTH,
+  MIN_USER_PASSWORD_LENGTH,
   MAX_RELATED_MEMORIES,
   MEMORY_STORY_MAX_LENGTH,
   MEMORY_TITLE_MAX_LENGTH,
@@ -99,7 +100,8 @@ export async function parseUserRegistration(request: Request) {
     maxLength: MAX_PASSWORD_LENGTH,
     trim: false,
   })!;
-  if (password.trim().length < 12) throw new ApiError("PASSWORD_TOO_SHORT", 400);
+  if (password.trim().length < MIN_USER_PASSWORD_LENGTH)
+    throw new ApiError("PASSWORD_TOO_SHORT", 400);
   return {
     email,
     password,
@@ -150,7 +152,8 @@ export async function parsePasswordResetConfirmation(request: Request) {
     maxLength: MAX_PASSWORD_LENGTH,
     trim: false,
   })!;
-  if (password.trim().length < 12) throw new ApiError("PASSWORD_TOO_SHORT", 400);
+  if (password.trim().length < MIN_USER_PASSWORD_LENGTH)
+    throw new ApiError("PASSWORD_TOO_SHORT", 400);
   return { token: input.token, newPassword: password };
 }
 

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useSyncExternalStore } from "react";
 import { ClientApiError, requestJson } from "@/client/http-client";
+import { MIN_USER_PASSWORD_LENGTH } from "@/domain/rules";
 
 function subscribeToHashChange(callback: () => void) {
   window.addEventListener("hashchange", callback);
@@ -90,7 +91,7 @@ export function ResetPasswordForm() {
           name="newPassword"
           type="password"
           autoComplete="new-password"
-          minLength={12}
+          minLength={MIN_USER_PASSWORD_LENGTH}
           required
         />
       </label>
@@ -100,7 +101,7 @@ export function ResetPasswordForm() {
           name="confirmPassword"
           type="password"
           autoComplete="new-password"
-          minLength={12}
+          minLength={MIN_USER_PASSWORD_LENGTH}
           required
         />
       </label>

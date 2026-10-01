@@ -8,5 +8,6 @@ export const MAX_MEMORY_PHOTOS = 20;
 export const EXHIBIT_TITLE_MAX_LENGTH = 120;
 export const EXHIBIT_DESCRIPTION_MAX_LENGTH = 2_000;
 export const MAX_PASSWORD_LENGTH = 512;
+export const MIN_USER_PASSWORD_LENGTH = 8;
 export const MAX_IDENTIFIER_LENGTH = 200;
 export const MAX_BATCH_ITEMS = 10_000;

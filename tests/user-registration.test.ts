@@ -17,6 +17,17 @@ function registrationRequest(value: unknown): Request {
   });
 }
 
+test("registration accepts eight-character passwords and rejects seven non-padding characters", async () => {
+  const input = { email: "person@example.com", password: "abcdefgh", displayName: "馆长" };
+  assert.equal((await parseUserRegistration(registrationRequest(input))).password, "abcdefgh");
+  for (const password of ["abcdefg", " abcdefg "]) {
+    await assert.rejects(
+      parseUserRegistration(registrationRequest({ ...input, password })),
+      (error: unknown) => error instanceof ApiError && error.code === "PASSWORD_TOO_SHORT",
+    );
+  }
+});
+
 test("registration validation normalizes email and preserves the password before hashing", async () => {
   const input = await parseUserRegistration(
     registrationRequest({

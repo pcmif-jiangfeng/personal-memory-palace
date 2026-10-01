@@ -3,15 +3,17 @@
 import Link from "next/link";
 import { useState } from "react";
 import { ClientApiError, requestJson } from "@/client/http-client";
+import { MIN_USER_PASSWORD_LENGTH } from "@/domain/rules";
 
 const errorMessages: Record<string, string> = {
   EMAIL_ALREADY_REGISTERED: "这个邮箱已经注册。",
   INVALID_EMAIL: "请输入有效的邮箱地址。",
   INVALID_DISPLAYNAME: "请输入展示名称。",
   INVALID_PASSWORD: "请输入密码。",
-  PASSWORD_TOO_SHORT: "密码至少需要 12 个字符。",
+  PASSWORD_TOO_SHORT: `密码至少需要 ${MIN_USER_PASSWORD_LENGTH} 个字符。`,
   PASSWORD_TOO_LONG: "密码不能超过 512 个字符。",
   TOO_MANY_ATTEMPTS: "尝试次数过多，请稍后再试。",
+  EMAIL_NOT_CONFIGURED: "网站尚未配置验证邮件服务，暂时无法注册。请在邮件服务配置完成后重试。",
 };
 
 export function RegisterForm() {
@@ -93,7 +95,7 @@ export function RegisterForm() {
           name="password"
           type="password"
           autoComplete="new-password"
-          minLength={12}
+          minLength={MIN_USER_PASSWORD_LENGTH}
           maxLength={512}
           required
         />
