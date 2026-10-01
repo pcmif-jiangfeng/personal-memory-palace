@@ -1,8 +1,8 @@
-import { publicSiteUrl } from "../domain/share-links.ts";
+import { accountEmailLink } from "./account-email-link.ts";
 import { sendTransactionalEmail, type EmailConfiguration } from "./transactional-email.ts";
 
 export function passwordResetLink(token: string): string {
-  return `${new URL("reset-password", publicSiteUrl).href}#${token}`;
+  return accountEmailLink("reset-password", token);
 }
 
 export async function sendPasswordResetEmail(

@@ -1,10 +1,10 @@
-import { publicSiteUrl } from "../domain/share-links.ts";
+import { accountEmailLink } from "./account-email-link.ts";
 import { sendTransactionalEmail, type EmailConfiguration } from "./transactional-email.ts";
 
 export { getEmailConfiguration, type EmailConfiguration } from "./transactional-email.ts";
 
 export function verificationLink(token: string): string {
-  return `${new URL("verify-email", publicSiteUrl).href}#${token}`;
+  return accountEmailLink("verify-email", token);
 }
 
 export async function sendVerificationEmail(
