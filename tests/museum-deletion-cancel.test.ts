@@ -14,6 +14,8 @@ import { ApiError } from "../src/http/errors.ts";
 
 function fixture(t: TestContext) {
   const db = initializeDatabase(":memory:", false);
+  // Exercise stale ownership in the historical pre-13B schema, not a live transfer.
+  db.exec("DROP INDEX museums_owner_unique");
   t.after(() => db.close());
   const users = ["owner", "active", "revoked", "outsider"].map((name) =>
     createUserInDatabase(db, {
@@ -85,8 +87,8 @@ test("J5 cancellation restores only active collaborators, preserves all membersh
     otherMuseums,
   );
   assert.equal(
-    listSwitcherMuseumsInDatabase(f.db, f.users[1].id).find((m) => m.id === f.id)!.role,
-    "collaborator",
+    listSwitcherMuseumsInDatabase(f.db, f.users[1].id).some((m) => m.id === f.id),
+    false,
   );
   for (const user of [f.users[2], f.users[3]]) {
     assert.equal(

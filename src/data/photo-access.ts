@@ -88,6 +88,7 @@ export function canReadMuseumPhoto(db: DatabaseSync, userId: string | null, key:
     .get(key);
   if (!photo || typeof photo.museum_id !== "string") return false;
   try {
+    requirePhotoMuseum(db, { userId, museumId: photo.museum_id }, true);
     requirePhotoAccess(db, { userId, museumId: photo.museum_id }, String(photo.id));
     return true;
   } catch {

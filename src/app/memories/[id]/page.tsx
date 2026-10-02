@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { unstable_rethrow, notFound } from "next/navigation";
 import Link from "next/link";
 import { MemoryCard } from "@/components/memory-card";
 import { findMemoryDetails, listActiveStages } from "@/data/memory-repository";
@@ -14,8 +14,6 @@ import { listScopedMemories } from "@/data/scoped-memory";
 import { PhotoViewer } from "@/components/photo-viewer";
 import { MemoryExhibition } from "@/components/memory-exhibition";
 import { MemoryAttribution } from "@/components/memory-attribution";
-import { MuseumCopyForm } from "@/components/museum-copy-form";
-import { listSwitcherMuseumsInDatabase } from "@/data/museum-switcher";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +30,8 @@ export default async function MemoryExhibitionPage({
     scope = await memoryPageScope((await searchParams).museumId);
     if (scope)
       requireMemoryAccessInDatabase(getDatabase(), scope.userId, scope.museumId, id, "read");
-  } catch {
+  } catch (error) {
+    unstable_rethrow(error);
     notFound();
   }
   const owner = Boolean(scope);
@@ -170,20 +169,6 @@ export default async function MemoryExhibitionPage({
         </div>
       </footer>
       <section className="section-shell exhibition-management">
-        <details className="relation-editor">
-          <summary>{copy.museumCopy.memory}</summary>
-          <p className="field-help">{copy.museumCopy.memoryHint}</p>
-          <MuseumCopyForm
-            memoryId={memory.id}
-            museumId={scope!.museumId}
-            targets={listSwitcherMuseumsInDatabase(getDatabase(), scope!.userId).filter(
-              (museum) =>
-                museum.id !== scope!.museumId &&
-                getDatabase().prepare("SELECT status FROM museums WHERE id=?").get(museum.id)
-                  ?.status === "active",
-            )}
-          />
-        </details>
         <MemoryManagement
           memory={memory}
           museumId={scope!.museumId}
@@ -194,14 +179,7 @@ export default async function MemoryExhibitionPage({
           libraryNextCursor={libraryPage.nextCursor}
         />
         {scope?.role === "owner" ? (
-          <ShareManager
-            memoryId={memory.id}
-            publiclyVisible={
-              memory.isPublic &&
-              (!memory.stageId ||
-                stages.some((stage) => stage.id === memory.stageId && stage.isPublic))
-            }
-          />
+          <ShareManager memoryId={memory.id} museumId={scope.museumId} />
         ) : null}
       </section>
     </article>

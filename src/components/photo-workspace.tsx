@@ -21,7 +21,6 @@ import type {
   WorkspacePhotoView,
 } from "@/contracts/photo";
 import { imageVariantUrl } from "@/components/image-variant-url";
-import { MuseumCopyForm } from "@/components/museum-copy-form";
 
 export type { WorkspacePhotoView } from "@/contracts/photo";
 
@@ -34,7 +33,6 @@ export function PhotoWorkspace({
   stages,
   museumId,
   canDeletePhotos = true,
-  copyTargets = [],
 }: {
   initialPhotos: WorkspacePhotoView[];
   initialSource: PhotoSource;
@@ -42,7 +40,6 @@ export function PhotoWorkspace({
   stages: Array<{ id: string; title: string }>;
   museumId: string;
   canDeletePhotos?: boolean;
-  copyTargets?: Array<{ id: string; name: string }>;
 }) {
   const { startUpload } = useUploadTasks();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -273,15 +270,6 @@ export function PhotoWorkspace({
             ) : null}
           </div>
         </div>
-      ) : null}
-
-      {selected.size === 1 ? (
-        <MuseumCopyForm
-          key={[...selected][0]}
-          photoId={[...selected][0]}
-          museumId={museumId}
-          targets={copyTargets}
-        />
       ) : null}
 
       {batchDeleteResult ? (

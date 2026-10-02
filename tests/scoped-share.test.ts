@@ -93,7 +93,7 @@ test("share reads exclude foreign notes and private/foreign related Memories; co
   }
 });
 
-test("password shares require the password and do not survive hiding or trashing a Memory", () => {
+test("password shares require the password, ignore ordinary publication and stop on trash", () => {
   const { db, owner } = fixture();
   try {
     const token = configureScopedShare(db, owner, "own", {
@@ -111,7 +111,7 @@ test("password shares require the password and do not survive hiding or trashing
       /^scrypt\$/,
     );
     manageScopedMemory(db, owner, "own", { action: "publication", isPublic: false });
-    assert.equal(getSharedMemoryInDatabase(db, token, "correct-password"), null);
+    assert.ok(getSharedMemoryInDatabase(db, token, "correct-password"));
     manageScopedMemory(db, owner, "own", { action: "publication", isPublic: true });
     manageScopedMemory(db, owner, "own", { action: "trash" });
     assert.equal(getSharedMemoryInDatabase(db, token, "correct-password"), null);

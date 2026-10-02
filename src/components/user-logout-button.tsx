@@ -4,7 +4,10 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { requestJson } from "@/client/http-client";
 
-export function UserLogoutButton() {
+export function UserLogoutButton({
+  label = "登出账号",
+  className = "button-primary",
+}: { label?: string; className?: string } = {}) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -34,8 +37,8 @@ export function UserLogoutButton() {
           {error}
         </p>
       ) : null}
-      <button className="button-primary" type="button" disabled={submitting} onClick={logout}>
-        {submitting ? "正在登出…" : "登出账号"}
+      <button className={className} type="button" disabled={submitting} onClick={logout}>
+        {submitting ? "正在登出…" : label}
       </button>
     </div>
   );

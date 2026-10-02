@@ -7,7 +7,7 @@ import { memoryPageScope } from "@/memory-page-scope";
 import { listUploadedPhotosByIds } from "@/data/photo-repository";
 import { copy } from "@/i18n/zh-CN";
 import { imageStorage } from "@/storage/local-image-storage";
-import { notFound } from "next/navigation";
+import { unstable_rethrow, notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +20,8 @@ export default async function MemoryEditorPage({
   let scope;
   try {
     scope = await memoryPageScope(params.museumId);
-  } catch {
+  } catch (error) {
+    unstable_rethrow(error);
     notFound();
   }
   if (!scope) notFound();

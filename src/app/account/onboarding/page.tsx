@@ -3,7 +3,7 @@ import Link from "next/link";
 import { MuseumOnboardingForm } from "@/components/museum-onboarding-form";
 import { getDatabase } from "@/data/database";
 import { findMuseumByOwnerIdInDatabase } from "@/data/museum-repository";
-import { currentUser } from "@/user-auth";
+import { requireVerifiedPageUser as currentUser } from "@/user-auth";
 
 export const dynamic = "force-dynamic";
 

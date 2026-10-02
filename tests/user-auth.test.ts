@@ -7,6 +7,7 @@ import { initializeDatabase } from "../src/data/database.ts";
 import {
   loginUserInDatabase,
   findUserBySessionInDatabase,
+  findSessionUserInDatabase,
   revokeUserSessionInDatabase,
 } from "../src/data/user-auth.ts";
 import { registerUserInDatabase } from "../src/data/user-registration.ts";
@@ -29,11 +30,20 @@ test("valid credentials create a revocable User session without Owner privileges
       loginUserInDatabase(database, "missing@example.com", "correct-password-123", now).status,
       "invalid",
     );
-    assert.equal(
-      loginUserInDatabase(database, user.email, "correct-password-123", now).status,
-      "unverified",
+    const restricted = loginUserInDatabase(
+      database,
+      " PERSON@EXAMPLE.COM ",
+      "correct-password-123",
+      now,
     );
-    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM user_sessions").get()?.count, 0);
+    assert.equal(restricted.status, "unverified");
+    if (restricted.status !== "unverified") throw new Error("Expected restricted session");
+    assert.equal(
+      findSessionUserInDatabase(database, restricted.sessionToken, now)?.emailVerified,
+      false,
+    );
+    assert.equal(findUserBySessionInDatabase(database, restricted.sessionToken, now), null);
+    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM user_sessions").get()?.count, 1);
 
     database.prepare("UPDATE users SET email_verified = 1 WHERE id = ?").run(user.id);
     const login = loginUserInDatabase(database, user.email, "correct-password-123", now);

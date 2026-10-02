@@ -7,6 +7,7 @@ import { photoStorageUsageSchemaSql } from "./photo-storage-quota.ts";
 import { museumNotificationSchemaSql } from "./museum-notifications.ts";
 import { supportAccessSchemaSql } from "./platform-admin-support.ts";
 import { museumPermanentDeletionSchemaSql } from "./museum-permanent-deletion.ts";
+import { emailCodeSchemaSql } from "./email-code-schema.ts";
 
 type Migration = {
   version: number;
@@ -334,6 +335,17 @@ const migrations: readonly Migration[] = [
     version: 26,
     migrate(database) {
       database.exec(museumPermanentDeletionSchemaSql);
+    },
+  },
+  { version: 27, migrate(database) { database.exec(emailCodeSchemaSql); } },
+  {
+    version: 28,
+    migrate(database) {
+      if (!hasColumn(database, "museums", "owner_id")) return;
+      if (database.prepare("SELECT owner_id FROM museums GROUP BY owner_id HAVING COUNT(*)>1 LIMIT 1").get()) {
+        throw new Error("Task13B: multiple owned palaces require an explicit migration decision; no records were merged or deleted");
+      }
+      database.exec("CREATE UNIQUE INDEX IF NOT EXISTS museums_owner_unique ON museums(owner_id)");
     },
   },
 ];

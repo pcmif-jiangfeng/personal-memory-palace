@@ -18,7 +18,7 @@ export function UserLoginForm() {
     setSubmitting(true);
     const values = new FormData(event.currentTarget);
     try {
-      await requestJson(
+      const verified = await requestJson(
         "/api/user-auth",
         {
           method: "POST",
@@ -34,10 +34,10 @@ export function UserLoginForm() {
           ) {
             throw new TypeError("Invalid login response");
           }
-          return true;
+          return "emailVerified" in payload && payload.emailVerified === true;
         },
       );
-      router.replace("/account");
+      router.replace(verified ? "/" : "/verify-email");
       router.refresh();
     } catch (cause) {
       const code = cause instanceof ClientApiError ? cause.code : "";

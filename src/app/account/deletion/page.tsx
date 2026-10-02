@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { currentUser } from "@/user-auth";
+import { requireVerifiedPageUser as currentUser } from "@/user-auth";
 import { getDatabase } from "@/data/database";
 import { checkAccountDeletionPreconditionsInDatabase } from "@/data/account-deletion-preconditions";
 import { readAccountDeletionPage } from "@/http/account-deletion-preconditions";
@@ -37,7 +37,7 @@ export default async function AccountDeletionPage({
         ) : (
           <p role="status">
             暂不能进入删除流程：有 {result.blockedMuseumCount}{" "}
-            座博物馆仍有有效协作者，必须先转移对应馆长身份。
+            座博物馆仍保留历史协作记录，需要在数据迁移检查中处理。
           </p>
         )}
         <p>
@@ -53,17 +53,7 @@ export default async function AccountDeletionPage({
               </p>
               {museum.collaboratorCount > 0 ? (
                 <>
-                  <p>需要先转移馆长身份。</p>
-                  {museum.status === "active" ? (
-                    <Link
-                      href={`/account/museums/${encodeURIComponent(museum.id)}/transfer`}
-                      prefetch={false}
-                    >
-                      转移这座馆的馆长身份
-                    </Link>
-                  ) : (
-                    <p>本馆当前不是正常运行状态，暂不能转移；后续需先处理删除状态，再重新检查。</p>
-                  )}
+                  <p>协作和馆长转移已停用；历史记录保留，当前不会发起账号删除。</p>
                 </>
               ) : (
                 <p>本馆无有效协作者。</p>

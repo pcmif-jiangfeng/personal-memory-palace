@@ -87,8 +87,35 @@ test("every mutation route applies same-origin checks before authorization", () 
   assert.ok(mutationRoutes.length > 0);
   for (const file of mutationRoutes) {
     const source = readFileSync(file, "utf8");
+    // Retired endpoints always return 410 and perform no writes or credential validation.
+    if (/LEGACY_EMAIL_LINK_REMOVED/.test(source)) {
+      assert.match(source, /status:\s*410/);
+      assert.doesNotMatch(source, /getDatabase|consumeVerification|resetUserPassword/);
+      continue;
+    }
     const originCheck = source.indexOf("sameOriginRequiredResponse(request)");
     assert.notEqual(originCheck, -1, `${path.relative(apiDirectory, file)} lacks origin checking`);
+    if (/COLLABORATION_RETIRED/.test(source)) {
+      assert.match(source, /status:\s*410/);
+      assert.doesNotMatch(
+        source,
+        /getDatabase|copyMemory|copyPhoto|acceptInvite|transferMuseumOwner/,
+      );
+      continue;
+    }
+    if (file.endsWith(path.join("account", "profile", "route.ts"))) {
+      const userCheck = source.indexOf("await currentUser()", originCheck);
+      assert.ok(userCheck > originCheck);
+      assert.ok(source.indexOf("await parseNicknameUpdate(request)", userCheck) > userCheck);
+      assert.match(source, /updateOwnNicknameInDatabase\(getDatabase\(\), user.id, nickname\)/);
+      continue;
+    }
+    if (file.endsWith(path.join("email-code", "route.ts"))) {
+      assert.match(source, /consumeRateLimit\(/);
+      assert.match(source, /await currentSessionUser\(\)/);
+      assert.match(source, /EMAIL_VERIFICATION_REQUIRED/);
+      continue;
+    }
     if (path.relative(apiDirectory, file).startsWith(`admin${path.sep}`)) {
       const userCheck = source.indexOf("await currentUser()", originCheck);
       const adminCheck = source.indexOf(

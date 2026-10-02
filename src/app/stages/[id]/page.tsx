@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { unstable_rethrow, notFound } from "next/navigation";
 import { MemoryCard } from "@/components/memory-card";
 import { PageIntro } from "@/components/page-intro";
 import { StageDeleteAction } from "@/components/stage-delete-action";
@@ -25,7 +25,8 @@ export default async function StageViewPage({
   try {
     scope = await memoryPageScope((await searchParams).museumId);
     stage = scope ? readScopedStage(getDatabase(), scope, id) : findStageById(id, true);
-  } catch {
+  } catch (error) {
+    unstable_rethrow(error);
     notFound();
   }
   if (!stage) notFound();

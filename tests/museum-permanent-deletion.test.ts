@@ -24,8 +24,13 @@ function fixture(t: TestContext) {
     passwordHash: "fixture-hash",
   });
   db.exec("UPDATE users SET email_verified=1");
-  const museums = ["due", "other"].map((slug) =>
-    createMuseumInDatabase(db, { ownerId: user.id, name: slug, slug }),
+  const otherUser = createUserInDatabase(db, {
+    email: "other@example.com",
+    displayName: "Other",
+    passwordHash: "fixture-hash",
+  });
+  const museums = ["due", "other"].map((slug, index) =>
+    createMuseumInDatabase(db, { ownerId: index === 0 ? user.id : otherUser.id, name: slug, slug }),
   );
   db.prepare(
     "UPDATE museums SET status='pending_deletion',deletion_scheduled_at=?,version=2 WHERE id=?",

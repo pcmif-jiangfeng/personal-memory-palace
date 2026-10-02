@@ -32,7 +32,7 @@ export function MemoryExhibition({
           <p className="eyebrow">{visitor ? "VISITOR EXHIBITION" : copy.exhibition.label}</p>
           <p className="exhibition-stage">{memory.stageTitle ?? copy.common.uncategorized}</p>
           <h1>{memory.title}</h1>
-          <MemoryAttribution memory={memory} />
+          {!visitor ? <MemoryAttribution memory={memory} /> : null}
         </div>
         {imagePath ? (
           <figure className="exhibition-hero">

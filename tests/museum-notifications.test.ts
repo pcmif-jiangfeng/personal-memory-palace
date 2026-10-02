@@ -15,6 +15,8 @@ import { withTransaction } from "../src/data/transaction.ts";
 const configuration = { apiKey: "fixture-key", from: "Museum <test@example.com>" };
 function fixture(t: TestContext) {
   const db = initializeDatabase(":memory:", false);
+  // Historical transfer-notification behavior only; the live transfer endpoint is retired.
+  db.exec("DROP INDEX museums_owner_unique");
   t.after(() => db.close());
   const users = ["owner", "member", "outsider"].map((name) =>
     createUserInDatabase(db, {

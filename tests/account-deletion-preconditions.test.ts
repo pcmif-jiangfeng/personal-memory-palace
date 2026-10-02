@@ -11,6 +11,8 @@ import { ApiError } from "../src/http/errors.ts";
 
 function fixture(t: TestContext) {
   const db = initializeDatabase(":memory:", false);
+  // Historical multi-palace deletion checks; production v28 uniqueness is tested separately.
+  db.exec("DROP INDEX museums_owner_unique");
   t.after(() => db.close());
   const users = ["owner", "member", "other"].map((name) =>
     createUserInDatabase(db, {

@@ -9,7 +9,6 @@ import {
   isPhotoMediaAvailable,
 } from "@/data/photo-access";
 import { isSharedImageAccessible, shareAccessCookieName } from "@/data/share-repository";
-import { isPublicImageAccessible } from "@/data/publication-repository";
 import {
   readOrCreateImagePreview,
   resolveImagePreviewPath,
@@ -32,7 +31,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ key:
   const user = await currentUser();
   if (!canReadMuseumPhoto(getDatabase(), user?.id ?? null, key)) {
     const token = new URL(request.url).searchParams.get("share");
-    const publicImage = isPublicImageAccessible(key);
     const sharedImage =
       token && /^[A-Za-z0-9_-]{10,200}$/.test(token)
         ? isSharedImageAccessible(
@@ -41,7 +39,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ key:
             (await cookies()).get(shareAccessCookieName(token))?.value,
           )
         : false;
-    if (!publicImage && !sharedImage) {
+    if (!sharedImage) {
       return new NextResponse(null, { status: 404 });
     }
   }

@@ -2,11 +2,11 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getDatabase } from "@/data/database";
 import { listMuseumActivityInDatabase } from "@/data/museum-activity";
-import { requireMuseumAccessInDatabase } from "@/data/museum-access";
+import { requireMuseumOwnerInDatabase } from "@/data/museum-access";
 import { findMuseumByIdInDatabase } from "@/data/museum-repository";
 import { readAuditLogQuery } from "@/http/audit-log-query";
 import { ApiError } from "@/http/errors";
-import { currentUser } from "@/user-auth";
+import { requireVerifiedPageUser as currentUser } from "@/user-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +23,7 @@ export default async function MuseumActivityPage({
   const database = getDatabase();
   let role: "owner" | "collaborator";
   try {
-    const access = requireMuseumAccessInDatabase(database, user.id, id);
+    const access = requireMuseumOwnerInDatabase(database, user.id, id);
     if (access.status !== "active") notFound();
     role = access.role;
   } catch (error) {

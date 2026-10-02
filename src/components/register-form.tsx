@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { ClientApiError, requestJson } from "@/client/http-client";
 import { MIN_USER_PASSWORD_LENGTH } from "@/domain/rules";
+import { useRouter } from "next/navigation";
 
 const errorMessages: Record<string, string> = {
   EMAIL_ALREADY_REGISTERED: "这个邮箱已经注册。",
@@ -17,6 +18,7 @@ const errorMessages: Record<string, string> = {
 };
 
 export function RegisterForm() {
+  const router = useRouter();
   const [error, setError] = useState("");
   const [emailSent, setEmailSent] = useState<boolean | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -27,6 +29,11 @@ export function RegisterForm() {
     setSubmitting(true);
     const form = event.currentTarget;
     const values = new FormData(form);
+    if (values.get("password") !== values.get("confirmPassword")) {
+      setError("两次输入的密码不一致。");
+      setSubmitting(false);
+      return;
+    }
 
     try {
       const result = await requestJson(
@@ -37,6 +44,7 @@ export function RegisterForm() {
           body: JSON.stringify({
             email: values.get("email"),
             password: values.get("password"),
+            confirmPassword: values.get("confirmPassword"),
             displayName: values.get("displayName"),
           }),
         },
@@ -57,6 +65,8 @@ export function RegisterForm() {
       );
       form.reset();
       setEmailSent(result);
+      router.replace("/verify-email");
+      router.refresh();
     } catch (cause) {
       const code = cause instanceof ClientApiError ? cause.code : "";
       setError(errorMessages[code] ?? "注册未完成，请稍后再试。");
@@ -70,7 +80,7 @@ export function RegisterForm() {
       <div className="login-form" role="status">
         <p>
           {emailSent
-            ? "账号已建立。请查收验证邮件，并打开其中的链接完成验证。"
+            ? "账号已建立。请查收六位验证码，并进入邮箱验证页面。"
             : "账号已建立，但验证邮件暂时未能发送。请稍后重新发送。"}
         </p>
         <Link href="/resend-verification">重新发送验证邮件</Link>
@@ -86,8 +96,8 @@ export function RegisterForm() {
         <input name="email" type="email" autoComplete="email" maxLength={254} required />
       </label>
       <label className="form-field">
-        <span>展示名称</span>
-        <input name="displayName" type="text" autoComplete="nickname" maxLength={80} required />
+        <span>昵称</span>
+        <input name="displayName" type="text" autoComplete="nickname" maxLength={50} required />
       </label>
       <label className="form-field">
         <span>密码</span>
@@ -96,6 +106,17 @@ export function RegisterForm() {
           type="password"
           autoComplete="new-password"
           minLength={MIN_USER_PASSWORD_LENGTH}
+          maxLength={512}
+          required
+        />
+      </label>
+      <label className="form-field">
+        <span>确认密码</span>
+        <input
+          name="confirmPassword"
+          type="password"
+          autoComplete="new-password"
+          minLength={8}
           maxLength={512}
           required
         />

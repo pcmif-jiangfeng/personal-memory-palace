@@ -7,20 +7,10 @@ import { createMuseumInDatabase } from "../src/data/museum-repository.ts";
 import { withTransaction } from "../src/data/transaction.ts";
 import { createUserInDatabase } from "../src/data/user-repository.ts";
 import { hashUserPassword } from "../src/security/user-password.ts";
+import { legacyOwnedTables } from "../src/data/owner-migration.ts";
+export { legacyOwnedTables } from "../src/data/owner-migration.ts";
 
 // Fixed table names: never accept a table identifier from CLI or database content.
-export const legacyOwnedTables = [
-  "stages",
-  "memories",
-  "uploaded_photos",
-  "stage_covers",
-  "memory_images",
-  "memory_relations",
-  "later_notes",
-  "share_configs",
-  "photo_deletion_jobs",
-  "pending_uploads",
-] as const;
 
 type OwnedTable = (typeof legacyOwnedTables)[number];
 type Counts = Record<OwnedTable | "users" | "museums", number>;
@@ -103,7 +93,7 @@ export function migrateLegacyOwnerInDatabase(
   });
 }
 
-function countMissingFiles(database: DatabaseSync, imageRoot: string): number {
+export function countMissingFiles(database: DatabaseSync, imageRoot: string): number {
   const keys = new Set<string>();
   for (const [table, column] of [
     ["uploaded_photos", "optimized_storage_key"],

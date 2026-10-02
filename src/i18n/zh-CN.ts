@@ -1,4 +1,30 @@
 export const copy = {
+  account: {
+    title: "账号管理",
+    description: "管理你的个人信息。博物馆资料与账号信息彼此独立。",
+    nickname: "昵称",
+    nicknameHelp: "支持中文、英文和数字，最多 50 个字符。昵称可以与其他用户相同。",
+    save: "保存昵称",
+    saving: "正在保存…",
+    saved: "昵称已保存。",
+    invalid: "请输入 1–50 个字符的昵称，不能只有空格。",
+    failed: "昵称未保存，请稍后重试。",
+    email: "绑定邮箱",
+    emailHelp: "当前阶段不支持修改邮箱。",
+    verified: "邮箱已验证",
+    logout: "退出登录",
+    password: "修改密码",
+    passwordHelp: "通过当前绑定邮箱验证身份，不需要输入旧密码。",
+    passwordSteps: [
+      "发送六位邮箱验证码",
+      "输入验证码完成验证",
+      "设置并确认至少 8 位的新密码",
+    ] as const,
+    passwordPending:
+      "六位验证码能力将在 Task13B 接入。本阶段仅展示流程，不会发送验证码或修改密码。",
+    passwordSession: "正式接入后，修改成功将保持当前设备登录。",
+    passwordSend: "发送验证码（待接入）",
+  },
   museumCopy: {
     target: "复制到另一座博物馆",
     choose: "选择目标博物馆",

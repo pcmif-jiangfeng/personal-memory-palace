@@ -167,7 +167,8 @@ test("private memory or stage is absent from public lists, direct URLs, recall a
     assert.equal(findMemoryByIdInDatabase(database, "in-stage", true), null);
     assert.equal(findMemoryByIdInDatabase(database, "in-stage")?.isPublic, false);
     assert.equal(isPublicImageAccessibleInDatabase(database, "stage.webp"), false);
-    assert.equal(isSharedImageAccessibleInDatabase(database, "share-token", "stage.webp"), false);
+    // Ordinary publication and explicit token authorization are independent in Task13B.
+    assert.equal(isSharedImageAccessibleInDatabase(database, "share-token", "stage.webp"), true);
     assert.equal(findRandomActiveMemoryInDatabase(database, true)?.id, "unassigned");
 
     setMemoryPublicInDatabase(database, "in-stage", true);

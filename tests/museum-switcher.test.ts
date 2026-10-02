@@ -6,7 +6,7 @@ import { createMuseumInDatabase } from "../src/data/museum-repository.ts";
 import { listSwitcherMuseumsInDatabase } from "../src/data/museum-switcher.ts";
 import { currentSwitcherMuseum } from "../src/domain/museum-switcher.ts";
 
-test("switcher lists Own first and only active joined museums without sensitive fields", () => {
+test("Task13B navigation only lists owned museums, never historical collaborators' museums", () => {
   const db = initializeDatabase(":memory:", false);
   try {
     const users = ["self", "joined", "pending", "revoked", "other"].map((name) =>
@@ -34,16 +34,12 @@ test("switcher lists Own first and only active joined museums without sensitive 
     const choices = listSwitcherMuseumsInDatabase(db, users[0].id);
     assert.deepEqual(
       choices.map((m) => m.id),
-      [museums[0].id, museums[1].id],
+      [museums[0].id],
     );
     assert.equal(choices[0].role, "owner");
-    assert.equal(choices[1].role, "collaborator");
     assert.deepEqual(Object.keys(choices[0]).sort(), ["id", "name", "role"]);
     assert.equal(currentSwitcherMuseum(choices, "/account")?.id, museums[0].id);
-    assert.equal(
-      currentSwitcherMuseum(choices, `/account/museums/${museums[1].id}`)?.id,
-      museums[1].id,
-    );
+    assert.equal(currentSwitcherMuseum(choices, `/account/museums/${museums[1].id}`), null);
     assert.equal(currentSwitcherMuseum(choices, `/account/museums/${museums[2].id}`), null);
     assert.equal(currentSwitcherMuseum(choices, "/account/museums/unknown"), null);
     assert.deepEqual(listSwitcherMuseumsInDatabase(db, "missing"), []);

@@ -30,6 +30,8 @@ import { ApiError } from "../src/http/errors.ts";
 
 function fixture(t: TestContext) {
   const db = initializeDatabase(":memory:", false);
+  // Preserve deletion checks against historical multi-palace snapshots.
+  db.exec("DROP INDEX museums_owner_unique");
   t.after(() => db.close());
   const users = ["owner", "member", "other"].map((name) =>
     createUserInDatabase(db, {
@@ -284,7 +286,7 @@ test("pending Museum denies business reads, public Memory/Stage/photo/share acce
   assert.deepEqual(f.content(), content);
   assert.equal(
     listSwitcherMuseumsInDatabase(f.db, f.member.userId).some((m) => m.id === f.owner.museumId),
-    true,
+    false,
   );
   assert.ok(readScopedMemory(f.db, f.member, "memory"));
   assert.ok(findStageByIdInDatabase(f.db, "stage", true));

@@ -29,6 +29,8 @@ import { createOwnMuseumInDatabase } from "../src/data/museum-onboarding.ts";
 
 function fixture(t: TestContext) {
   const db = initializeDatabase(":memory:", false);
+  // Retired transfer service tests retain the pre-13B multi-palace schema in isolation.
+  db.exec("DROP INDEX museums_owner_unique");
   t.after(() => db.close());
   const users = ["owner", "target", "other", "outsider"].map((name) =>
     createUserInDatabase(db, {

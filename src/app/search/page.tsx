@@ -5,7 +5,7 @@ import { MemoryCard } from "@/components/memory-card";
 import { memoryPageScope } from "@/memory-page-scope";
 import { getDatabase } from "@/data/database";
 import { listScopedMemories } from "@/data/scoped-memory";
-import { notFound } from "next/navigation";
+import { unstable_rethrow, notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 export default async function SearchPage({
@@ -17,7 +17,8 @@ export default async function SearchPage({
   let scope;
   try {
     scope = await memoryPageScope(params.museumId);
-  } catch {
+  } catch (error) {
+    unstable_rethrow(error);
     notFound();
   }
   const q = params.q?.trim() ?? "";

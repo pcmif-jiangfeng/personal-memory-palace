@@ -11,11 +11,10 @@ import {
 import { copy } from "@/i18n/zh-CN";
 import { imageStorage } from "@/storage/local-image-storage";
 import { TimeGear } from "@/components/time-gear";
-import { isOwner } from "@/auth";
 import { memoryPageScope } from "@/memory-page-scope";
 import { getDatabase } from "@/data/database";
 import { listScopedMemories } from "@/data/scoped-memory";
-import { notFound } from "next/navigation";
+import { unstable_rethrow, notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -24,11 +23,11 @@ export default async function LifeGalleryPage({
 }: {
   searchParams: Promise<{ museumId?: string }>;
 }) {
-  const owner = await isOwner();
   let scope;
   try {
     scope = await memoryPageScope((await searchParams).museumId);
-  } catch {
+  } catch (error) {
+    unstable_rethrow(error);
     notFound();
   }
   const memories = scope ? listScopedMemories(getDatabase(), scope) : listActiveMemories(true);
@@ -84,7 +83,7 @@ export default async function LifeGalleryPage({
           <h2>{copy.recall.title}</h2>
           <p>{copy.recall.description}</p>
         </div>
-        <TimeGear owner={owner} />
+        <TimeGear owner={Boolean(scope)} />
       </section>
       <section className="stage-gallery section-shell" id="stage-shelf">
         <header className="section-heading">

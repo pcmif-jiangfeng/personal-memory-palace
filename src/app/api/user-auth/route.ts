@@ -29,11 +29,8 @@ export async function POST(request: Request) {
     if (result.status === "invalid") {
       return NextResponse.json({ error: "INVALID_CREDENTIALS" }, { status: 401 });
     }
-    if (result.status === "unverified") {
-      return NextResponse.json({ error: "EMAIL_NOT_VERIFIED" }, { status: 403 });
-    }
     clearRateLimit(limitKey);
-    const response = NextResponse.json({ ok: true });
+    const response = NextResponse.json({ ok: true, emailVerified: result.user.emailVerified });
     response.cookies.set(userSessionCookie(result.sessionToken));
     return response;
   } catch (error) {

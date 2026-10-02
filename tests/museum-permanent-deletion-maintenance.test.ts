@@ -26,8 +26,13 @@ async function fixture(t: TestContext) {
     displayName: "Owner",
     passwordHash: "fixture-hash",
   });
-  const museums = ["due", "other"].map((slug) =>
-    createMuseumInDatabase(db, { ownerId: user.id, name: slug, slug }),
+  const otherUser = createUserInDatabase(db, {
+    email: "other@example.com",
+    displayName: "Other",
+    passwordHash: "fixture-hash",
+  });
+  const museums = ["due", "other"].map((slug, index) =>
+    createMuseumInDatabase(db, { ownerId: index === 0 ? user.id : otherUser.id, name: slug, slug }),
   );
   const files: string[] = [];
   for (const museum of museums) {
@@ -109,7 +114,7 @@ test("J6 real maintenance CLI verifies a recoverable backup before deleting only
   const db = new DatabaseSync(path.join(f.data, "palace.sqlite"), { readOnly: true });
   try {
     assert.equal(db.prepare("SELECT COUNT(*) n FROM museums").get()!.n, 1);
-    assert.equal(db.prepare("SELECT COUNT(*) n FROM users").get()!.n, 1);
+    assert.equal(db.prepare("SELECT COUNT(*) n FROM users").get()!.n, 2);
     assert.equal(db.prepare("SELECT COUNT(*) n FROM uploaded_photos").get()!.n, 1);
     assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
   } finally {

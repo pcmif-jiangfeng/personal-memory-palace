@@ -18,6 +18,8 @@ import { transferMuseumOwnerInDatabase } from "../src/data/museum-owner-transfer
 function fixture(t: TestContext) {
   const previous = process.env.MEMORY_PALACE_PLATFORM_ADMIN_USER_ID;
   const db = initializeDatabase(":memory:", false);
+  // Historical ownership-change permit invalidation; live ownership transfer is disabled.
+  db.exec("DROP INDEX museums_owner_unique");
   const users = ["owner", "admin", "other"].map((name) =>
     createUserInDatabase(db, {
       email: `${name}@example.com`,

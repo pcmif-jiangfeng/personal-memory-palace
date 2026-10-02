@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { currentUser } from "@/user-auth";
+import { requireVerifiedPageUser as currentUser } from "@/user-auth";
 import { getDatabase } from "@/data/database";
 import { isPlatformAdminInDatabase } from "@/data/platform-admin";
 import Link from "next/link";

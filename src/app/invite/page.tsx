@@ -1,14 +1,9 @@
-import { AcceptInviteForm } from "@/components/accept-invite-form";
+import { notFound } from "next/navigation";
+import { requireVerifiedPageUser } from "@/user-auth";
 
-export default function InvitePage() {
-  return (
-    <section className="section-shell skeleton-page">
-      <div className="login-panel">
-        <p className="eyebrow">PERSONAL MEMORY PALACE</p>
-        <h1>接受协作者邀请</h1>
-        <p>加入另一座人生博物馆。接受邀请前，请验证邮箱并创建自己的 Museum。</p>
-        <AcceptInviteForm />
-      </div>
-    </section>
-  );
+export const dynamic = "force-dynamic";
+// Historical collaboration URLs no longer expose private content or mutation controls.
+export default async function RetiredCollaborationPage() {
+  await requireVerifiedPageUser();
+  notFound();
 }

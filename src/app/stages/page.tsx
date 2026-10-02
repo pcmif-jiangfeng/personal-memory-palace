@@ -9,7 +9,7 @@ import { imageStorage } from "@/storage/local-image-storage";
 import { memoryPageScope } from "@/memory-page-scope";
 import { getDatabase } from "@/data/database";
 import { listScopedStages } from "@/data/scoped-stage";
-import { notFound } from "next/navigation";
+import { unstable_rethrow, notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +21,8 @@ export default async function StagesPage({
   let scope;
   try {
     scope = await memoryPageScope((await searchParams).museumId);
-  } catch {
+  } catch (error) {
+    unstable_rethrow(error);
     notFound();
   }
   if (!scope) {

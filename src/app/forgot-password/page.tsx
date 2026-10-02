@@ -1,4 +1,4 @@
-import { ForgotPasswordForm } from "@/components/forgot-password-form";
+import { EmailCodeForm } from "@/components/email-code-form";
 
 export default function ForgotPasswordPage() {
   return (
@@ -6,8 +6,8 @@ export default function ForgotPasswordPage() {
       <div className="login-panel">
         <p className="eyebrow">PERSONAL MEMORY PALACE</p>
         <h1>找回密码</h1>
-        <p>输入注册邮箱，我们会向该邮箱发送重置链接。</p>
-        <ForgotPasswordForm />
+        <p>通过六位邮箱验证码验证后设置新密码，密码至少八位。</p>
+        <EmailCodeForm purpose="RESET_PASSWORD" />
       </div>
     </section>
   );

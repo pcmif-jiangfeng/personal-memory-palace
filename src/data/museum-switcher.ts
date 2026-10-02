@@ -8,15 +8,9 @@ export function listSwitcherMuseumsInDatabase(
 ): SwitcherMuseum[] {
   return database
     .prepare(
-      `SELECT id, name, 'owner' AS role, created_at FROM museums WHERE owner_id=?
-    UNION ALL
-    SELECT m.id, m.name, 'collaborator' AS role, m.created_at FROM museums m
-    JOIN museum_memberships membership ON membership.museum_id=m.id
-    WHERE membership.user_id=? AND membership.status='active' AND m.status='active'
-      AND m.owner_id<>?
-    ORDER BY role DESC, created_at, id`,
+      `SELECT id, name, 'owner' AS role FROM museums WHERE owner_id=? ORDER BY created_at, id`,
     )
-    .all(userId, userId, userId)
+    .all(userId)
     .map((row) => ({
       id: row.id as string,
       name: row.name as string,

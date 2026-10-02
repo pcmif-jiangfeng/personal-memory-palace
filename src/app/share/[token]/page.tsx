@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
-import { getSharedMemory, shareTokenExists } from "@/data/share-repository";
+import { getSharedMemory, getShareOwnerNickname, shareTokenExists } from "@/data/share-repository";
 import { ShareAccess } from "@/components/share-access";
 import { copy } from "@/i18n/zh-CN";
 import { MemoryExhibition } from "@/components/memory-exhibition";
@@ -11,7 +11,13 @@ export default async function SharedMemoryPage({ params }: { params: Promise<{ t
   const configCookie = (await cookies()).get(`memory_palace_share_${token}`);
   const memory = getSharedMemory(token, undefined, configCookie?.value);
   if (!shareTokenExists(token)) notFound();
-  if (memory) return <MemoryExhibition memory={memory} visitor shareToken={token} />;
+  if (memory)
+    return (
+      <>
+        <p className="section-shell">来自「{getShareOwnerNickname(token)}」的分享</p>
+        <MemoryExhibition memory={memory} visitor shareToken={token} />
+      </>
+    );
   if (!configCookie)
     return (
       <section className="section-shell skeleton-page">

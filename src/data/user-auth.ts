@@ -4,11 +4,10 @@ import { findUserByIdInDatabase, type User } from "./user-repository.ts";
 
 export const userSessionLifetimeSeconds = 7 * 24 * 60 * 60;
 
-type PublicUser = Pick<User, "id" | "email" | "displayName">;
+type PublicUser = Pick<User, "id" | "email" | "displayName" | "emailVerified">;
 type LoginResult =
   | { status: "invalid" }
-  | { status: "unverified" }
-  | { status: "authenticated"; user: PublicUser; sessionToken: string };
+  | { status: "unverified" | "authenticated"; user: PublicUser; sessionToken: string };
 
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
@@ -30,7 +29,7 @@ export function loginUserInDatabase(
   password: string,
   now = new Date(),
 ): LoginResult {
-  const row = database.prepare("SELECT id FROM users WHERE email = ?").get(email) as
+  const row = database.prepare("SELECT id FROM users WHERE email = ?").get(email.trim().toLowerCase()) as
     | { id: string }
     | undefined;
   const user = row ? findUserByIdInDatabase(database, row.id) : null;
@@ -39,7 +38,6 @@ export function loginUserInDatabase(
     return { status: "invalid" };
   }
   if (!passwordMatches(password, user.passwordHash)) return { status: "invalid" };
-  if (!user.emailVerified) return { status: "unverified" };
 
   const sessionToken = randomBytes(32).toString("base64url");
   const expiresAt = new Date(now.getTime() + userSessionLifetimeSeconds * 1000).toISOString();
@@ -48,13 +46,13 @@ export function loginUserInDatabase(
     VALUES (?, ?, ?, ?)
   `).run(hashToken(sessionToken), user.id, expiresAt, now.toISOString());
   return {
-    status: "authenticated",
+    status: user.emailVerified ? "authenticated" : "unverified",
     sessionToken,
-    user: { id: user.id, email: user.email, displayName: user.displayName },
+    user: { id: user.id, email: user.email, displayName: user.displayName, emailVerified: user.emailVerified },
   };
 }
 
-export function findUserBySessionInDatabase(
+export function findSessionUserInDatabase(
   database: DatabaseSync,
   sessionToken: string | undefined,
   now = new Date(),
@@ -64,11 +62,15 @@ export function findUserBySessionInDatabase(
     SELECT users.id FROM user_sessions
     JOIN users ON users.id = user_sessions.user_id
     WHERE user_sessions.token_hash = ? AND user_sessions.expires_at > ?
-      AND users.email_verified = 1
   `).get(hashToken(sessionToken), now.toISOString()) as { id: string } | undefined;
   if (!row) return null;
   const user = findUserByIdInDatabase(database, row.id);
-  return user ? { id: user.id, email: user.email, displayName: user.displayName } : null;
+  return user ? { id: user.id, email: user.email, displayName: user.displayName, emailVerified: user.emailVerified } : null;
+}
+
+export function findUserBySessionInDatabase(database: DatabaseSync, token: string | undefined, now = new Date()): PublicUser | null {
+  const user = findSessionUserInDatabase(database, token, now);
+  return user?.emailVerified ? user : null;
 }
 
 export function revokeUserSessionInDatabase(

@@ -8,6 +8,7 @@ import { publicSiteUrl } from "@/domain/share-links";
 import { copy } from "@/i18n/zh-CN";
 import { MuseumSwitcher } from "@/components/museum-switcher";
 import { currentSwitcherMuseum, type SwitcherMuseum } from "@/domain/museum-switcher";
+import { AccountMenu } from "@/components/account-menu";
 
 const ownerNavigationItems = [
   { href: "/", label: copy.nav.gallery, marker: "◇" },
@@ -18,18 +19,18 @@ const ownerNavigationItems = [
 ] as const;
 
 const visitorNavigationItems = [
-  { href: "/", label: copy.nav.gallery, marker: "◇" },
-  { href: "/stages", label: copy.nav.stages, marker: "Ⅱ" },
-  { href: "/search", label: copy.nav.search, marker: "⌕" },
-  { href: "/login", label: "馆长登录", marker: "○" },
+  { href: "/account/login", label: "登录", marker: "○" },
+  { href: "/register", label: "注册", marker: "◇" },
 ] as const;
 
 export function SiteHeader({
   owner,
   museums = [],
+  user = null,
 }: {
   owner: boolean;
   museums?: SwitcherMuseum[];
+  user?: { displayName: string; email: string } | null;
 }) {
   const pathname = usePathname();
   const queryMuseumId = useSearchParams().get("museumId");
@@ -59,7 +60,7 @@ export function SiteHeader({
       <Link className="brand" href={scopedHref("/")}>
         {copy.brand}
       </Link>
-      <MuseumSwitcher museums={museums} selectedMuseumId={museumId} />
+      {museums.length > 1 ? <MuseumSwitcher museums={museums} selectedMuseumId={museumId} /> : null}
       <nav aria-label={copy.common.mainNavigation}>
         <button className="site-share-button" type="button" onClick={() => void shareSite()}>
           <span className="site-nav-marker" aria-hidden="true">
@@ -84,6 +85,7 @@ export function SiteHeader({
           );
         })}
       </nav>
+      {user ? <AccountMenu user={user} /> : null}
       {shareMessage ? (
         <div className="site-share-feedback" role="status">
           <span>{shareMessage}</span>

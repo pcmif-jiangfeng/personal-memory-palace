@@ -5,7 +5,6 @@ import { getDatabase } from "./database.ts";
 import { findMemoryDetailsInDatabase } from "./memory-repository.ts";
 import { withTransaction } from "./transaction.ts";
 import { DomainError } from "../domain/errors.ts";
-import { isMemoryPublicInDatabase } from "./publication-repository.ts";
 
 export type ShareMode = "link" | "password";
 
@@ -173,8 +172,7 @@ function readAccessibleShare(database: DatabaseSync, token: string) {
     .get(token) as ShareAccessRow | undefined;
   return row &&
     row.visibility === "shared" &&
-    !row.trashed_at &&
-    isMemoryPublicInDatabase(database, row.memory_id)
+    !row.trashed_at
     ? row
     : undefined;
 }
@@ -187,7 +185,22 @@ export function getSharedMemoryInDatabase(
 ) {
   const row = readAccessibleShare(database, token);
   if (!row || !hasShareAccess(row, token, password, accessCookie)) return null;
-  return findMemoryDetailsInDatabase(database, row.memory_id, true, row.museum_id ?? undefined);
+  const memory = findMemoryDetailsInDatabase(database, row.memory_id, false, row.museum_id ?? undefined);
+  // A token grants this Memory only, not its linked private Memories or stage.
+  return memory ? {
+    ...memory, relatedMemories: [], stageId: null, stageTitle: null,
+    createdByUserId: null, lastEditedByUserId: null,
+    createdByDisplayName: null, lastEditedByDisplayName: null,
+  } : null;
+}
+
+export function getShareOwnerNickname(token: string): string {
+  const db = getDatabase();
+  if (!readAccessibleShare(db, token)) return "某位用户";
+  const row = db.prepare(`SELECT users.display_name FROM share_configs
+    JOIN museums ON museums.id=share_configs.museum_id
+    JOIN users ON users.id=museums.owner_id WHERE share_configs.id=?`).get(token);
+  return String(row?.display_name ?? "").trim() || "某位用户";
 }
 
 export function isSharedImageAccessibleInDatabase(
@@ -218,7 +231,6 @@ export function isSharedImageAccessibleInDatabase(
     row &&
     row.visibility === "shared" &&
     !row.trashed_at &&
-    isMemoryPublicInDatabase(database, row.memory_id) &&
     hasShareAccess(row, token, undefined, accessCookie),
   );
 }

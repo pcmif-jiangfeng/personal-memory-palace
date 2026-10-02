@@ -5,7 +5,7 @@ import { getDatabase } from "@/data/database";
 import { readMuseumDeletionInDatabase } from "@/data/museum-deletion";
 import { checkAccountDeletionPreconditionsInDatabase } from "@/data/account-deletion-preconditions";
 import { ApiError } from "@/http/errors";
-import { currentUser } from "@/user-auth";
+import { requireVerifiedPageUser as currentUser } from "@/user-auth";
 
 export const dynamic = "force-dynamic";
 

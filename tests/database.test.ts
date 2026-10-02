@@ -45,6 +45,7 @@ test("initializes the core schema and isolated demo data", () => {
 
     assert.deepEqual(tables, [
       "audit_logs",
+      "email_codes",
       "email_verification_tokens",
       "invite_links",
       "later_notes",
@@ -181,7 +182,7 @@ test("adds photo library membership to an existing owner database without losing
       versions,
       [
         1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
-        26,
+        26, 27, 28,
       ],
     );
   } finally {
@@ -384,7 +385,7 @@ test("records each database migration once", () => {
       versions,
       [
         1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
-        26,
+        26, 27, 28,
       ],
     );
   } finally {

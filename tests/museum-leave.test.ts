@@ -32,7 +32,7 @@ function fixture() {
 test("collaborator leave revokes only self and disappears from switcher without deleting museum", () => {
   const { db, users, museums } = fixture();
   try {
-    assert.equal(listSwitcherMuseumsInDatabase(db, users[1].id).length, 2);
+    assert.equal(listSwitcherMuseumsInDatabase(db, users[1].id).length, 1);
     assert.deepEqual(leaveMuseumInDatabase(db, users[1].id, museums[0].id), { ok: true });
     const row = db
       .prepare("SELECT * FROM museum_memberships WHERE museum_id=? AND user_id=?")

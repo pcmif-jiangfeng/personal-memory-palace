@@ -5,7 +5,7 @@ import { memoryPageScope } from "@/memory-page-scope";
 import { getDatabase } from "@/data/database";
 import { listScopedMemories } from "@/data/scoped-memory";
 import { TrashManager } from "@/components/trash-manager";
-import { notFound } from "next/navigation";
+import { unstable_rethrow, notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 export default async function TrashPage({
@@ -16,7 +16,8 @@ export default async function TrashPage({
   let scope;
   try {
     scope = await memoryPageScope((await searchParams).museumId);
-  } catch {
+  } catch (error) {
+    unstable_rethrow(error);
     notFound();
   }
   if (!scope) notFound();

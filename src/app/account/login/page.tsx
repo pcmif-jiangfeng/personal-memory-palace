@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { UserLoginForm } from "@/components/user-login-form";
-import { currentUser } from "@/user-auth";
+import { currentSessionUser } from "@/user-auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function UserLoginPage() {
-  if (await currentUser()) redirect("/account");
+  const user = await currentSessionUser();
+  if (user) redirect(user.emailVerified ? "/" : "/verify-email");
   return (
     <section className="section-shell skeleton-page">
       <div className="login-panel">

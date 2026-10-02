@@ -102,10 +102,11 @@ export async function parseUserRegistration(request: Request) {
   })!;
   if (password.trim().length < MIN_USER_PASSWORD_LENGTH)
     throw new ApiError("PASSWORD_TOO_SHORT", 400);
+  if (input.confirmPassword !== password) throw new ApiError("PASSWORD_CONFIRMATION_MISMATCH", 400);
   return {
     email,
     password,
-    displayName: stringValue(input, "displayName", { required: true, maxLength: 80 })!,
+    displayName: stringValue(input, "displayName", { required: true, maxLength: 50 })!,
   };
 }
 

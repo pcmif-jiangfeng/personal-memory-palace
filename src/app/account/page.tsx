@@ -6,7 +6,7 @@ import { MuseumSlugForm } from "@/components/museum-slug-form";
 import { UserLogoutButton } from "@/components/user-logout-button";
 import { getDatabase } from "@/data/database";
 import { findMuseumByIdInDatabase, findMuseumByOwnerIdInDatabase } from "@/data/museum-repository";
-import { currentUser } from "@/user-auth";
+import { requireVerifiedPageUser as currentUser } from "@/user-auth";
 import { isPlatformAdminInDatabase } from "@/data/platform-admin";
 import { requireMuseumOwnerInDatabase } from "@/data/museum-access";
 import { readMuseumSelection } from "@/http/museum-selection";
@@ -51,7 +51,7 @@ export default async function AccountPage({
           馆长：{user.displayName} · 馆址：{museum.slug}
         </p>
         <MuseumProfileForm
-          key={museum.id}
+          key={`profile-${museum.id}`}
           museumId={museum.id}
           version={museum.version}
           name={museum.name}
@@ -59,23 +59,14 @@ export default async function AccountPage({
           coverPhotoId={museum.coverPhotoId}
           photos={museumCoverChoicesInDatabase(getDatabase(), museum.id, museum.coverPhotoId)}
         />
-        <MuseumSlugForm key={museum.id} museumId={museum.id} currentSlug={museum.slug} />
-        <Link href={`/account/invites?museumId=${encodeURIComponent(museum.id)}`}>
-          管理协作者邀请
-        </Link>
-        <Link href={`/account/museums/${encodeURIComponent(museum.id)}/transfer`} prefetch={false}>
-          转移馆长身份
-        </Link>
-        <Link
-          href={`/account/museums/${encodeURIComponent(museum.id)}/collaborators`}
-          prefetch={false}
-        >
-          管理协作者
-        </Link>
+        <MuseumSlugForm key={`slug-${museum.id}`} museumId={museum.id} currentSlug={museum.slug} />
         <Link href={`/account/museums/${encodeURIComponent(museum.id)}/audit`} prefetch={false}>
           查看操作审计
         </Link>
         <UserLogoutButton />
+        <Link href="/account/settings" prefetch={false}>
+          账号管理
+        </Link>
         <Link href="/account/deletion" prefetch={false}>
           检查账号删除条件
         </Link>

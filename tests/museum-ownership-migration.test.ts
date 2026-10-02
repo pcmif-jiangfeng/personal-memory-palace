@@ -26,7 +26,7 @@ function versionTenDatabase(): DatabaseSync {
   return database;
 }
 
-test("migration 11 keeps existing Museums and migration 22 permits multiple owned Museums", () => {
+test("migrations preserve Museums and Task13B restores one palace per owner", () => {
   const database = versionTenDatabase();
   try {
     database.exec(
@@ -34,7 +34,7 @@ test("migration 11 keeps existing Museums and migration 22 permits multiple owne
     );
     runDatabaseMigrations(database);
     runDatabaseMigrations(database);
-    assert.doesNotThrow(() =>
+    assert.throws(() =>
       database.exec(
         "INSERT INTO museums (id, owner_id, slug) VALUES ('museum-2', 'owner-1', 'second')",
       ),
@@ -44,7 +44,7 @@ test("migration 11 keeps existing Museums and migration 22 permits multiple owne
     );
     assert.equal(
       (database.prepare("SELECT COUNT(*) AS count FROM museums").get() as { count: number }).count,
-      3,
+      2,
     );
     assert.equal(
       (

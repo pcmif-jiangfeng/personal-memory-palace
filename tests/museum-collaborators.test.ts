@@ -64,7 +64,7 @@ test("Owner removes only the selected membership, switcher and captured content 
     listSwitcherMuseumsInDatabase(f.db, f.users[1].id)
       .map((m) => m.id)
       .sort(),
-    [f.museums[1].id, f.museums[2].id].sort(),
+    [f.museums[1].id],
   );
   for (const operation of ["read", "update"] as const)
     assert.throws(

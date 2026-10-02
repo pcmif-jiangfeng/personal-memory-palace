@@ -13,7 +13,10 @@ function registrationRequest(value: unknown): Request {
   return new Request("http://localhost/api/register", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(value),
+    body: JSON.stringify({
+      confirmPassword: (value as { password?: string }).password,
+      ...(value as object),
+    }),
   });
 }
 
@@ -53,6 +56,17 @@ test("registration validation normalizes email and preserves the password before
     await assert.rejects(
       parseUserRegistration(registrationRequest(value)),
       (error: unknown) => error instanceof ApiError && error.code === code,
+    );
+  }
+});
+
+test("registration rejects a missing or mismatched confirmation password", async () => {
+  const input = { email: "person@example.com", displayName: "昵称", password: "abcdefgh" };
+  for (const confirmPassword of [undefined, "different"]) {
+    await assert.rejects(
+      parseUserRegistration(registrationRequest({ ...input, confirmPassword })),
+      (error: unknown) =>
+        error instanceof ApiError && error.code === "PASSWORD_CONFIRMATION_MISMATCH",
     );
   }
 });
