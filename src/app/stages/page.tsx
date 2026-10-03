@@ -47,7 +47,11 @@ export default async function StagesPage({
   return (
     <section className="section-shell skeleton-page">
       <PageIntro title={copy.stage.manageTitle} description={copy.stage.manageDescription} />
-      <StageManager stages={listScopedStages(getDatabase(), scope)} photos={photos} />
+      <StageManager
+        stages={listScopedStages(getDatabase(), scope)}
+        photos={photos}
+        canManagePublication={scope.role === "owner"}
+      />
     </section>
   );
 }

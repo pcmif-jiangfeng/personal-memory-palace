@@ -19,7 +19,7 @@ export function museumCoverChoicesInDatabase(
   const rows = database
     .prepare(
       `SELECT id, original_name AS name FROM uploaded_photos
-    WHERE museum_id = ? AND NOT EXISTS (SELECT 1 FROM photo_deletion_jobs WHERE photo_id = uploaded_photos.id)
+    WHERE museum_id = ? AND trashed_at IS NULL AND NOT EXISTS (SELECT 1 FROM photo_deletion_jobs WHERE photo_id = uploaded_photos.id)
     ORDER BY (id = ?) DESC, created_at DESC, id LIMIT 60`,
     )
     .all(museumId, currentCoverId) as { id: string; name: string }[];
@@ -42,7 +42,7 @@ export function updateOwnMuseumProfileInDatabase(
       !database
         .prepare(
           `SELECT id FROM uploaded_photos
-      WHERE id = ? AND museum_id = ? AND NOT EXISTS (SELECT 1 FROM photo_deletion_jobs WHERE photo_id = uploaded_photos.id)`,
+      WHERE id = ? AND museum_id = ? AND trashed_at IS NULL AND NOT EXISTS (SELECT 1 FROM photo_deletion_jobs WHERE photo_id = uploaded_photos.id)`,
         )
         .get(input.coverPhotoId, museum.id)
     ) {

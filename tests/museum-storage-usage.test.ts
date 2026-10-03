@@ -9,8 +9,77 @@ import { fileURLToPath } from "node:url";
 import { initializeDatabase } from "../src/data/database.ts";
 import { createUserInDatabase } from "../src/data/user-repository.ts";
 import { createMuseumInDatabase, findMuseumByIdInDatabase } from "../src/data/museum-repository.ts";
-import { recalculateMuseumStorageUsageInDatabase } from "../src/data/museum-storage-usage.ts";
+import {
+  recalculateMuseumStorageUsageInDatabase,
+  readMuseumStorageSummaryInDatabase,
+} from "../src/data/museum-storage-usage.ts";
 import { deleteUploadedPhotoInDatabase } from "../src/data/photo-deletion-service.ts";
+import { ApiError } from "../src/http/errors.ts";
+
+test("storage summary shows only the current palace's use and the owner's account remainder", () => {
+  const f = fixture();
+  try {
+    f.db.exec("UPDATE users SET email_verified=1");
+    f.db.prepare("UPDATE users SET storage_quota_bytes=100 WHERE id=?").run(f.museums[0].ownerId);
+    f.db.prepare("UPDATE museums SET storage_used_bytes=20 WHERE id=?").run(f.museums[0].id);
+    const sibling = createMuseumInDatabase(f.db, {
+      ownerId: f.museums[0].ownerId,
+      museumType: "shared",
+      name: "PRIVATE-OTHER-NAME",
+      slug: "sibling",
+    });
+    f.db.prepare("UPDATE museums SET storage_used_bytes=30 WHERE id=?").run(sibling.id);
+    for (const [museum, bytes] of [
+      [f.museums[0], 5],
+      [sibling, 7],
+    ] as const)
+      f.db
+        .prepare(
+          "INSERT INTO photo_asset_usage(storage_key,museum_id,bytes,state) VALUES (?,?,?,'reserved')",
+        )
+        .run(f.key(museum), museum.id, bytes);
+    const summary = readMuseumStorageSummaryInDatabase(f.db, f.museums[0].ownerId, f.museums[0].id);
+    assert.deepEqual(summary, {
+      museumId: f.museums[0].id,
+      storageUsedBytes: 20,
+      reservedBytes: 5,
+      ownerRemainingBytes: 38,
+    });
+    assert.doesNotMatch(JSON.stringify(summary), /PRIVATE-OTHER-NAME|email|ownerId|museumIds/);
+    assert.equal(JSON.stringify(summary).includes(sibling.id), false);
+    assert.throws(
+      () => readMuseumStorageSummaryInDatabase(f.db, f.museums[1].ownerId, f.museums[0].id),
+      ApiError,
+    );
+    f.db
+      .prepare(
+        "INSERT INTO museum_memberships(museum_id,user_id,created_at,updated_at) VALUES (?,?,'now','now')",
+      )
+      .run(f.museums[0].id, f.museums[1].ownerId);
+    assert.deepEqual(
+      readMuseumStorageSummaryInDatabase(f.db, f.museums[1].ownerId, f.museums[0].id),
+      summary,
+    );
+    f.db.exec("UPDATE museum_memberships SET status='revoked'");
+    assert.throws(
+      () => readMuseumStorageSummaryInDatabase(f.db, f.museums[1].ownerId, f.museums[0].id),
+      ApiError,
+    );
+    f.db.prepare("UPDATE museums SET storage_usage_ready=0 WHERE id=?").run(sibling.id);
+    assert.equal(
+      readMuseumStorageSummaryInDatabase(f.db, f.museums[0].ownerId, f.museums[0].id)
+        .ownerRemainingBytes,
+      null,
+    );
+    f.db.prepare("UPDATE museums SET status='pending_deletion' WHERE id=?").run(f.museums[0].id);
+    assert.throws(
+      () => readMuseumStorageSummaryInDatabase(f.db, f.museums[0].ownerId, f.museums[0].id),
+      ApiError,
+    );
+  } finally {
+    f.close();
+  }
+});
 
 function fixture() {
   const directory = mkdtempSync(path.join(tmpdir(), "museum-storage-usage-"));

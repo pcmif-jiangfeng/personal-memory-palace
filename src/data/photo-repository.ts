@@ -175,7 +175,7 @@ export function addUploadedPhotos(
 export function listWorkspacePhotos(): UploadedPhoto[] {
   const rows = getDatabase().prepare(
     `SELECT * FROM uploaded_photos
-     WHERE used_at IS NULL AND library_archived_at IS NULL
+     WHERE used_at IS NULL AND library_archived_at IS NULL AND trashed_at IS NULL
      ORDER BY created_at DESC`
   ).all().map(readPhotoRow);
   return rows.map(mapPhoto);
@@ -183,7 +183,7 @@ export function listWorkspacePhotos(): UploadedPhoto[] {
 
 export function listAllUploadedPhotos(museumId?: string): UploadedPhoto[] {
   const rows = getDatabase().prepare(
-    "SELECT * FROM uploaded_photos WHERE (? IS NULL OR museum_id=?) ORDER BY created_at DESC"
+    "SELECT * FROM uploaded_photos WHERE trashed_at IS NULL AND (? IS NULL OR museum_id=?) ORDER BY created_at DESC"
   ).all(museumId ?? null, museumId ?? null).map(readPhotoRow);
   return rows.map(mapPhoto);
 }
@@ -193,7 +193,7 @@ export function listUploadedPhotosByIds(ids: string[], museumId?: string): Uploa
   if (uniqueIds.length === 0) return [];
   const placeholders = uniqueIds.map(() => "?").join(",");
   const rows = getDatabase()
-    .prepare(`SELECT * FROM uploaded_photos WHERE id IN (${placeholders}) AND (? IS NULL OR museum_id=?)`)
+    .prepare(`SELECT * FROM uploaded_photos WHERE trashed_at IS NULL AND id IN (${placeholders}) AND (? IS NULL OR museum_id=?)`)
     .all(...uniqueIds, museumId ?? null, museumId ?? null).map(readPhotoRow);
   const photosById = new Map(rows.map((row) => [row.id, mapPhoto(row)]));
   return uniqueIds.flatMap((id) => {
@@ -235,7 +235,7 @@ export function queryWorkspacePhotoCatalogInDatabase(
       AND memories.museum_id IS uploaded_photos.museum_id AND memory_images.museum_id IS uploaded_photos.museum_id
   )`;
   const libraryMember = `(used_at IS NOT NULL OR library_archived_at IS NOT NULL OR ${activeReference})`;
-  const where = [query.source === "library" ? libraryMember : `NOT ${libraryMember}`];
+  const where = ["uploaded_photos.trashed_at IS NULL", query.source === "library" ? libraryMember : `NOT ${libraryMember}`];
   const parameters: Array<string | number> = [];
   if (museumId) { where.push("uploaded_photos.museum_id=?"); parameters.push(museumId); }
   if (query.source === "library" && query.usage === "used") where.push(activeReference);
@@ -321,7 +321,7 @@ export function listWorkspacePhotoCatalogInDatabase(
   database: ReturnType<typeof getDatabase>,
 ): WorkspacePhoto[] {
   const photos = database
-    .prepare("SELECT * FROM uploaded_photos ORDER BY created_at DESC")
+    .prepare("SELECT * FROM uploaded_photos WHERE trashed_at IS NULL ORDER BY created_at DESC")
     .all().map(readPhotoRow);
   const references = database
     .prepare(

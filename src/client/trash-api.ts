@@ -1,7 +1,7 @@
 import { requestJson } from "./http-client.ts";
 import { memoryMuseumUrl } from "./memory-museum-url.ts";
 
-export type TrashType = "memory" | "stage";
+export type TrashType = "memory" | "stage" | "photo";
 export type TrashAction = "restore" | "permanent";
 
 export interface TrashBatchResult {

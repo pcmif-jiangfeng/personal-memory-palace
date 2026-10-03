@@ -15,6 +15,43 @@ import {
 
 const now = new Date("2026-10-01T00:00:00.000Z");
 const backup = { directory: "/verified-backup", fingerprint: "a".repeat(64) };
+test("staged deletion keeps stored and reserved account charges until physical cleanup completes", (t) => {
+  const f = fixture(t);
+  f.db.prepare("UPDATE museums SET storage_used_bytes=23 WHERE id=?").run(f.id);
+  f.db
+    .prepare(
+      "INSERT INTO photo_asset_usage(storage_key,museum_id,bytes,state) VALUES (?,?,7,'reserved')",
+    )
+    .run(museumPhotoStorageKey(f.id), f.id);
+  stageMuseumPermanentDeletion(f.db, f.id, backup, now);
+  assert.equal(
+    f.db.prepare("SELECT storage_used_bytes FROM museums WHERE id=?").get(f.id)!.storage_used_bytes,
+    30,
+  );
+  stageMuseumPermanentDeletion(f.db, f.id, backup, now);
+  assert.equal(
+    f.db.prepare("SELECT storage_used_bytes FROM museums WHERE id=?").get(f.id)!.storage_used_bytes,
+    30,
+  );
+  finishMuseumPermanentDeletion(f.db, f.id, now);
+  assert.equal(f.db.prepare("SELECT 1 FROM museums WHERE id=?").get(f.id), undefined);
+});
+test("private palace permanent deletion is refused even when a historical pending deadline has elapsed", (t) => {
+  const f = fixture(t);
+  f.db.prepare("UPDATE museums SET museum_type='private' WHERE id=?").run(f.id);
+  const before = f.db.prepare("SELECT * FROM museums WHERE id=?").get(f.id);
+  assert.throws(
+    () => planMuseumPermanentDeletion(f.db, f.id, now),
+    /Private palace deletion is disabled/,
+  );
+  assert.throws(
+    () => stageMuseumPermanentDeletion(f.db, f.id, backup, now),
+    /Private palace deletion is disabled/,
+  );
+  assert.deepEqual(f.db.prepare("SELECT * FROM museums WHERE id=?").get(f.id), before);
+  assert.equal(f.db.prepare("SELECT COUNT(*) n FROM memories WHERE museum_id=?").get(f.id)!.n, 2);
+  assert.equal(f.db.prepare("SELECT COUNT(*) n FROM museum_permanent_deletion_jobs").get()!.n, 0);
+});
 function fixture(t: TestContext) {
   const db = initializeDatabase(":memory:", false);
   t.after(() => db.close());
@@ -32,6 +69,7 @@ function fixture(t: TestContext) {
   const museums = ["due", "other"].map((slug, index) =>
     createMuseumInDatabase(db, { ownerId: index === 0 ? user.id : otherUser.id, name: slug, slug }),
   );
+  db.exec("UPDATE museums SET museum_type='shared'");
   db.prepare(
     "UPDATE museums SET status='pending_deletion',deletion_scheduled_at=?,version=2 WHERE id=?",
   ).run(now.toISOString(), museums[0].id);
@@ -63,6 +101,17 @@ function fixture(t: TestContext) {
     db.prepare(
       "INSERT INTO invite_links (id,museum_id,token_hash,created_at) VALUES (?,?,?,'now')",
     ).run(`invite-${index}`, museum.id, String(index).repeat(64));
+    db.prepare(
+      "INSERT INTO collaboration_invites(id,museum_id,target_email,created_at,expires_at) VALUES (?,?,?,'now','later')",
+    ).run(`email-invite-${index}`, museum.id, `target-${index}@example.com`);
+    db.prepare(
+      "INSERT INTO owner_transfer_requests(id,museum_id,owner_user_id,target_user_id,status,created_at,expires_at) VALUES (?,?,?,?,'invalidated','now','later')",
+    ).run(
+      `transfer-${index}`,
+      museum.id,
+      index === 0 ? user.id : otherUser.id,
+      index === 0 ? otherUser.id : user.id,
+    );
     db.prepare(
       "INSERT INTO museum_memberships (museum_id,user_id,created_at,updated_at) VALUES (?,?,'now','now')",
     ).run(museum.id, user.id);

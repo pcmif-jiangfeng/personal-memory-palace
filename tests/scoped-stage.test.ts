@@ -57,7 +57,18 @@ test("collaborator Stage lifecycle is scoped and permanent deletion is Owner-onl
       input: { title: "Edited", version: stage.version },
     });
     assert.equal(readScopedStage(db, member, stage.id).title, "Edited");
-    manageScopedStage(db, member, stage.id, { action: "publication", isPublic: false });
+    const beforePublication = db.prepare("SELECT * FROM stages WHERE id=?").get(stage.id);
+    for (const isPublic of [false, true]) {
+      assert.throws(
+        () => manageScopedStage(db, member, stage.id, { action: "publication", isPublic }),
+        (error) => error instanceof ApiError && error.code === "MUSEUM_OWNER_REQUIRED",
+      );
+      assert.deepEqual(
+        db.prepare("SELECT * FROM stages WHERE id=?").get(stage.id),
+        beforePublication,
+      );
+    }
+    manageScopedStage(db, owner, stage.id, { action: "publication", isPublic: false });
     assert.equal(readScopedStage(db, member, stage.id).isPublic, false);
     manageScopedStage(db, member, stage.id, { action: "trash" });
     assert.throws(() => readScopedStage(db, member, stage.id));
@@ -160,7 +171,7 @@ test("Stage trash preserves local Memories as unclassified and cover deletion ne
     db.prepare(
       "INSERT INTO memories (id,museum_id,stage_id,title,story,is_public,created_at,updated_at) VALUES ('local-memory',?,?,'Kept','Story',1,'now','now')",
     ).run(owner.museumId, stage.id);
-    manageScopedStage(db, member, stage.id, { action: "publication", isPublic: false });
+    manageScopedStage(db, owner, stage.id, { action: "publication", isPublic: false });
     manageScopedStage(db, member, stage.id, { action: "trash" });
     const memory = db
       .prepare("SELECT stage_id,is_public,trashed_at FROM memories WHERE id='local-memory'")

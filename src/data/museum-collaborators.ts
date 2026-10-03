@@ -5,6 +5,7 @@ import { withTransaction } from "./transaction.ts";
 import { writeAuditLogInDatabase } from "./audit-log.ts";
 import { readNumber, readString } from "./row-readers.ts";
 import { queueCollaborationNotificationInDatabase } from "./museum-notifications.ts";
+import { invalidateOwnerTransfersInDatabase } from "./owner-transfer-requests.ts";
 
 export const collaboratorsPageSize = 25;
 
@@ -25,7 +26,7 @@ export function listMuseumCollaboratorsInDatabase(
     throw new ApiError("INVALID_COLLABORATOR_PAGE", 400);
   const entries = database
     .prepare(
-      `SELECT u.id,u.display_name,u.email FROM museum_memberships membership
+      `SELECT u.id,u.display_name FROM museum_memberships membership
     JOIN users u ON u.id=membership.user_id
     WHERE membership.museum_id=? AND membership.status='active' AND membership.user_id<>?
     ORDER BY membership.created_at ASC,u.id ASC LIMIT ? OFFSET ?`,
@@ -34,7 +35,6 @@ export function listMuseumCollaboratorsInDatabase(
     .map((row) => ({
       id: readString(row, "id"),
       displayName: readString(row, "display_name"),
-      email: readString(row, "email"),
     }));
   const total = readNumber(
     database
@@ -63,6 +63,7 @@ export function removeMuseumCollaboratorInDatabase(
     if (!membership) throw new ApiError("MEMBERSHIP_NOT_FOUND", 404);
     // Preserve the relationship and timestamp on retries; only a real transition is audited.
     if (membership.status === "active") {
+      invalidateOwnerTransfersInDatabase(database,museumId,collaboratorUserId);
       database
         .prepare(
           "UPDATE museum_memberships SET status='revoked',updated_at=? WHERE museum_id=? AND user_id=?",

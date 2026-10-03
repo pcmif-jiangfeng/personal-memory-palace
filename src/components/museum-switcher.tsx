@@ -12,34 +12,40 @@ export function MuseumSwitcher({
   selectedMuseumId?: string | null;
 }) {
   const pathname = usePathname();
-  // Legacy exhibition routes are not Museum-scoped until Phase F.
-  if (!pathname.startsWith("/account") || museums.length === 0) return null;
+  const contentRoute =
+    pathname === "/" ||
+    ["/workspace", "/stages", "/memories", "/search", "/trash"].some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+    );
+  if ((!pathname.startsWith("/account") && !contentRoute) || museums.length === 0) return null;
   const current = currentSwitcherMuseum(museums, pathname, selectedMuseumId);
   return (
     <label className="museum-switcher">
-      <span>当前 Museum</span>
+      <span>当前宫殿</span>
       <select
-        aria-label="切换 Museum"
+        aria-label="切换宫殿"
         value={current?.id ?? ""}
         onChange={(event) => {
           const selected = museums.find((museum) => museum.id === event.target.value);
           if (!selected) return;
           // Reload metadata so revoked relationships never become a remembered selection.
-          window.location.assign(
-            selected.role === "owner"
-              ? `/account?museumId=${encodeURIComponent(selected.id)}`
-              : `/account/museums/${selected.id}`,
+          const destination = new URL(
+            pathname.startsWith("/account") ? "/account" : "/",
+            window.location.origin,
           );
+          destination.searchParams.set("museumId", selected.id);
+          window.location.assign(destination.href);
         }}
       >
         {!current ? (
           <option value="" disabled>
-            当前 Museum 不可用
+            当前宫殿不可用
           </option>
         ) : null}
         {museums.map((museum) => (
           <option key={museum.id} value={museum.id}>
-            {museum.name} · {museum.role === "owner" ? "我管理的 Museum" : "协作者"}
+            {museum.name} · {museum.museumType === "private" ? "私人宫殿" : "共同宫殿"} ·{" "}
+            {museum.role === "owner" ? "馆长" : "协作者"}
           </option>
         ))}
       </select>

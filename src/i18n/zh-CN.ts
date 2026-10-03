@@ -75,14 +75,14 @@ export const copy = {
     failed: "分享保存失败，请检查馆长登录状态。",
   },
   publication: {
-    public: "访客可见",
-    private: "仅馆长可见",
-    publish: "设为访客可见",
-    hide: "对访客隐藏",
-    memoryHint: "公开后，访客无需密码即可从网站浏览这段记忆。",
-    stageHint: "隐藏章节会同时隐藏其中所有记忆；重新公开章节也不会自动公开私密记忆。",
-    saved: "访客可见范围已更新",
-    failed: "可见范围更新失败，请重试。",
+    public: "已标记展出",
+    private: "未标记展出",
+    publish: "标记展出",
+    hide: "取消展出标记",
+    memoryHint: "展出标记不会公开宫殿，也不改变成员访问权限。对外参观请由馆长设置独立分享链接。",
+    stageHint: "章节展出标记不会公开宫殿，也不会开启、关闭其中记忆的独立分享链接。",
+    saved: "展出标记已更新",
+    failed: "展出标记更新失败，请重试。",
   },
   uploadTasks: {
     ariaLabel: "图片上传任务",
@@ -185,9 +185,9 @@ export const copy = {
     finishSelection: "完成",
     selectPhotoLabel: (name: string) => `选择照片“${name}”`,
     batchDeleteConfirm: (count: number) =>
-      `将检查并删除选中的 ${count} 张照片。仍被使用的照片会保留，是否继续？`,
+      `将选中的 ${count} 张照片移入回收站，文件和引用会保留，可在回收站恢复。是否继续？`,
     batchDeleteSummary: (deleted: number, failed: number) =>
-      `批量删除完成：成功 ${deleted} 张，保留 ${failed} 张。`,
+      `移入回收站完成：成功 ${deleted} 张，未完成 ${failed} 张。`,
     create: "用选中照片创建 Memory",
     recentEmpty: "没有待整理的新照片。可以继续上传，或去已有照片库选择。",
     libraryEmpty: "照片库中没有符合当前条件的照片。",
@@ -233,6 +233,7 @@ export const copy = {
     manageStagesHint: "会在新标签页打开；创建后刷新本页即可选择。",
   },
   management: {
+    shareEditWarning: "如果馆长已开启这段记忆的分享，后续保存的修改会同步显示在分享链接中。",
     museumConflict: "博物馆资料已被更新，本次保存未覆盖新内容。草稿仍保留，请复制草稿后重新加载。",
     editDetails: "编辑标题、Original Story 与人生章节",
     originalStory: "Original Story",
@@ -361,7 +362,7 @@ export const copy = {
   },
   trash: {
     title: "回收站",
-    description: "删除的 Memory 与 Stage 将在这里等待恢复或永久删除。",
+    description: "删除的 Memory、Stage 与照片将在这里等待恢复或永久删除。永久删除仅馆长可操作。",
     selected: (count: number) => `已选择 ${count} 项`,
     selectAll: (title: string) => `全选 ${title}`,
     clear: "取消选择",

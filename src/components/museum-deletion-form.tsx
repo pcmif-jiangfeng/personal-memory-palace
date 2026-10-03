@@ -46,9 +46,13 @@ export function MuseumDeletionForm({
       setError(
         code === "MUSEUM_VERSION_CONFLICT"
           ? "博物馆状态已改变，请刷新后重新确认。"
-          : code === "TRANSFER_OWNERSHIP_REQUIRED"
-            ? "名下博物馆仍有有效协作者，请先转移馆长身份。"
-            : "操作结果未确认，请刷新查看当前状态，不要直接重复提交。",
+          : code === "DELETION_DEADLINE_PASSED"
+            ? "删除截止时间已到，不能撤销；请查看后台清理状态。"
+            : code === "DELETION_DEADLINE_UNKNOWN"
+              ? "历史删除期限未知，不能自动撤销，需要先核对历史数据。"
+              : code === "MUSEUM_DELETE_IN_PROGRESS"
+                ? "后台清理已经开始，不能撤销。"
+                : "操作结果未确认，请刷新查看当前状态，不要直接重复提交。",
       );
       setBusy(false);
     }
@@ -64,7 +68,7 @@ export function MuseumDeletionForm({
         />
         {pending
           ? "确认取消待删除，恢复博物馆访问。"
-          : "我理解本馆将暂停访问，记录 30 天删除期限，可在最终清理前取消。"}
+          : "我理解本馆所有成员和分享将暂停访问，30×24小时截止前可取消，截止后不可撤销。"}
       </label>
       <button
         type="button"

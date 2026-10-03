@@ -10,16 +10,16 @@ export const dynamic = "force-dynamic";
 export default async function MuseumOnboardingPage() {
   const user = await currentUser();
   if (!user) redirect("/account/login");
-  if (findMuseumByOwnerIdInDatabase(getDatabase(), user.id)) redirect("/account");
+  const hasPrivatePalace = Boolean(findMuseumByOwnerIdInDatabase(getDatabase(), user.id));
   return (
     <section className="section-shell skeleton-page">
       <div className="login-panel">
         <p className="eyebrow">PERSONAL MEMORY PALACE</p>
-        <h1>为回忆建一座馆</h1>
+        <h1>{hasPrivatePalace ? "创建共同宫殿" : "为回忆建一座馆"}</h1>
         <p>给它一个名字和馆址。故事与照片可以留待日后慢慢陈列。</p>
-        <MuseumOnboardingForm />
+        <MuseumOnboardingForm hasPrivatePalace={hasPrivatePalace} />
         <Link href="/account/deletion" prefetch={false}>
-          检查账号删除条件
+          账号与宫殿保留说明
         </Link>
       </div>
     </section>

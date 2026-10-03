@@ -105,7 +105,7 @@ test("photo archive/deletion reject foreign IDs and collaborators cannot permane
     const ownKey = String(
       db.prepare("SELECT optimized_storage_key AS k FROM uploaded_photos WHERE id='own'").get()!.k,
     );
-    assert.equal(canReadMuseumPhoto(db, member.userId, ownKey), false);
+    assert.equal(canReadMuseumPhoto(db, member.userId, ownKey), true);
     assert.equal((await deleteUploadedPhotoInDatabase(db, storage, "own", owner)).deleted, true);
     assert.equal(removed.length, 1);
     assert.ok(db.prepare("SELECT id FROM uploaded_photos WHERE id='foreign'").get());
@@ -156,7 +156,7 @@ test("private media permission ends immediately on revocation and does not autho
       db.prepare("SELECT optimized_storage_key AS k FROM uploaded_photos WHERE id='foreign'").get()!
         .k,
     );
-    assert.equal(canReadMuseumPhoto(db, member.userId, key), false);
+    assert.equal(canReadMuseumPhoto(db, member.userId, key), true);
     assert.equal(isPhotoMediaAvailable(db, key), true);
     assert.equal(canReadMuseumPhoto(db, member.userId, foreignKey), false);
     assert.equal(canReadMuseumPhoto(db, null, key), false);

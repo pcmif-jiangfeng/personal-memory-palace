@@ -33,6 +33,7 @@ function fixture(t: TestContext) {
     }),
   );
   const id = museums[0].id;
+  db.exec("UPDATE museums SET museum_type='shared'");
   // Historical pending fixture: J3 forbids initiating a new deletion with active collaborators.
   db.prepare(
     "UPDATE museums SET status='pending_deletion',deletion_scheduled_at='2026-10-29T00:00:00.000Z',version=7 WHERE id=?",
@@ -88,7 +89,7 @@ test("J5 cancellation restores only active collaborators, preserves all membersh
   );
   assert.equal(
     listSwitcherMuseumsInDatabase(f.db, f.users[1].id).some((m) => m.id === f.id),
-    false,
+    true,
   );
   for (const user of [f.users[2], f.users[3]]) {
     assert.equal(

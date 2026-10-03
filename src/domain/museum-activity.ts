@@ -21,7 +21,13 @@ export const museumActivityMessages: Readonly<Record<string, string>> = Object.f
   "stage.permanent": "永久删除了一个 Stage",
   "photo.upload": "上传了一张照片",
   "photo.archive": "归档了一张照片",
+  "photo.trash": "将照片移入了回收站",
+  "photo.restore": "恢复了一张照片",
   "photo.deleteQueued": "将照片加入了删除队列",
+  "laterNote.update": "修改了一条后记",
+  "laterNote.trash": "将后记移入了回收站",
+  "laterNote.restore": "恢复了一条后记",
+  "laterNote.permanent": "永久删除了一条后记",
 });
 
 export interface MuseumActivityEntry {

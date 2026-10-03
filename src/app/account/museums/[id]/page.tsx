@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { getDatabase } from "@/data/database";
-import { requireMuseumOwnerInDatabase } from "@/data/museum-access";
+import { requireMuseumAccessInDatabase } from "@/data/museum-access";
 import { requireVerifiedPageUser } from "@/user-auth";
 import { ApiError } from "@/http/errors";
 
@@ -9,7 +9,7 @@ export default async function MuseumPage({ params }: { params: Promise<{ id: str
   const user = await requireVerifiedPageUser();
   const { id } = await params;
   try {
-    requireMuseumOwnerInDatabase(getDatabase(), user.id, id);
+    requireMuseumAccessInDatabase(getDatabase(), user.id, id);
   } catch (error) {
     if (error instanceof ApiError && [403, 404].includes(error.status)) notFound();
     throw error;

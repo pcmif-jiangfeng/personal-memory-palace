@@ -10,6 +10,9 @@ import {
   isSharedImageAccessibleInDatabase,
 } from "../src/data/share-repository.ts";
 import { createUserInDatabase } from "../src/data/user-repository.ts";
+import { runDatabaseMigrations } from "../src/data/migrations.ts";
+import { createEmailInviteInDatabase } from "../src/data/email-invites.ts";
+import { acceptEmailInviteInDatabase } from "../src/data/email-invite-acceptance.ts";
 
 function fixture() {
   const db = initializeDatabase(":memory:", false);
@@ -28,10 +31,13 @@ function fixture() {
       slug: `task13-private-${index}`,
     }),
   );
-  // Historical collaboration must not authorize ordinary private media routes.
+  // Migration, not a modern active grant, is what makes the historical relationship inert.
   db.prepare(
     "INSERT INTO museum_memberships (museum_id,user_id,role,status,created_at,updated_at) VALUES (?,?,'collaborator','active','now','now')",
   ).run(museums[1].id, users[0].id);
+  db.prepare("DELETE FROM schema_migrations WHERE version=29").run();
+  runDatabaseMigrations(db);
+  assert.equal(db.prepare("SELECT status FROM museum_memberships").get()?.status, "revoked");
   const keys = [
     museumPhotoStorageKey(museums[0].id),
     museumPhotoStorageKey(museums[1].id),
@@ -56,11 +62,34 @@ function fixture() {
   return { db, users, museums, keys, token };
 }
 
-test("Task13B ordinary private media rejects another owner despite active historical collaboration", () => {
+test("ordinary private media rejects historical collaboration after its one-time migration", () => {
   const { db, users, keys } = fixture();
   try {
     assert.equal(canReadMuseumPhoto(db, users[0].id, keys[1]), false);
     assert.equal(canReadMuseumPhoto(db, users[1].id, keys[0]), false);
+  } finally {
+    db.close();
+  }
+});
+
+test("only newly accepted active verified members can read the joined palace's media", () => {
+  const { db, users, museums, keys } = fixture();
+  try {
+    const { invite } = createEmailInviteInDatabase(db, users[1].id, museums[1].id, users[0].email);
+    assert.equal(canReadMuseumPhoto(db, users[0].id, keys[1]), false);
+    acceptEmailInviteInDatabase(db, users[0].id, invite.id);
+    assert.equal(canReadMuseumPhoto(db, users[0].id, keys[1]), true);
+    assert.equal(canReadMuseumPhoto(db, users[1].id, keys[0]), false);
+    db.prepare("UPDATE users SET email_verified=0 WHERE id=?").run(users[0].id);
+    assert.equal(canReadMuseumPhoto(db, users[0].id, keys[1]), false);
+    db.prepare("UPDATE users SET email_verified=1 WHERE id=?").run(users[0].id);
+    db.prepare("UPDATE museums SET status='pending_deletion' WHERE id=?").run(museums[1].id);
+    assert.equal(canReadMuseumPhoto(db, users[0].id, keys[1]), false);
+    assert.equal(canReadMuseumPhoto(db, users[1].id, keys[1]), false);
+    db.prepare("UPDATE museums SET status='active' WHERE id=?").run(museums[1].id);
+    db.prepare("UPDATE museum_memberships SET status='revoked'").run();
+    assert.equal(canReadMuseumPhoto(db, users[0].id, keys[1]), false);
+    assert.equal(canReadMuseumPhoto(db, users[1].id, keys[1]), true);
   } finally {
     db.close();
   }

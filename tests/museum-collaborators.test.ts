@@ -64,7 +64,7 @@ test("Owner removes only the selected membership, switcher and captured content 
     listSwitcherMuseumsInDatabase(f.db, f.users[1].id)
       .map((m) => m.id)
       .sort(),
-    [f.museums[1].id],
+    [f.museums[1].id, f.museums[2].id].sort(),
   );
   for (const operation of ["read", "update"] as const)
     assert.throws(
@@ -169,7 +169,7 @@ test("only active collaborators appear; list is safely projected, bounded and pa
   assert.equal(first.entries.length, 25);
   assert.equal(second.entries.length, 2);
   assert.equal(new Set([...first.entries, ...second.entries].map((e) => e.id)).size, 27);
-  assert.deepEqual(Object.keys(first.entries[0]).sort(), ["displayName", "email", "id"]);
+  assert.deepEqual(Object.keys(first.entries[0]).sort(), ["displayName", "id"]);
   assert.doesNotMatch(JSON.stringify(first), /PRIVATE-HASH|PRIVATE-STORY|PRIVATE-TITLE/);
   f.remove();
   assert.equal(listMuseumCollaboratorsInDatabase(f.db, f.users[0].id, f.museums[0].id).total, 26);

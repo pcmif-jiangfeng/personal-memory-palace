@@ -4,7 +4,15 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ClientApiError, requestJson } from "@/client/http-client";
 
-export function AdminQuotaForm({ museumId, quota }: { museumId: string; quota: number }) {
+export function AdminQuotaForm({
+  museumId,
+  ownerId,
+  quota,
+}: {
+  museumId: string;
+  ownerId: string;
+  quota: number;
+}) {
   const router = useRouter();
   const [expectedQuota, setExpectedQuota] = useState(quota);
   const [submitting, setSubmitting] = useState(false);
@@ -29,7 +37,11 @@ export function AdminQuotaForm({ museumId, quota }: { museumId: string; quota: n
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ storageQuotaBytes: bytes, expectedQuotaBytes: expectedQuota }),
+          body: JSON.stringify({
+            storageQuotaBytes: bytes,
+            expectedQuotaBytes: expectedQuota,
+            expectedOwnerId: ownerId,
+          }),
         },
         (payload) => {
           if (
@@ -45,13 +57,13 @@ export function AdminQuotaForm({ museumId, quota }: { museumId: string; quota: n
         },
       );
       setExpectedQuota(saved);
-      setMessage("配额已保存并立即生效；已有照片不会被删除。");
+      setMessage("馆长账号总配额已保存并立即生效，适用于其全部自有宫殿；已有照片不会被删除。");
       router.refresh();
     } catch (cause) {
       const code = cause instanceof ClientApiError ? cause.code : "";
       setError(
-        code === "STORAGE_QUOTA_CONFLICT"
-          ? "配额已被修改，请刷新页面后重新确认。"
+        code === "STORAGE_QUOTA_CONFLICT" || code === "STORAGE_QUOTA_OWNER_CONFLICT"
+          ? "配额或馆长已被修改，请刷新页面后重新确认。"
           : code === "INVALID_STORAGE_QUOTA"
             ? "请输入有效的非负整数字节数。"
             : "配额未保存，请确认管理员登录状态后重试。",
@@ -64,7 +76,7 @@ export function AdminQuotaForm({ museumId, quota }: { museumId: string; quota: n
   return (
     <form className="login-form admin-quota-form" onSubmit={submit}>
       <label className="form-field" htmlFor={inputId}>
-        <span>调整存储配额（字节）</span>
+        <span>调整馆长账号总配额（字节）</span>
         <input
           id={inputId}
           name="quota"

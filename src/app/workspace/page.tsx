@@ -47,7 +47,7 @@ export default async function PhotoWorkspacePage({
         initialSource={source}
         initialNextCursor={page.nextCursor}
         museumId={scope.museumId}
-        canDeletePhotos={scope.role === "owner"}
+        canDeletePhotos={true}
         stages={listActiveStages(false, scope.museumId).map((stage) => ({
           id: stage.id,
           title: stage.title,

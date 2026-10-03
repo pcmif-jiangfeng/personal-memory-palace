@@ -124,7 +124,9 @@ test("K1 rejects foreign photo IDs, inaccessible and pending Museums, same-Museu
 test("K1 quota covers combined assets and rolls back all reservations before any files are copied", async (t) => {
   const f = fixture(t);
   f.db
-    .prepare("UPDATE museums SET storage_quota_bytes=? WHERE id=?")
+    .prepare(
+      "UPDATE users SET storage_quota_bytes=? WHERE id=(SELECT owner_id FROM museums WHERE id=?)",
+    )
     .run(f.files.get(f.optimized)!.length, f.museums[1].id);
   await assert.rejects(
     copyPhotoToMuseum(f.db, f.scope, "source-photo", f.museums[1].id, f.storage),

@@ -198,7 +198,7 @@ for (const reactivating of [false, true]) {
   });
 }
 
-test("failed leave audit preserves access; a successful leave of a pending museum is logged once", () => {
+test("failed leave audit preserves access; pending leave is refused and active leave is logged once", () => {
   const { db, users, museums, invite } = fixture();
   try {
     const created = invite(null);
@@ -213,6 +213,10 @@ test("failed leave audit preserves access; a successful leave of a pending museu
     );
     db.exec("DROP TRIGGER fail_membership_audit");
     db.prepare("UPDATE museums SET status='pending_deletion' WHERE id=?").run(museums[0].id);
+    const frozen = snapshot(db);
+    assert.throws(() => leaveMuseumInDatabase(db, users[1].id, museums[0].id), /MUSEUM_NOT_FOUND/);
+    assert.deepEqual(snapshot(db), frozen);
+    db.prepare("UPDATE museums SET status='active' WHERE id=?").run(museums[0].id);
     leaveMuseumInDatabase(db, users[1].id, museums[0].id);
     leaveMuseumInDatabase(db, users[1].id, museums[0].id);
     assert.equal(
@@ -252,10 +256,7 @@ test("unauthorized invitation changes and invalid leave attempts cannot write su
       () => leaveMuseumInDatabase(db, users[1].id, museums[0].id),
       /MEMBERSHIP_NOT_FOUND/,
     );
-    assert.throws(
-      () => leaveMuseumInDatabase(db, "missing", museums[0].id),
-      /MEMBERSHIP_NOT_FOUND/,
-    );
+    assert.throws(() => leaveMuseumInDatabase(db, "missing", museums[0].id), /USER_REQUIRED/);
     assert.deepEqual(snapshot(db), before);
   } finally {
     db.close();

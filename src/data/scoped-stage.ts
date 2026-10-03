@@ -38,7 +38,7 @@ function requireCover(db: DatabaseSync, scope: MemoryScope, photoId?: string | n
   if (
     photoId &&
     !db
-      .prepare("SELECT id FROM uploaded_photos WHERE id=? AND museum_id=?")
+      .prepare("SELECT id FROM uploaded_photos WHERE id=? AND museum_id=? AND trashed_at IS NULL")
       .get(photoId, scope.museumId)
   )
     throw new ApiError("INVALID_COVER_PHOTO", 400);
@@ -85,7 +85,7 @@ export function manageScopedStage(
       id,
       action.action === "restore" || action.action === "permanent",
     );
-    if (action.action === "permanent" && access.role !== "owner")
+    if ((action.action === "permanent" || action.action === "publication") && access.role !== "owner")
       throw new ApiError("MUSEUM_OWNER_REQUIRED", 403);
     // Legacy corrupt bindings must not let Stage deletion mutate another Museum's photos or Memories.
     const foreignCover = db

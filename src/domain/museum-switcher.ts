@@ -2,6 +2,7 @@ export interface SwitcherMuseum {
   id: string;
   name: string;
   role: "owner" | "collaborator";
+  museumType: "private" | "shared";
 }
 
 export function currentSwitcherMuseum(
@@ -15,5 +16,7 @@ export function currentSwitcherMuseum(
     return museums.find((museum) => museum.id === id) ?? null;
   }
   if (selectedId != null) return museums.find((museum) => museum.id === selectedId) ?? null;
-  return museums.find((museum) => museum.role === "owner") ?? null;
+  return (
+    museums.find((museum) => museum.role === "owner" && museum.museumType === "private") ?? null
+  );
 }

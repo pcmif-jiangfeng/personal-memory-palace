@@ -191,6 +191,7 @@ export function getSharedMemoryInDatabase(
     ...memory, relatedMemories: [], stageId: null, stageTitle: null,
     createdByUserId: null, lastEditedByUserId: null,
     createdByDisplayName: null, lastEditedByDisplayName: null,
+    laterNotes: memory.laterNotes.map((note) => ({ ...note, authorUserId: null })),
   } : null;
 }
 
@@ -223,7 +224,7 @@ export function isSharedImageAccessibleInDatabase(
       AND (memories.museum_id IS NULL OR EXISTS (SELECT 1 FROM museums WHERE museums.id=memories.museum_id AND museums.status='active'))
       AND memory_images.storage_key = ?
       AND memory_images.museum_id IS memories.museum_id
-      AND (memories.museum_id IS NULL OR EXISTS (SELECT 1 FROM uploaded_photos p WHERE p.optimized_storage_key=memory_images.storage_key AND p.museum_id=memories.museum_id))
+      AND (memories.museum_id IS NULL OR EXISTS (SELECT 1 FROM uploaded_photos p WHERE p.optimized_storage_key=memory_images.storage_key AND p.museum_id=memories.museum_id AND p.trashed_at IS NULL))
   `,
     )
     .get(token, storageKey) as ShareAccessRow | undefined;

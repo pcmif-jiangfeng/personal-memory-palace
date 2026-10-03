@@ -29,8 +29,6 @@ import { createOwnMuseumInDatabase } from "../src/data/museum-onboarding.ts";
 
 function fixture(t: TestContext) {
   const db = initializeDatabase(":memory:", false);
-  // Retired transfer service tests retain the pre-13B multi-palace schema in isolation.
-  db.exec("DROP INDEX museums_owner_unique");
   t.after(() => db.close());
   const users = ["owner", "target", "other", "outsider"].map((name) =>
     createUserInDatabase(db, {
@@ -40,9 +38,10 @@ function fixture(t: TestContext) {
     }),
   );
   db.exec("UPDATE users SET email_verified=1");
-  const museums = users.map((user) =>
+  const museums = users.map((user, index) =>
     createMuseumInDatabase(db, {
       ownerId: user.id,
+      museumType: index === 0 ? "shared" : "private",
       name: user.displayName,
       slug: user.displayName,
       storageQuotaBytes: 123456,
@@ -69,7 +68,7 @@ function fixture(t: TestContext) {
 test("migration 22 upgrades an existing single-owner database without changing content or permitting repeated onboarding", (t) => {
   const f = fixture(t);
   f.db.exec(
-    "DELETE FROM schema_migrations WHERE version=22; DROP INDEX museums_owner_index; CREATE UNIQUE INDEX museums_owner_unique ON museums(owner_id)",
+    "DELETE FROM schema_migrations WHERE version=22; DROP INDEX museums_owner_index; DROP INDEX museums_owner_unique; CREATE UNIQUE INDEX museums_owner_unique ON museums(owner_id)",
   );
   const before = f.db.prepare("SELECT * FROM museums ORDER BY id").all();
   const content = f.db.prepare("SELECT * FROM memories").all();
@@ -294,6 +293,7 @@ test("multi-owned management is explicitly bound, never falls back after a trans
     currentSwitcherMuseum(entries, "/account")?.id,
     findMuseumByOwnerIdInDatabase(f.db, f.users[1].id)?.id,
   );
+  assert.equal(currentSwitcherMuseum(entries, "/account")?.id, f.museums[1].id);
   runDatabaseMigrations(f.db);
   assert.equal(entries.filter((m) => m.role === "owner").length, 2);
 });

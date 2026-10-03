@@ -144,6 +144,8 @@ export function PhotoWorkspace({
 
   async function deletePhoto(photo: WorkspacePhotoView) {
     if (deletingPhotoId) return;
+    if (!window.confirm(`将照片“${photo.name}”移入回收站？文件和引用会保留，可在回收站恢复。`))
+      return;
     setDeletingPhotoId(photo.id);
     setDeleteIssue(null);
     try {

@@ -84,16 +84,17 @@ export default async function AdminPage({
                 </dd>
                 <dt>建立时间</dt>
                 <dd>{entry.createdAt}</dd>
-                <dt>存储已用</dt>
+                <dt>本馆存储已用</dt>
                 <dd>{entry.storageUsedBytes} 字节</dd>
-                <dt>存储配额</dt>
+                <dt>馆长账号总配额（全部自有宫殿共用）</dt>
                 <dd>{entry.storageQuotaBytes} 字节</dd>
                 <dt>状态</dt>
                 <dd>{entry.status}</dd>
               </dl>
               <AdminQuotaForm
-                key={`${entry.id}:${entry.storageQuotaBytes}`}
+                key={`${entry.id}:${entry.owner.id}:${entry.storageQuotaBytes}`}
                 museumId={entry.id}
+                ownerId={entry.owner.id}
                 quota={entry.storageQuotaBytes}
               />
             </div>

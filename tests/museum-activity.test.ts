@@ -64,11 +64,15 @@ test("all reviewed content events produce only a name, simple summary, timestamp
     };
     const result = listMuseumActivityInDatabase(db, users[1].id, museums[0].id);
     assert.equal(result.total, Object.keys(museumActivityMessages).length);
+    const entries = [
+      ...result.entries,
+      ...listMuseumActivityInDatabase(db, users[1].id, museums[0].id, 2).entries,
+    ];
     assert.deepEqual(
-      result.entries.map((entry) => entry.summary).sort(),
+      entries.map((entry) => entry.summary).sort(),
       Object.values(museumActivityMessages).sort(),
     );
-    for (const entry of result.entries) {
+    for (const entry of entries) {
       assert.deepEqual(Object.keys(entry).sort(), ["actorName", "id", "summary", "timestamp"]);
       assert.equal(entry.actorName, "member");
       assert.match(entry.timestamp, /^\d{4}-/);
@@ -195,7 +199,12 @@ test("deleted actors and deleted objects do not drop safe content activity", () 
     const result = listMuseumActivityInDatabase(db, users[0].id, museums[0].id);
     assert.equal(result.total, 1);
     assert.deepEqual(result.entries, [
-      { id: created.id, actorName: null, timestamp: created.timestamp, summary: "恢复了一段记忆" },
+      {
+        id: created.id,
+        actorName: "member",
+        timestamp: created.timestamp,
+        summary: "恢复了一段记忆",
+      },
     ]);
   } finally {
     db.close();

@@ -53,7 +53,7 @@ function denied(operation: () => unknown, status: number) {
   assert.throws(operation, (error) => error instanceof ApiError && error.status === status);
 }
 
-test("Owner audit returns only the scoped records and sparse diff, without account secrets", () => {
+test("owner and member audit returns scoped summaries without raw details or account secrets", () => {
   const { db, users, museums, event } = fixture();
   try {
     const created = event();
@@ -70,37 +70,37 @@ test("Owner audit returns only the scoped records and sparse diff, without accou
         action: "memory.details",
         objectType: "memory",
         objectId: "deleted-object",
-        diff: JSON.stringify({ version: { before: 1, after: 2 }, isPublic: false }),
+        diff: null,
       },
     ]);
     assert.doesNotMatch(JSON.stringify(result), /password|secret|@example.com|foreign/);
+    assert.deepEqual(listMuseumAuditInDatabase(db, users[1].id, museums[0].id, all), result);
   } finally {
     db.close();
   }
 });
 
-test("anonymous, unverified, collaborator, nonmember and cross-Museum owners cannot read audit", () => {
+test("anonymous, unverified, nonmember and cross-Museum owners cannot read audit", () => {
   const { db, users, museums, event } = fixture();
   try {
     event();
     for (const userId of [null, "", "missing"])
       denied(() => listMuseumAuditInDatabase(db, userId, museums[0].id, all), 401);
     denied(() => listMuseumAuditInDatabase(db, users[3].id, museums[0].id, all), 403);
-    denied(() => listMuseumAuditInDatabase(db, users[1].id, museums[0].id, all), 403);
     denied(() => listMuseumAuditInDatabase(db, users[2].id, museums[0].id, all), 404);
     for (const museumId of ["missing", "' OR 1=1 --", museums[1].id])
       denied(() => listMuseumAuditInDatabase(db, users[0].id, museumId, all), 404);
     // Invalid filters do not bypass authorization or expose validation information first.
     denied(
-      () => listMuseumAuditInDatabase(db, users[1].id, museums[0].id, { ...all, page: -1 }),
-      403,
+      () => listMuseumAuditInDatabase(db, users[2].id, museums[0].id, { ...all, page: -1 }),
+      404,
     );
   } finally {
     db.close();
   }
 });
 
-test("each read rechecks ownership; pending deletion preserves only Owner audit access", () => {
+test("each read rechecks membership and ownership; pending deletion blocks all business audit access", () => {
   const { db, users, museums, event } = fixture();
   try {
     event();
@@ -109,7 +109,7 @@ test("each read rechecks ownership; pending deletion preserves only Owner audit 
     denied(() => listMuseumAuditInDatabase(db, users[0].id, museums[0].id, all), 404);
     assert.equal(listMuseumAuditInDatabase(db, users[1].id, museums[0].id, all).total, 1);
     db.prepare("UPDATE museums SET status='pending_deletion' WHERE id=?").run(museums[0].id);
-    assert.equal(listMuseumAuditInDatabase(db, users[1].id, museums[0].id, all).total, 1);
+    denied(() => listMuseumAuditInDatabase(db, users[1].id, museums[0].id, all), 404);
     db.prepare("UPDATE museums SET status='deleted' WHERE id=?").run(museums[0].id);
     denied(() => listMuseumAuditInDatabase(db, users[1].id, museums[0].id, all), 404);
   } finally {
@@ -172,21 +172,20 @@ test("pagination is bounded and deterministic for events with equal timestamps",
   }
 });
 
-test("audit survives deleted actors and objects and includes unknown actions and null diff", () => {
+test("audit preserves deleted actors and objects but excludes unknown actions", () => {
   const { db, users, museums, event } = fixture();
   try {
     const created = event();
     db.prepare("DELETE FROM users WHERE id=?").run(users[1].id);
-    db.prepare("UPDATE audit_logs SET action='future.action', diff=NULL WHERE id=?").run(
-      created.id,
-    );
     const result = listMuseumAuditInDatabase(db, users[0].id, museums[0].id, all);
     assert.equal(result.total, 1);
     assert.equal(result.entries[0].actorUserId, null);
-    assert.equal(result.entries[0].actorName, null);
+    assert.equal(result.entries[0].actorName, "member");
     assert.equal(result.entries[0].objectId, "deleted-object");
-    assert.equal(result.entries[0].action, "future.action");
+    assert.equal(result.entries[0].action, "memory.details");
     assert.equal(result.entries[0].diff, null);
+    db.prepare("UPDATE audit_logs SET action='future.action' WHERE id=?").run(created.id);
+    assert.equal(listMuseumAuditInDatabase(db, users[0].id, museums[0].id, all).total, 0);
   } finally {
     db.close();
   }
@@ -200,6 +199,42 @@ test("refreshing audit reads new events without mutating logs", () => {
     const before = db.prepare("SELECT * FROM audit_logs").all();
     assert.equal(listMuseumAuditInDatabase(db, users[0].id, museums[0].id, all).total, 1);
     assert.deepEqual(db.prepare("SELECT * FROM audit_logs").all(), before);
+  } finally {
+    db.close();
+  }
+});
+
+test("member audit never selects raw diff and revocation immediately blocks later pages", () => {
+  const { db, users, museums, event } = fixture();
+  try {
+    const content = event();
+    db.prepare("UPDATE audit_logs SET diff=? WHERE id=?").run(
+      '{"email":"private@example.com","token":"SECRET"}',
+      content.id,
+    );
+    writeAuditLogInDatabase(db, {
+      actorUserId: users[0].id,
+      museumId: museums[0].id,
+      objectType: "support",
+      objectId: "secret",
+      action: "support.privateRead",
+      diff: { token: "SECRET" },
+    });
+    const prepare = db.prepare.bind(db);
+    db.prepare = (sql) => {
+      if (/\bSELECT\b/i.test(sql)) assert.doesNotMatch(sql, /\bdiff\b|SELECT\s+(?:a\.)?\*/i);
+      return prepare(sql);
+    };
+    const result = listMuseumAuditInDatabase(db, users[1].id, museums[0].id, all);
+    assert.equal(result.total, 1);
+    assert.doesNotMatch(JSON.stringify(result), /SECRET|private@example.com|support/);
+    db.prepare(
+      "UPDATE museum_memberships SET status='revoked' WHERE museum_id=? AND user_id=?",
+    ).run(museums[0].id, users[1].id);
+    denied(
+      () => listMuseumAuditInDatabase(db, users[1].id, museums[0].id, { ...all, page: 2 }),
+      404,
+    );
   } finally {
     db.close();
   }

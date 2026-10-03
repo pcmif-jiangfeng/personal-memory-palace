@@ -65,7 +65,8 @@ export function requirePhotoAccess(
 export function archiveScopedPhoto(db: DatabaseSync, scope: MemoryScope, id: string) {
   return withTransaction(db, () => {
     requirePhotoAccess(db, scope, id);
-    const photo = db.prepare("SELECT library_archived_at FROM uploaded_photos WHERE id=?").get(id)!;
+    const photo = db.prepare("SELECT library_archived_at,trashed_at FROM uploaded_photos WHERE id=?").get(id)!;
+    if (photo.trashed_at !== null) throw new ApiError("PHOTO_NOT_FOUND", 404);
     const alreadyArchived = readNullableString(photo, "library_archived_at") !== null;
     const result = archiveUploadedPhotoInDatabase(db, id);
     if (!alreadyArchived) {
@@ -88,7 +89,6 @@ export function canReadMuseumPhoto(db: DatabaseSync, userId: string | null, key:
     .get(key);
   if (!photo || typeof photo.museum_id !== "string") return false;
   try {
-    requirePhotoMuseum(db, { userId, museumId: photo.museum_id }, true);
     requirePhotoAccess(db, { userId, museumId: photo.museum_id }, String(photo.id));
     return true;
   } catch {
@@ -100,7 +100,7 @@ export function isPhotoMediaAvailable(db: DatabaseSync, key: string) {
   if (!optimizedPhotoKeyPattern.test(key)) return false;
   const photo = db
     .prepare(
-      `SELECT p.museum_id, m.status FROM uploaded_photos p LEFT JOIN museums m ON m.id=p.museum_id WHERE p.optimized_storage_key=?`,
+      `SELECT p.museum_id, m.status FROM uploaded_photos p LEFT JOIN museums m ON m.id=p.museum_id WHERE p.optimized_storage_key=? AND p.trashed_at IS NULL`,
     )
     .get(key);
   if (!photo) return false;

@@ -6,6 +6,7 @@ import { listUploadedPhotosByIds, queryWorkspacePhotoCatalog } from "@/data/phot
 import { copy } from "@/i18n/zh-CN";
 import { imageStorage } from "@/storage/local-image-storage";
 import { MemoryManagement } from "@/components/memory-management";
+import { listScopedTrashedLaterNotes } from "@/data/scoped-later-note";
 import { ShareManager } from "@/components/share-manager";
 import { memoryPageScope } from "@/memory-page-scope";
 import { requireMemoryAccessInDatabase } from "@/data/memory-access";
@@ -134,6 +135,7 @@ export default async function MemoryExhibitionPage({
                   )}
                 </time>
                 <p>{note.content}</p>
+                <p className="field-help">作者：{note.authorDisplayName || "历史作者未知"}</p>
               </article>
             ))}
           </div>
@@ -172,6 +174,9 @@ export default async function MemoryExhibitionPage({
         <MemoryManagement
           memory={memory}
           museumId={scope!.museumId}
+          canManagePublication={scope?.role === "owner"}
+          currentUserId={scope!.userId}
+          trashedNotes={listScopedTrashedLaterNotes(getDatabase(), scope!, memory.id)}
           candidates={listScopedMemories(getDatabase(), scope!)}
           stages={stages}
           exhibits={exhibits}

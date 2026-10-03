@@ -13,7 +13,8 @@ import {
   updateMemoryRelations,
 } from "@/client/memory-api";
 import type { WorkspacePhotoView } from "@/contracts/photo";
-import type { MemoryDetails, MemorySummary, Stage } from "@/domain/models";
+import type { LaterNote, MemoryDetails, MemorySummary, Stage } from "@/domain/models";
+import { LaterNoteControls } from "@/components/later-note-controls";
 import { copy } from "@/i18n/zh-CN";
 import { MemoryExhibitManager, type ExhibitPhotoView } from "@/components/memory-exhibit-manager";
 
@@ -25,6 +26,9 @@ export function MemoryManagement({
   libraryPhotos,
   libraryNextCursor,
   museumId,
+  canManagePublication,
+  currentUserId,
+  trashedNotes,
 }: {
   memory: MemoryDetails;
   candidates: MemorySummary[];
@@ -33,6 +37,9 @@ export function MemoryManagement({
   libraryPhotos: WorkspacePhotoView[];
   libraryNextCursor: string | null;
   museumId: string;
+  canManagePublication: boolean;
+  currentUserId: string;
+  trashedNotes: LaterNote[];
 }) {
   const router = useRouter();
   const [title, setTitle] = useState(memory.title);
@@ -71,25 +78,28 @@ export function MemoryManagement({
 
   return (
     <div className="memory-management">
-      <section className="publication-control">
-        <h3>访客可见范围</h3>
-        <p>{memory.isPublic ? copy.publication.public : copy.publication.private}</p>
-        <p className="field-help">{copy.publication.memoryHint}</p>
-        {memory.stageId &&
-        stages.find((stage) => stage.id === memory.stageId)?.isPublic === false ? (
-          <p className="field-help">所属章节目前对访客隐藏，因此这段记忆也不会显示。</p>
-        ) : null}
-        <button
-          className="button-secondary"
-          type="button"
-          disabled={busy}
-          onClick={() =>
-            void send(() => setMemoryPublic(memory.id, !memory.isPublic), copy.publication.saved)
-          }
-        >
-          {memory.isPublic ? copy.publication.hide : copy.publication.publish}
-        </button>
-      </section>
+      {canManagePublication ? (
+        <section className="publication-control">
+          <h3>展出标记</h3>
+          <p>{memory.isPublic ? copy.publication.public : copy.publication.private}</p>
+          <p className="field-help">{copy.publication.memoryHint}</p>
+          {memory.stageId &&
+          stages.find((stage) => stage.id === memory.stageId)?.isPublic === false ? (
+            <p className="field-help">所属章节尚未标记展出；这不改变本馆成员权限或独立分享链接。</p>
+          ) : null}
+          <button
+            className="button-secondary"
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              void send(() => setMemoryPublic(memory.id, !memory.isPublic), copy.publication.saved)
+            }
+          >
+            {memory.isPublic ? copy.publication.hide : copy.publication.publish}
+          </button>
+        </section>
+      ) : null}
+      <p className="field-help">{copy.management.shareEditWarning}</p>
       <details className="relation-editor memory-details-editor" open>
         <summary>{copy.management.editDetails}</summary>
         <form
@@ -184,6 +194,18 @@ export function MemoryManagement({
         </p>
       ) : null}
 
+      <section className="relation-editor">
+        <h3>注记管理与回收站</h3>
+        {[...memory.laterNotes, ...trashedNotes].map((note) => (
+          <LaterNoteControls
+            key={note.id}
+            note={note}
+            museumId={museumId}
+            isAuthor={note.authorUserId === currentUserId}
+            isOwner={canManagePublication}
+          />
+        ))}
+      </section>
       <form
         onSubmit={(event) => {
           event.preventDefault();

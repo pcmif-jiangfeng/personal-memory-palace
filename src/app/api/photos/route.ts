@@ -6,8 +6,7 @@ import {
 } from "@/data/photo-repository";
 import { maximumUploadBytes } from "@/storage/image-processor";
 import { imageStorage } from "@/storage/local-image-storage";
-import { deleteUploadedPhotosInDatabase } from "@/data/photo-deletion-service";
-import { requirePhotoMuseum } from "@/data/photo-access";
+import { trashScopedPhotos } from "@/data/photo-trash";
 import { getDatabase } from "@/data/database";
 import { memoryRequestScope } from "@/memory-request-scope";
 import { parsePhotoBatchDelete } from "@/http/schemas";
@@ -82,7 +81,6 @@ export async function DELETE(request: Request) {
   if (originError) return originError;
   try {
     const scope = await memoryRequestScope(request);
-    requirePhotoMuseum(getDatabase(), scope, true);
     const input = await parsePhotoBatchDelete(request);
     const names = new Map(
       listUploadedPhotosByIds(input.ids, scope.museumId).map((photo) => [
@@ -90,12 +88,7 @@ export async function DELETE(request: Request) {
         photo.originalName,
       ]),
     );
-    const result = await deleteUploadedPhotosInDatabase(
-      getDatabase(),
-      imageStorage,
-      input.ids,
-      scope,
-    );
+    const result = trashScopedPhotos(getDatabase(), scope, input.ids);
     return NextResponse.json({
       ...result,
       failures: result.failures.map((failure) => ({

@@ -301,12 +301,13 @@ export async function parseTrashAction(request: Request) {
   const input = await readJsonObject(request);
   const type = input.type;
   const action = input.action;
-  if (type !== "memory" && type !== "stage") throw new ApiError("INVALID_TYPE", 400);
+  if (type !== "memory" && type !== "stage" && type !== "photo")
+    throw new ApiError("INVALID_TYPE", 400);
   if (action !== "trash" && action !== "restore" && action !== "permanent")
     throw new ApiError("INVALID_ACTION", 400);
   if (action === "permanent" && input.confirm !== true) throw new ApiError("CONFIRM_REQUIRED", 400);
   return {
-    type: type as "memory" | "stage",
+    type: type as "memory" | "stage" | "photo",
     action: action as "trash" | "restore" | "permanent",
     ids:
       input.ids === undefined

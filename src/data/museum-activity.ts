@@ -24,8 +24,8 @@ export function listMuseumActivityInDatabase(
   const total = readNumber(database.prepare(`SELECT COUNT(*) AS total FROM audit_logs a WHERE ${where}`)
     .get(museumId, ...actions)!, "total");
   const entries: MuseumActivityEntry[] = database.prepare(`
-    SELECT a.id, u.display_name AS actor_name, a.action, a.timestamp
-    FROM audit_logs a LEFT JOIN users u ON u.id=a.actor_user_id
+    SELECT a.id, a.actor_name, a.action, a.timestamp
+    FROM audit_logs a
     WHERE ${where} ORDER BY a.timestamp DESC,a.id DESC LIMIT ? OFFSET ?
   `).all(museumId, ...actions, activityPageSize, (page - 1) * activityPageSize).map(row => ({
     id: readString(row, "id"),

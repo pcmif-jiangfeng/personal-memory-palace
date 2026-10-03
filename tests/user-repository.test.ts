@@ -41,6 +41,7 @@ test("creates Users with distinct emails and duplicate display names without a p
         "password_hash",
         "display_name",
         "email_verified",
+        "storage_quota_bytes",
         "created_at",
         "updated_at",
       ],

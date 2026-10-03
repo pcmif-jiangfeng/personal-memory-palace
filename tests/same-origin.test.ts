@@ -166,6 +166,11 @@ test("every mutation route applies same-origin checks before authorization", () 
       );
       assert.ok(userCheck > originCheck && ownerCheck > userCheck);
       assert.ok(
+        source.indexOf("readMuseumDeletionInDatabase(database, user.id, id)", ownerCheck) >
+          ownerCheck,
+      );
+      assert.match(source, /PRIVATE_PALACE_DELETION_DISABLED/);
+      assert.ok(
         source.indexOf("await parseMuseumDeletionConfirmation(request)", ownerCheck) > ownerCheck,
       );
       assert.match(source, /scheduleMuseumDeletionInDatabase\(database, user.id, id, input\)/);
@@ -174,13 +179,17 @@ test("every mutation route applies same-origin checks before authorization", () 
     }
     if (file.endsWith(path.join("transfer", "route.ts"))) {
       const userCheck = source.indexOf("await currentUser()", originCheck);
-      const ownerCheck = source.indexOf(
-        "requireMuseumOwnerInDatabase(database, user.id, id)",
+      const memberCheck = source.indexOf(
+        "requireMuseumAccessInDatabase(database, user.id, id)",
         userCheck,
       );
-      assert.ok(userCheck > originCheck && ownerCheck > userCheck);
-      assert.ok(source.indexOf("await parseMuseumOwnerTransfer(request)", ownerCheck) > ownerCheck);
-      assert.match(source, /transferMuseumOwnerInDatabase\(database, user.id, id, input\)/);
+      assert.ok(userCheck > originCheck && memberCheck > userCheck);
+      assert.ok(
+        source.indexOf("await parseOwnerTransferAction(request)", memberCheck) > memberCheck,
+      );
+      assert.match(source, /createOwnerTransferRequestInDatabase\(database, user.id, id, input\)/);
+      assert.match(source, /resolveOwnerTransferRequestInDatabase\(database, user.id, id, input\)/);
+      assert.doesNotMatch(source, /transferMuseumOwnerInDatabase/);
       continue;
     }
     if (file.endsWith(path.join("collaborators", "[userId]", "route.ts"))) {
@@ -197,10 +206,15 @@ test("every mutation route applies same-origin checks before authorization", () 
     if (isInviteRoute) {
       assert.match(
         source,
-        /(createOwnInviteInDatabase|revokeOwnInviteInDatabase|acceptInviteInDatabase)\(\s*(getDatabase\(\)|database),\s*user.id/,
+        /(createAndSendEmailInviteInDatabase|revokeEmailInviteInDatabase|acceptEmailInviteInDatabase)\(\s*(getDatabase\(\)|database),\s*user.id/,
         "Invite mutations must derive the acting User from the authenticated session",
       );
-      if (/acceptInviteInDatabase\(database,/.test(source))
+      assert.doesNotMatch(
+        source,
+        /\bacceptInviteInDatabase\(|\bcreateOwnInviteInDatabase\(/,
+        "New endpoints must not restore legacy bearer authorization",
+      );
+      if (/acceptEmailInviteInDatabase\(database,/.test(source))
         assert.match(source, /const database = getDatabase\(\);/);
     }
     const isLeaveRoute =
@@ -217,10 +231,16 @@ test("every mutation route applies same-origin checks before authorization", () 
     }
     const isMuseumMemoryRoute = file.endsWith(path.join("[id]", "memories", "route.ts"));
     if (isMuseumMemoryRoute) {
-      assert.match(
-        source,
-        /createMemoryInDatabase\(getDatabase\(\), input, \{ userId: user.id, museumId: id \}\)/,
+      assert.match(source, /const scope = await memoryRequestScope\(request, id\);/);
+      assert.match(source, /createMemoryInDatabase\(getDatabase\(\), input, scope\)/);
+      assert.ok(source.indexOf("await memoryRequestScope(request, id)", originCheck) > originCheck);
+      const scopeSource = readFileSync(
+        path.join(process.cwd(), "src", "memory-request-scope.ts"),
+        "utf8",
       );
+      assert.match(scopeSource, /const user = await currentUser\(\);/);
+      assert.match(scopeSource, /if \(!user\) throw new ApiError\("USER_REQUIRED", 401\)/);
+      continue;
     }
     if (
       file.endsWith(path.join("museums", "route.ts")) ||
@@ -242,6 +262,7 @@ test("every mutation route applies same-origin checks before authorization", () 
       path.relative(apiDirectory, file).startsWith(`memories${path.sep}`) ||
       path.relative(apiDirectory, file).startsWith(`stages${path.sep}`) ||
       path.relative(apiDirectory, file).startsWith(`photos${path.sep}`) ||
+      path.relative(apiDirectory, file).startsWith(`later-notes${path.sep}`) ||
       file.endsWith(path.join("trash", "route.ts")) ||
       file.endsWith(path.join("shares", "route.ts"))
     ) {

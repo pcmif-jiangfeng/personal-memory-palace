@@ -38,6 +38,41 @@ function fixture() {
   };
 }
 const enabled = { enabled: true, mode: "link" as const, password: "", rotate: false };
+test("a shared link follows accepted member edits but not stale or departed member edits", () => {
+  const { db, owner, member } = fixture();
+  try {
+    const token = configureScopedShare(db, owner, "own", enabled)!;
+    const loaded = findMemoryDetailsInDatabase(db, "own")!;
+    const edit = {
+      action: "details" as const,
+      title: "Member revision",
+      story: "Updated live story",
+      stageId: null,
+      version: loaded.version,
+    };
+    manageScopedMemory(db, member, "own", edit);
+    const shared = getSharedMemoryInDatabase(db, token)!;
+    assert.equal(shared.title, edit.title);
+    assert.equal(shared.story, edit.story);
+    assert.throws(() => manageScopedMemory(db, owner, "own", { ...edit, title: "Stale" }));
+    assert.deepEqual(getSharedMemoryInDatabase(db, token), shared);
+    db.prepare(
+      "UPDATE museum_memberships SET status='revoked' WHERE museum_id=? AND user_id=?",
+    ).run(member.museumId, member.userId);
+    assert.throws(() =>
+      manageScopedMemory(db, member, "own", {
+        ...edit,
+        version: shared.version,
+        title: "Departed",
+      }),
+    );
+    assert.deepEqual(getSharedMemoryInDatabase(db, token), shared);
+    configureScopedShare(db, owner, "own", { ...enabled, enabled: false });
+    assert.equal(getSharedMemoryInDatabase(db, token), null);
+  } finally {
+    db.close();
+  }
+});
 test("only Museum Owner may configure or disable an owned share; token rotation and lifecycle remain bounded", () => {
   const { db, owner, member } = fixture();
   try {

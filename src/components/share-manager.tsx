@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { requestJson } from "@/client/http-client";
+import { copy } from "@/i18n/zh-CN";
 
 export function ShareManager({ memoryId, museumId }: { memoryId: string; museumId: string }) {
   const [url, setUrl] = useState("");
@@ -57,6 +58,7 @@ export function ShareManager({ memoryId, museumId }: { memoryId: string; museumI
     <div className="share-manager">
       <h3>分享这段记忆</h3>
       <p>持有链接的访客可以只读查看这段记忆，无需登录，不能查看其他私人内容。</p>
+      <p className="field-help">{copy.management.shareEditWarning}</p>
       <button
         className="button-secondary"
         type="button"

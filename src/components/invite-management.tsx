@@ -2,74 +2,60 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { requestJson } from "@/client/http-client";
-import type { InviteSummary } from "@/domain/invites";
+import { ClientApiError, requestJson } from "@/client/http-client";
+import type { EmailInviteSummary } from "@/data/email-invites";
 
 export function InviteManagement({
   invites,
-  now,
   museumId,
 }: {
-  invites: InviteSummary[];
-  now: string;
+  invites: EmailInviteSummary[];
   museumId: string;
 }) {
   const router = useRouter();
-  const [mode, setMode] = useState("single-use");
+  const [email, setEmail] = useState("");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [createdLink, setCreatedLink] = useState("");
-  const [createdId, setCreatedId] = useState("");
 
-  async function create(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const values = new FormData(event.currentTarget);
-    const days = Number(values.get("expiryDays"));
-    setBusy("create");
+  async function send(targetEmail: string) {
+    setBusy(targetEmail);
     setError("");
     setMessage("");
-    setCreatedLink("");
     try {
-      const result = await requestJson(
-        `/api/invites?museumId=${encodeURIComponent(museumId)}`,
+      const delivery = await requestJson(
+        "/api/invites?museumId=" + encodeURIComponent(museumId),
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            useMode: mode,
-            maxUses:
-              mode === "single-use"
-                ? 1
-                : values.get("maxUses")
-                  ? Number(values.get("maxUses"))
-                  : null,
-            expiresAt: days ? new Date(Date.now() + days * 86400000).toISOString() : null,
-          }),
+          body: JSON.stringify({ targetEmail }),
         },
         (payload) => {
           if (
             !payload ||
             typeof payload !== "object" ||
-            !("token" in payload) ||
-            typeof payload.token !== "string" ||
-            !/^[A-Za-z0-9_-]{43}$/.test(payload.token) ||
-            !("invite" in payload) ||
-            !payload.invite ||
-            typeof payload.invite !== "object" ||
-            !("id" in payload.invite) ||
-            typeof payload.invite.id !== "string"
+            !("delivery" in payload) ||
+            (payload.delivery !== "accepted" && payload.delivery !== "failed")
           )
-            throw new TypeError("Invalid invite response");
-          return { token: payload.token, id: payload.invite.id };
+            throw new TypeError("Invalid invitation delivery response");
+          return payload.delivery;
         },
       );
-      setCreatedLink(`${window.location.origin}/invite#token=${result.token}`);
-      setCreatedId(result.id);
-      setMessage("邀请已创建。请复制保存链接，离开页面后不会再次显示。");
+      setMessage(
+        delivery === "accepted"
+          ? "邀请已提交邮件服务。对方须验证此邮箱并主动接受；请以实际收件为准。"
+          : "邀请已保存，但邮件发送失败。可重试发送，不会延长原截止时间。",
+      );
       router.refresh();
-    } catch {
-      setError("创建未确认成功，请先检查列表再决定是否重新创建。");
+    } catch (cause) {
+      const code = cause instanceof ClientApiError ? cause.code : "";
+      setError(
+        code === "ALREADY_MUSEUM_MEMBER"
+          ? "对方已是本馆成员，不能再次邀请。"
+          : code === "INVITE_RATE_LIMITED"
+            ? "发送过于频繁，请稍后重试。"
+            : "邀请未确认成功，请刷新列表核对后重试。",
+      );
     } finally {
       setBusy("");
     }
@@ -80,8 +66,8 @@ export function InviteManagement({
     setError("");
     setMessage("");
     try {
-      await requestJson(
-        `/api/invites/${encodeURIComponent(id)}?museumId=${encodeURIComponent(museumId)}`,
+      const status = await requestJson(
+        "/api/invites/" + encodeURIComponent(id) + "?museumId=" + encodeURIComponent(museumId),
         { method: "DELETE" },
         (payload) => {
           if (
@@ -90,18 +76,22 @@ export function InviteManagement({
             !("invite" in payload) ||
             !payload.invite ||
             typeof payload.invite !== "object" ||
-            !("revokedAt" in payload.invite) ||
-            typeof payload.invite.revokedAt !== "string"
+            !("status" in payload.invite) ||
+            (payload.invite.status !== "revoked" && payload.invite.status !== "expired")
           )
-            throw new TypeError("Invalid revocation response");
-          return true;
+            throw new TypeError("Invalid invitation revocation response");
+          return payload.invite.status;
         },
       );
-      if (createdId === id) setCreatedLink("");
-      setMessage("邀请已撤销。");
+      setMessage(status === "revoked" ? "邀请已撤销。" : "邀请已过期，无需撤销。");
       router.refresh();
-    } catch {
-      setError("撤销未确认成功，请刷新列表查看状态后重试。");
+    } catch (cause) {
+      setError(
+        cause instanceof ClientApiError && cause.code === "INVITE_ALREADY_ACCEPTED"
+          ? "对方已接受邀请。如需移除，请使用成员管理。"
+          : "撤销未确认成功，请刷新列表核对后重试。",
+      );
+      router.refresh();
     } finally {
       setBusy("");
     }
@@ -109,89 +99,83 @@ export function InviteManagement({
 
   return (
     <div className="login-form">
-      <form className="login-form" onSubmit={create}>
-        <label className="form-field">
-          <span>邀请类型</span>
-          <select value={mode} onChange={(event) => setMode(event.target.value)}>
-            <option value="single-use">单次邀请</option>
-            <option value="multi-use">多次邀请</option>
-          </select>
-        </label>
-        {mode === "multi-use" ? (
-          <label className="form-field">
-            <span>最多使用次数（留空不限次）</span>
-            <input name="maxUses" type="number" min={1} step={1} max={Number.MAX_SAFE_INTEGER} />
-          </label>
-        ) : null}
-        <label className="form-field">
-          <span>邀请有效期</span>
-          <select name="expiryDays" defaultValue="7">
-            <option value="7">7天</option>
-            <option value="30">30天</option>
-            <option value="0">不设到期时间</option>
-          </select>
-        </label>
+      <form
+        className="login-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void send(email);
+        }}
+      >
+        <div className="form-field">
+          <label htmlFor="invitation-email">受邀邮箱</label>
+          <input
+            id="invitation-email"
+            type="email"
+            maxLength={254}
+            required
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            disabled={Boolean(busy)}
+            autoComplete="off"
+          />
+        </div>
+        <p>邀请固定有效七天。重复发送沿用原邀请，不延长截止时间；链接不能授权其他邮箱账号。</p>
         <button className="button-primary" disabled={Boolean(busy)}>
-          {busy === "create" ? "正在创建…" : "创建邀请"}
+          {busy ? "正在处理…" : "发送邀请"}
         </button>
       </form>
-      {createdLink ? (
-        <label className="form-field">
-          <span>新邀请链接（仅显示一次）</span>
-          <textarea
-            readOnly
-            rows={4}
-            value={createdLink}
-            onFocus={(event) => event.currentTarget.select()}
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </label>
-      ) : null}
       {error ? (
-        <p role="alert" className="form-error">
+        <p className="form-error" role="alert">
           {error}
         </p>
       ) : null}
       {message ? <p role="status">{message}</p> : null}
-      <h2>已有邀请</h2>
-      {invites.length === 0 ? (
+      <h2>本馆邀请</h2>
+      {!invites.length ? (
         <p>暂无邀请。</p>
       ) : (
-        <ul>
-          {invites.map((invite) => {
-            const status = invite.revokedAt
-              ? "已撤销"
-              : invite.expiresAt && invite.expiresAt <= now
-                ? "已过期"
-                : invite.maxUses !== null && invite.usageCount >= invite.maxUses
-                  ? "已用完"
-                  : "可用";
-            return (
-              <li key={invite.id}>
-                <p>
-                  {invite.useMode === "single-use" ? "单次邀请" : "多次邀请"} · {status}
-                </p>
-                <small>
-                  创建：{invite.createdAt.slice(0, 10)} · 使用：{invite.usageCount}/
-                  {invite.maxUses ?? "不限"}
-                  <br />
-                  到期：{invite.expiresAt ? invite.expiresAt.slice(0, 10) : "不设到期时间"}
-                </small>
-                {!invite.revokedAt ? (
-                  <p>
-                    <button
-                      className="button-secondary"
-                      disabled={Boolean(busy)}
-                      onClick={() => void revoke(invite.id)}
-                    >
-                      {busy === invite.id ? "正在撤销…" : "撤销邀请"}
-                    </button>
-                  </p>
-                ) : null}
-              </li>
-            );
-          })}
+        <ul className="invitation-list">
+          {invites.map((invite) => (
+            <li key={invite.id}>
+              <p>
+                {invite.targetEmail} ·{" "}
+                {
+                  { pending: "待接受", accepted: "已接受", revoked: "已撤销", expired: "已过期" }[
+                    invite.status
+                  ]
+                }
+              </p>
+              <p>
+                截止：<time dateTime={invite.expiresAt}>{invite.expiresAt}</time>
+              </p>
+              {invite.status === "pending" ? (
+                <div>
+                  <button
+                    className="button-secondary"
+                    disabled={Boolean(busy)}
+                    onClick={() => void send(invite.targetEmail)}
+                  >
+                    重新发送
+                  </button>{" "}
+                  <button
+                    className="button-secondary"
+                    disabled={Boolean(busy)}
+                    onClick={() => void revoke(invite.id)}
+                  >
+                    撤销邀请
+                  </button>
+                </div>
+              ) : invite.status === "expired" || invite.status === "revoked" ? (
+                <button
+                  className="button-secondary"
+                  disabled={Boolean(busy)}
+                  onClick={() => void send(invite.targetEmail)}
+                >
+                  重新邀请
+                </button>
+              ) : null}
+            </li>
+          ))}
         </ul>
       )}
     </div>

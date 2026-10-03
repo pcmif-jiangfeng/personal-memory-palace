@@ -22,7 +22,10 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: "USER_REQUIRED" }, { status: 401 });
     const input = await parseCreateMuseum(request);
     const museum = createOwnMuseumInDatabase(getDatabase(), user.id, input);
-    return NextResponse.json({ id: museum.id, slug: museum.slug }, { status: 201 });
+    return NextResponse.json(
+      { id: museum.id, slug: museum.slug, museumType: museum.museumType },
+      { status: 201 },
+    );
   } catch (error) {
     return apiErrorResponse(error, "museum-onboarding");
   }

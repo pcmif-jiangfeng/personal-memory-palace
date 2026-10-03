@@ -5,6 +5,7 @@ import { memoryPageScope } from "@/memory-page-scope";
 import { getDatabase } from "@/data/database";
 import { listScopedMemories } from "@/data/scoped-memory";
 import { TrashManager } from "@/components/trash-manager";
+import { listScopedTrashedPhotos } from "@/data/photo-trash";
 import { unstable_rethrow, notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,8 @@ export default async function TrashPage({
       <TrashManager
         memories={listScopedMemories(getDatabase(), scope, true)}
         stages={listScopedStages(getDatabase(), scope, true)}
+        photos={listScopedTrashedPhotos(getDatabase(), scope)}
+        canDeletePhotosPermanently={scope.role === "owner"}
         canDeleteMemoriesPermanently={scope.role === "owner"}
         canDeleteStagesPermanently={scope.role === "owner"}
       />

@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   display_name TEXT NOT NULL,
   email_verified INTEGER NOT NULL DEFAULT 0 CHECK (email_verified IN (0, 1)),
+  storage_quota_bytes INTEGER CHECK (storage_quota_bytes >= 0),
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -42,6 +43,7 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
 
 CREATE TABLE IF NOT EXISTS museums (
   id TEXT PRIMARY KEY,
+  museum_type TEXT NOT NULL DEFAULT 'private' CHECK (museum_type IN ('private','shared')),
   last_edited_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
   owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   name TEXT NOT NULL CHECK (length(trim(name)) > 0),
@@ -126,7 +128,8 @@ CREATE TABLE IF NOT EXISTS uploaded_photos (
   height INTEGER NOT NULL,
   created_at TEXT NOT NULL,
   used_at TEXT,
-  library_archived_at TEXT
+  library_archived_at TEXT,
+  trashed_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS photo_deletion_jobs (
@@ -172,7 +175,11 @@ CREATE TABLE IF NOT EXISTS later_notes (
   museum_id TEXT REFERENCES museums(id) ON DELETE RESTRICT,
   memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
   content TEXT NOT NULL,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  author_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  trashed_at TEXT,
+  updated_at TEXT,
+  version INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1)
 );
 
 CREATE TABLE IF NOT EXISTS share_configs (

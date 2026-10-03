@@ -64,9 +64,11 @@ export function writeAuditLogInDatabase(
   database
     .prepare(`
     INSERT INTO audit_logs
-      (id, actor_user_id, museum_id, action, object_type, object_id, timestamp, diff)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      (id, actor_user_id, museum_id, action, object_type, object_id, timestamp, diff, actor_name)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, (SELECT display_name FROM users WHERE id=?))
     `)
-    .run(id, input.actorUserId, input.museumId, input.action, input.objectType, input.objectId, timestamp, diff);
+    .run(id, input.actorUserId, input.museumId, input.action, input.objectType, input.objectId, timestamp,
+      input.action.endsWith(".permanent") || input.action === "photo.deleteQueued" ? null : diff,
+      input.actorUserId);
   return { id, timestamp };
 }

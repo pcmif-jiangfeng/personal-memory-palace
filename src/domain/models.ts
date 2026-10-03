@@ -70,6 +70,10 @@ export interface LaterNote {
   memoryId: string;
   content: string;
   createdAt: string;
+  authorUserId: string | null;
+  authorDisplayName: string | null;
+  trashedAt: string | null;
+  version: number;
 }
 
 export interface ShareConfig {

@@ -49,6 +49,7 @@ function fixture(t: TestContext) {
     }),
   );
   const museumId = museums[0].id;
+  db.exec("UPDATE museums SET museum_type='shared'");
   const owner = { userId: users[0].id, museumId };
   const member = { userId: users[1].id, museumId };
   const join = (id = museumId) =>
@@ -89,6 +90,28 @@ function fixture(t: TestContext) {
 const confirmed = (version: number) => ({ confirm: true as const, version });
 const code = (expected: string) => (error: unknown) =>
   error instanceof ApiError && error.code === expected;
+
+test("private palace deletion mutations are disabled and preserve active and historical pending content", (t) => {
+  const f = fixture(t);
+  f.db.prepare("UPDATE museums SET museum_type='private' WHERE id=?").run(f.owner.museumId);
+  assert.equal(read(f.db, f.owner.userId, f.owner.museumId).museumType, "private");
+  const content = f.content();
+  const before = f.db.prepare("SELECT * FROM museums WHERE id=?").get(f.owner.museumId);
+  for (const operation of [schedule, cancel])
+    assert.throws(
+      () => operation(f.db, f.owner.userId, f.owner.museumId, confirmed(1)),
+      code("PRIVATE_PALACE_DELETION_DISABLED"),
+    );
+  assert.deepEqual(f.db.prepare("SELECT * FROM museums WHERE id=?").get(f.owner.museumId), before);
+  f.db.prepare("UPDATE museums SET status='pending_deletion' WHERE id=?").run(f.owner.museumId);
+  assert.throws(
+    () => cancel(f.db, f.owner.userId, f.owner.museumId, confirmed(1)),
+    code("PRIVATE_PALACE_DELETION_DISABLED"),
+  );
+  assert.equal(read(f.db, f.owner.userId, f.owner.museumId).status, "pending_deletion");
+  assert.deepEqual(f.content(), content);
+  assert.equal(f.db.prepare("SELECT COUNT(*) n FROM audit_logs").get()!.n, 0);
+});
 
 test("migration 23 is additive, repeatable and preserves legacy pending rows without fabricating dates", (t) => {
   const f = fixture(t);
@@ -159,27 +182,24 @@ test("retries cannot extend deadlines and stale cancellation cannot undo a newer
   assert.equal(read(f.db, f.owner.userId, f.owner.museumId).status, "pending_deletion");
 });
 
-test("fresh global J3 guard blocks another owned Museum's collaborators and does not trust earlier snapshots", (t) => {
+test("shared deletion with active members is scoped and cannot affect another owned palace", (t) => {
   const f = fixture(t);
   const second = createMuseumInDatabase(f.db, {
     ownerId: f.owner.userId,
+    museumType: "shared",
     name: "second",
     slug: "second",
   });
   f.join(second.id);
-  assert.throws(
-    () => schedule(f.db, f.owner.userId, f.owner.museumId, confirmed(1)),
-    code("TRANSFER_OWNERSHIP_REQUIRED"),
-  );
-  f.db.exec("UPDATE museum_memberships SET status='revoked'");
-  // Simulate membership changing after the management page's precheck.
   f.join();
-  assert.throws(
-    () => schedule(f.db, f.owner.userId, f.owner.museumId, confirmed(1)),
-    code("TRANSFER_OWNERSHIP_REQUIRED"),
+  const members = f.db.prepare("SELECT * FROM museum_memberships ORDER BY rowid").all();
+  const other = findMuseumByIdInDatabase(f.db, second.id);
+  assert.equal(
+    schedule(f.db, f.owner.userId, f.owner.museumId, confirmed(1)).status,
+    "pending_deletion",
   );
-  assert.equal(read(f.db, f.owner.userId, f.owner.museumId).version, 1);
-  assert.equal(f.db.prepare("SELECT COUNT(*) n FROM audit_logs").get()!.n, 0);
+  assert.deepEqual(f.db.prepare("SELECT * FROM museum_memberships ORDER BY rowid").all(), members);
+  assert.deepEqual(findMuseumByIdInDatabase(f.db, second.id), other);
 });
 
 test("scheduling and cancellation require current verified Owner, confirmation and version", (t) => {
@@ -286,7 +306,7 @@ test("pending Museum denies business reads, public Memory/Stage/photo/share acce
   assert.deepEqual(f.content(), content);
   assert.equal(
     listSwitcherMuseumsInDatabase(f.db, f.member.userId).some((m) => m.id === f.owner.museumId),
-    false,
+    true,
   );
   assert.ok(readScopedMemory(f.db, f.member, "memory"));
   assert.ok(findStageByIdInDatabase(f.db, "stage", true));
@@ -297,16 +317,23 @@ test("pending Museum denies business reads, public Memory/Stage/photo/share acce
   );
 });
 
-test("legacy pending with no deadline and expired pending can be cancelled; no time-triggered data purge", (t) => {
+test("unknown and elapsed deadlines cannot be cancelled and do not trigger a data purge", (t) => {
   const f = fixture(t);
   f.db.prepare("UPDATE museums SET status='pending_deletion' WHERE id=?").run(f.owner.museumId);
   f.join();
-  assert.equal(cancel(f.db, f.owner.userId, f.owner.museumId, confirmed(1)).status, "active");
-  f.db.exec("UPDATE museum_memberships SET status='revoked'");
-  schedule(f.db, f.owner.userId, f.owner.museumId, confirmed(2), new Date("2020-01-01"));
   const content = f.content();
+  assert.throws(
+    () => cancel(f.db, f.owner.userId, f.owner.museumId, confirmed(1)),
+    code("DELETION_DEADLINE_UNKNOWN"),
+  );
+  f.db
+    .prepare("UPDATE museums SET deletion_scheduled_at='2020-01-31T00:00:00.000Z' WHERE id=?")
+    .run(f.owner.museumId);
   assert.equal(read(f.db, f.owner.userId, f.owner.museumId).status, "pending_deletion");
-  cancel(f.db, f.owner.userId, f.owner.museumId, confirmed(3));
+  assert.throws(
+    () => cancel(f.db, f.owner.userId, f.owner.museumId, confirmed(1)),
+    code("DELETION_DEADLINE_PASSED"),
+  );
   assert.deepEqual(f.content(), content);
 });
 

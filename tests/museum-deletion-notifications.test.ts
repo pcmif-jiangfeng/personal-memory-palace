@@ -19,11 +19,12 @@ function fixture(t: TestContext) {
   });
   db.exec("UPDATE users SET email_verified=1");
   const museum = createMuseumInDatabase(db, { ownerId: user.id, name: "Museum", slug: "museum" });
+  db.exec("UPDATE museums SET museum_type='shared'");
   const now = new Date("2026-09-01T00:00:00.000Z");
   const schedule = (version = 1, at = now) =>
     scheduleMuseumDeletionInDatabase(db, user.id, museum.id, { confirm: true, version }, at);
   const cancel = (version = 2) =>
-    cancelMuseumDeletionInDatabase(db, user.id, museum.id, { confirm: true, version });
+    cancelMuseumDeletionInDatabase(db, user.id, museum.id, { confirm: true, version }, now);
   const rows = () => db.prepare("SELECT * FROM museum_notifications ORDER BY kind").all();
   return { db, user, museum, schedule, cancel, rows };
 }

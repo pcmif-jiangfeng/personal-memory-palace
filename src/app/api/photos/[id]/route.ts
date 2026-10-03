@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { memoryRequestScope } from "@/memory-request-scope";
 import { getDatabase } from "@/data/database";
-import { imageStorage } from "@/storage/local-image-storage";
-import { deleteUploadedPhotoInDatabase } from "@/data/photo-deletion-service";
+import { manageScopedPhotoTrash } from "@/data/photo-trash";
 import { MAX_IDENTIFIER_LENGTH } from "@/domain/rules";
 import { apiErrorResponse, sameOriginRequiredResponse } from "@/http/api-error";
 
@@ -17,9 +16,8 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     if (!id || id.length > MAX_IDENTIFIER_LENGTH) {
       return NextResponse.json({ error: "INVALID_PHOTO_ID" }, { status: 400 });
     }
-    return NextResponse.json(
-      await deleteUploadedPhotoInDatabase(getDatabase(), imageStorage, id, scope),
-    );
+    manageScopedPhotoTrash(getDatabase(), scope, id, "trash");
+    return NextResponse.json({ deleted: true, alreadyDeleted: false });
   } catch (error) {
     return apiErrorResponse(error, "delete-photo");
   }

@@ -44,6 +44,10 @@ interface LaterNoteRow {
   memory_id: string;
   content: string;
   created_at: string;
+  author_user_id: string | null;
+  author_name: string | null;
+  trashed_at: string | null;
+  version: number;
 }
 
 interface MemorySummaryRow {
@@ -163,6 +167,10 @@ function readLaterNoteRow(row: Record<string, unknown>): LaterNoteRow {
     memory_id: readString(row, "memory_id"),
     content: readString(row, "content"),
     created_at: readString(row, "created_at"),
+    author_user_id: readNullableString(row, "author_user_id"),
+    author_name: readNullableString(row, "author_name"),
+    trashed_at: readNullableString(row, "trashed_at"),
+    version: readNumber(row, "version"),
   };
 }
 function mapStage(row: StageRow): Stage {
@@ -215,11 +223,11 @@ const summarySql = `
   LEFT JOIN stages ON stages.id = memories.stage_id AND stages.museum_id IS memories.museum_id
   LEFT JOIN memory_images AS cover ON cover.memory_id = memories.id AND cover.is_cover = 1 AND cover.museum_id IS memories.museum_id
     AND (memories.museum_id IS NULL OR EXISTS (
-      SELECT 1 FROM uploaded_photos p WHERE p.optimized_storage_key=cover.storage_key AND p.museum_id=memories.museum_id
+      SELECT 1 FROM uploaded_photos p WHERE p.optimized_storage_key=cover.storage_key AND p.museum_id=memories.museum_id AND p.trashed_at IS NULL
     ))
   LEFT JOIN memory_images AS images ON images.memory_id = memories.id AND images.museum_id IS memories.museum_id
     AND (memories.museum_id IS NULL OR EXISTS (
-      SELECT 1 FROM uploaded_photos p WHERE p.optimized_storage_key=images.storage_key AND p.museum_id=memories.museum_id
+      SELECT 1 FROM uploaded_photos p WHERE p.optimized_storage_key=images.storage_key AND p.museum_id=memories.museum_id AND p.trashed_at IS NULL
     ))
 `;
 
@@ -230,7 +238,7 @@ const stageSql = `SELECT stages.*, stage_covers.storage_key AS cover_key,
  LEFT JOIN users AS editor ON editor.id=stages.last_edited_by_user_id
   LEFT JOIN stage_covers ON stage_covers.stage_id=stages.id AND stage_covers.museum_id IS stages.museum_id
     AND (stages.museum_id IS NULL OR EXISTS (
-      SELECT 1 FROM uploaded_photos p WHERE p.optimized_storage_key=stage_covers.storage_key AND p.museum_id=stages.museum_id
+      SELECT 1 FROM uploaded_photos p WHERE p.optimized_storage_key=stage_covers.storage_key AND p.museum_id=stages.museum_id AND p.trashed_at IS NULL
     ))`;
 
 export function listActiveStages(publicOnly = false, museumId?: string): Stage[] {
@@ -452,6 +460,7 @@ export function findMemoryDetailsInDatabase(
      WHERE memory_images.memory_id = ?
        AND memory_images.museum_id IS ?
        AND uploaded_photos.museum_id IS ?
+       AND uploaded_photos.trashed_at IS NULL
      ORDER BY memory_images.sort_order`,
     )
     .all(id, contentMuseumId, contentMuseumId)
@@ -493,17 +502,18 @@ export function findMemoryDetailsInDatabase(
       .map(readMemorySummaryRow);
     relatedMemories = relatedRows.map(mapMemory);
   }
-  const noteRows = database
-    .prepare("SELECT * FROM later_notes WHERE memory_id = ? AND museum_id IS ? ORDER BY created_at")
-    .all(id, contentMuseumId)
-    .map(readLaterNoteRow);
-  const laterNotes: LaterNote[] = noteRows.map((row) => ({
-    id: row.id,
-    memoryId: row.memory_id,
-    content: row.content,
-    createdAt: row.created_at,
-  }));
+  const laterNotes = listLaterNotesInDatabase(database, id, contentMuseumId as string | null);
   return { ...memory, images, relatedMemories, laterNotes };
+}
+
+export function listLaterNotesInDatabase(database: ReturnType<typeof getDatabase>, memoryId: string, museumId: string | null, trashed = false): LaterNote[] {
+  return database.prepare(`SELECT n.id,n.memory_id,n.content,n.created_at,n.author_user_id,n.trashed_at,n.version,u.display_name AS author_name
+    FROM later_notes n LEFT JOIN users u ON u.id=n.author_user_id
+    WHERE n.memory_id=? AND n.museum_id IS ? AND n.trashed_at IS ${trashed ? "NOT " : ""}NULL ORDER BY n.created_at,n.id`)
+    .all(memoryId, museumId).map(readLaterNoteRow).map((row) => ({
+      id: row.id, memoryId: row.memory_id, content: row.content, createdAt: row.created_at,
+      authorUserId: row.author_user_id, authorDisplayName: row.author_name, trashedAt: row.trashed_at, version: row.version,
+    }));
 }
 
 export function listMemorySummariesInMuseumInDatabase(

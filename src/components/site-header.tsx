@@ -85,7 +85,7 @@ export function SiteHeader({
           );
         })}
       </nav>
-      {user ? <AccountMenu user={user} /> : null}
+      {user ? <AccountMenu user={user} museumId={museumId} /> : null}
       {shareMessage ? (
         <div className="site-share-feedback" role="status">
           <span>{shareMessage}</span>

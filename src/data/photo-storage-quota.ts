@@ -23,12 +23,18 @@ function safeBytes(value: number) {
 export function reservePhotoStorageInDatabase(db: DatabaseSync, museumId: string, key: string, bytes: number) {
   if (!db.isTransaction) throw new Error("Photo reservation requires a transaction");
   if (!isMuseumPhotoAssetKey(key, museumId) || safeBytes(bytes) === 0) throw new Error("Invalid photo reservation");
-  const museum = db.prepare("SELECT storage_used_bytes,storage_quota_bytes,storage_usage_ready FROM museums WHERE id=?").get(museumId);
+  const museum = db.prepare(`SELECT m.owner_id,u.storage_quota_bytes FROM museums m
+    JOIN users u ON u.id=m.owner_id WHERE m.id=?`).get(museumId);
   if (!museum) throw new ApiError("MUSEUM_NOT_FOUND", 404);
-  if (!readBooleanFlag(museum, "storage_usage_ready")) throw new ApiError("STORAGE_USAGE_NOT_READY", 503);
-  const used = safeBytes(readNumber(museum, "storage_used_bytes"));
+  const ownerId = readString(museum, "owner_id");
+  const accountUsage = db.prepare(`SELECT COALESCE(SUM(storage_used_bytes),0) AS storage_used_bytes,
+    MIN(storage_usage_ready) AS storage_usage_ready FROM museums WHERE owner_id=?`).get(ownerId)!;
+  if (!readBooleanFlag(accountUsage, "storage_usage_ready")) throw new ApiError("STORAGE_USAGE_NOT_READY", 503);
+  if (museum.storage_quota_bytes === null) throw new ApiError("ACCOUNT_QUOTA_NOT_READY", 503);
+  const used = safeBytes(readNumber(accountUsage, "storage_used_bytes"));
   const quota = safeBytes(readNumber(museum, "storage_quota_bytes"));
-  const reserved = safeBytes(readNumber(db.prepare("SELECT COALESCE(SUM(bytes),0) AS bytes FROM photo_asset_usage WHERE museum_id=? AND state='reserved'").get(museumId)!, "bytes"));
+  const reserved = safeBytes(readNumber(db.prepare(`SELECT COALESCE(SUM(a.bytes),0) AS bytes FROM photo_asset_usage a
+    JOIN museums m ON m.id=a.museum_id WHERE m.owner_id=? AND a.state='reserved'`).get(ownerId)!, "bytes"));
   if (bytes > quota - used - reserved)
     throw new ApiError("STORAGE_QUOTA_EXCEEDED", 507, {
       storageUsedBytes: used, storageQuotaBytes: quota, reservedBytes: reserved, newCompressedBytes: bytes,

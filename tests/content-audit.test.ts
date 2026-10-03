@@ -103,7 +103,8 @@ for (const action of memoryActions) {
         if (action.action === "restore" || action.action === "permanent") {
           db.exec("UPDATE memories SET trashed_at='now' WHERE id='memory'");
         }
-        const scope = action.action === "permanent" ? owner : member;
+        const scope =
+          action.action === "permanent" || action.action === "publication" ? owner : member;
         const before = snapshot(db);
         if (failing) {
           failAudit(db);
@@ -120,10 +121,12 @@ for (const action of memoryActions) {
           assert.equal(log.object_type, "memory");
           assert.equal(log.object_id, "memory");
           const diff = JSON.parse(String(log.diff));
-          assert.deepEqual(diff.version, {
-            before: 1,
-            after: action.action === "permanent" ? null : 2,
-          });
+          if (action.action === "permanent") assert.equal(log.diff, null);
+          else
+            assert.deepEqual(diff.version, {
+              before: 1,
+              after: 2,
+            });
           if ("photoId" in action) assert.equal(diff.photoId, action.photoId);
           if ("photoIds" in action) assert.deepEqual(diff.photoIds, action.photoIds);
           if ("version" in action) assert.equal(result, 2);
@@ -157,7 +160,8 @@ for (const action of stageActions) {
         } else {
           db.exec("UPDATE memories SET stage_id='stage' WHERE id='memory'");
         }
-        const scope = action.action === "permanent" ? owner : member;
+        const scope =
+          action.action === "permanent" || action.action === "publication" ? owner : member;
         const before = snapshot(db);
         if (failing) {
           failAudit(db);
@@ -174,10 +178,12 @@ for (const action of stageActions) {
           assert.equal(log.object_type, "stage");
           assert.equal(log.object_id, "stage");
           const diff = JSON.parse(String(log.diff));
-          assert.deepEqual(diff.version, {
-            before: 1,
-            after: action.action === "permanent" ? null : 2,
-          });
+          if (action.action === "permanent") assert.equal(log.diff, null);
+          else
+            assert.deepEqual(diff.version, {
+              before: 1,
+              after: 2,
+            });
           if (action.action === "details") {
             assert.equal(diff.coverPhotoId, "p3");
             assert.equal(result?.version, 2);

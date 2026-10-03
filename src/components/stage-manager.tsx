@@ -12,9 +12,11 @@ import { copy } from "@/i18n/zh-CN";
 export function StageManager({
   stages,
   photos,
+  canManagePublication,
 }: {
   stages: Stage[];
   photos: StageCoverPhotoOption[];
+  canManagePublication: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -124,14 +126,16 @@ export function StageManager({
               <button className="button-secondary" disabled={busy === stage.id}>
                 {copy.stage.save}
               </button>
-              <button
-                className="button-secondary"
-                type="button"
-                disabled={busy === stage.id}
-                onClick={() => void togglePublication(stage)}
-              >
-                {stage.isPublic ? copy.publication.hide : copy.publication.publish}
-              </button>
+              {canManagePublication ? (
+                <button
+                  className="button-secondary"
+                  type="button"
+                  disabled={busy === stage.id}
+                  onClick={() => void togglePublication(stage)}
+                >
+                  {stage.isPublic ? copy.publication.hide : copy.publication.publish}
+                </button>
+              ) : null}
               <StageDeleteAction stageId={stage.id} stageTitle={stage.title} />
             </div>
           </form>

@@ -32,7 +32,7 @@ export function listPlatformMetadataInDatabase(
   const museums = database
     .prepare(
       `SELECT m.id,m.name,m.slug,m.owner_id,u.display_name AS owner_name,
-    m.created_at,m.storage_used_bytes,m.storage_quota_bytes,m.status
+    m.created_at,m.storage_used_bytes,u.storage_quota_bytes,m.status
     FROM museums m JOIN users u ON u.id=m.owner_id
     ORDER BY m.created_at DESC,m.id ASC LIMIT ? OFFSET ?`,
     )

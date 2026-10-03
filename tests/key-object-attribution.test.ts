@@ -83,7 +83,10 @@ test("Stage creation and successful edits use trusted actors without changing it
     assert.equal(readScopedStage(db, owner, stage.id).title, "Updated");
     assert.equal(readScopedStage(db, owner, stage.id).lastEditedByUserId, owner.userId);
     db.exec("DROP TRIGGER fail_actor");
-    manageScopedStage(db, member, stage.id, { action: "publication", isPublic: false });
+    manageScopedStage(db, member, stage.id, {
+      action: "details",
+      input: { title: "Member edit", version: updated.version },
+    });
     assert.throws(() =>
       manageScopedStage(db, owner, stage.id, {
         action: "details",

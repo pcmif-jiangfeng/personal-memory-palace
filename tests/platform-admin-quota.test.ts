@@ -43,23 +43,62 @@ function fixture(t: TestContext) {
     db.close();
   });
   const quota = () =>
-    db.prepare("SELECT storage_quota_bytes FROM museums WHERE id=?").get(museum.id)!
+    db.prepare("SELECT storage_quota_bytes FROM users WHERE id=?").get(owner.id)!
       .storage_quota_bytes;
   const auditCount = () => db.prepare("SELECT COUNT(*) AS count FROM audit_logs").get()!.count;
   const adjust = (bytes: number, expected = 100, userId: string | null = admin.id) =>
     adjustMuseumQuotaInDatabase(db, userId, museum.id, {
       storageQuotaBytes: bytes,
       expectedQuotaBytes: expected,
+      expectedOwnerId: owner.id,
     });
   return { db, admin, owner, other, museum, second, adjust, quota, auditCount };
 }
+
+test("account quota applies across all owned palaces and rejects a stale owner selection", (t) => {
+  const f = fixture(t);
+  const id = randomUUID();
+  f.db
+    .prepare(
+      `INSERT INTO museums(id,owner_id,museum_type,name,slug,created_at,updated_at,storage_usage_ready)
+    VALUES (?,?,'shared','Shared',?,'now','now',1)`,
+    )
+    .run(id, f.owner.id, id);
+  f.adjust(150);
+  withTransaction(f.db, () =>
+    reservePhotoStorageInDatabase(f.db, id, museumPhotoStorageKey(id), 150),
+  );
+  assert.throws(
+    () =>
+      withTransaction(f.db, () =>
+        reservePhotoStorageInDatabase(f.db, f.museum.id, museumPhotoStorageKey(f.museum.id), 1),
+      ),
+    (error) => error instanceof ApiError && error.code === "STORAGE_QUOTA_EXCEEDED",
+  );
+  f.db.prepare("UPDATE museums SET owner_id=? WHERE id=?").run(f.other.id, id);
+  assert.throws(
+    () =>
+      adjustMuseumQuotaInDatabase(f.db, f.admin.id, id, {
+        storageQuotaBytes: 200,
+        expectedQuotaBytes: 77,
+        expectedOwnerId: f.owner.id,
+      }),
+    (error) => error instanceof ApiError && error.code === "STORAGE_QUOTA_OWNER_CONFLICT",
+  );
+  assert.equal(
+    f.db.prepare("SELECT storage_quota_bytes FROM users WHERE id=?").get(f.other.id)!
+      .storage_quota_bytes,
+    77,
+  );
+  assert.equal(f.auditCount(), 1);
+});
 
 test("quota and minimal trusted audit commit atomically without changing content metadata or another Museum", (t) => {
   const f = fixture(t);
   const before = f.db.prepare("SELECT * FROM museums WHERE id=?").get(f.museum.id)!;
   assert.deepEqual(f.adjust(200), { id: f.museum.id, storageQuotaBytes: 200 });
   const after = f.db.prepare("SELECT * FROM museums WHERE id=?").get(f.museum.id)!;
-  assert.deepEqual({ ...after, storage_quota_bytes: 100 }, { ...before });
+  assert.deepEqual(after, before);
   assert.equal(
     f.db.prepare("SELECT storage_quota_bytes FROM museums WHERE id=?").get(f.second.id)!
       .storage_quota_bytes,
@@ -69,8 +108,8 @@ test("quota and minimal trusted audit commit atomically without changing content
   assert.equal(audit.actor_user_id, f.admin.id);
   assert.equal(audit.museum_id, f.museum.id);
   assert.equal(audit.action, "admin.quota.update");
-  assert.equal(audit.object_type, "museum");
-  assert.equal(audit.object_id, f.museum.id);
+  assert.equal(audit.object_type, "account");
+  assert.equal(audit.object_id, f.owner.id);
   assert.deepEqual(JSON.parse(String(audit.diff)), { beforeQuotaBytes: 100, afterQuotaBytes: 200 });
   assert.equal(listMuseumActivityInDatabase(f.db, f.owner.id, f.museum.id).total, 0);
 });
@@ -107,6 +146,7 @@ test("invalid byte counts never update or audit; zero and safe integer maximum r
         adjustMuseumQuotaInDatabase(f.db, f.admin.id, f.museum.id, {
           storageQuotaBytes: 200,
           expectedQuotaBytes: value as number,
+          expectedOwnerId: f.owner.id,
         }),
       ApiError,
     );
@@ -135,6 +175,7 @@ test("stale quota is rejected, no-op produces no event, and missing Museum produ
       adjustMuseumQuotaInDatabase(f.db, f.admin.id, randomUUID(), {
         storageQuotaBytes: 200,
         expectedQuotaBytes: 100,
+        expectedOwnerId: f.owner.id,
       }),
     (e) => e instanceof ApiError && e.status === 404,
   );
@@ -209,13 +250,44 @@ test("JSON request boundary rejects malformed, missing, fractional, coerced and 
     '{"storageQuotaBytes":2,"expectedQuotaBytes":1,"actorUserId":"attacker"}',
     '{"storageQuotaBytes":1e99,"expectedQuotaBytes":1}',
   ]) {
-    await assert.rejects(() => parseQuotaAdjustment(request(body)), ApiError);
+    let payload = body;
+    try {
+      const object = JSON.parse(body);
+      if (object !== null && !Array.isArray(object) && typeof object === "object")
+        payload = JSON.stringify({
+          expectedOwnerId: "11111111-1111-4111-8111-111111111111",
+          ...object,
+        });
+    } catch {
+      /* Keep malformed JSON for the boundary test. */
+    }
+    await assert.rejects(() => parseQuotaAdjustment(request(payload)), ApiError);
+  }
+  for (const expectedOwnerId of [undefined, null, 123, "wrong", ""]) {
+    await assert.rejects(
+      () =>
+        parseQuotaAdjustment(
+          request(
+            JSON.stringify({
+              storageQuotaBytes: 100,
+              expectedQuotaBytes: 100,
+              expectedOwnerId,
+            }),
+          ),
+        ),
+      ApiError,
+    );
   }
   assert.deepEqual(
-    await parseQuotaAdjustment(request('{"storageQuotaBytes":0,"expectedQuotaBytes":100}')),
+    await parseQuotaAdjustment(
+      request(
+        '{"storageQuotaBytes":0,"expectedQuotaBytes":100,"expectedOwnerId":"11111111-1111-4111-8111-111111111111"}',
+      ),
+    ),
     {
       storageQuotaBytes: 0,
       expectedQuotaBytes: 100,
+      expectedOwnerId: "11111111-1111-4111-8111-111111111111",
     },
   );
 });

@@ -120,11 +120,15 @@ function TrashSelectionSection({
 export function TrashManager({
   memories,
   stages,
+  photos,
+  canDeletePhotosPermanently,
   canDeleteMemoriesPermanently = true,
   canDeleteStagesPermanently = true,
 }: {
   memories: MemorySummary[];
   stages: Stage[];
+  photos: TrashItem[];
+  canDeletePhotosPermanently: boolean;
   canDeleteMemoriesPermanently?: boolean;
   canDeleteStagesPermanently?: boolean;
 }) {
@@ -141,6 +145,12 @@ export function TrashManager({
         title="Stage"
         items={stages}
         canDeletePermanently={canDeleteStagesPermanently}
+      />
+      <TrashSelectionSection
+        type="photo"
+        title="照片"
+        items={photos}
+        canDeletePermanently={canDeletePhotosPermanently}
       />
     </div>
   );

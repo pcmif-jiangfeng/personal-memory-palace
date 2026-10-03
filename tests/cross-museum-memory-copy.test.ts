@@ -111,7 +111,11 @@ test("K2 copies content, cover/order/metadata and notes into independent private
 
 test("K2 combined quota failure occurs before copying any photos or publishing a partial Memory", async (t) => {
   const f = fixture(t);
-  f.db.prepare("UPDATE museums SET storage_quota_bytes=7 WHERE id=?").run(f.museums[1].id);
+  f.db
+    .prepare(
+      "UPDATE users SET storage_quota_bytes=7 WHERE id=(SELECT owner_id FROM museums WHERE id=?)",
+    )
+    .run(f.museums[1].id);
   await assert.rejects(
     f.copy(),
     (error) => error instanceof ApiError && error.code === "STORAGE_QUOTA_EXCEEDED",

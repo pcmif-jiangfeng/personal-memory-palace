@@ -92,6 +92,7 @@ export function MemoryExhibition({
                   )}
                 </time>
                 <p>{note.content}</p>
+                <p className="field-help">作者：{note.authorDisplayName || "历史作者未知"}</p>
               </article>
             ))
           ) : (

@@ -8,6 +8,7 @@ import { requirePhotoAccess, requirePhotoMuseum } from "./photo-access.ts";
 import { ApiError } from "../http/errors.ts";
 import { readBooleanFlag, readNullableString, readString } from "./row-readers.ts";
 import { releasePhotoStorageInDatabase } from "./photo-storage-quota.ts";
+import { redactObjectAuditInDatabase } from "./audit-content-redaction.ts";
 
 export interface PhotoMemoryReference {
   id: string;
@@ -108,6 +109,7 @@ function prepareDeletion(
   database: DatabaseSync,
   photoId: string,
   scope?: MemoryScope,
+  trashedOnly = false,
 ): PhotoRow | null {
   return withTransaction(database, () => {
     if (scope) {
@@ -116,6 +118,8 @@ function prepareDeletion(
         database.prepare("SELECT photo_id FROM photo_deletion_jobs WHERE photo_id=?").get(photoId),
       );
       requirePhotoAccess(database, scope, photoId, pending);
+      if (trashedOnly && !pending && database.prepare("SELECT trashed_at FROM uploaded_photos WHERE id=? AND museum_id=?").get(photoId, scope.museumId)?.trashed_at === null)
+        throw new ApiError("PHOTO_NOT_TRASHED", 409);
     }
     const pendingRow = database
       .prepare(
@@ -169,6 +173,7 @@ function prepareDeletion(
         new Date().toISOString(),
         readNullableString(photoRow!, "museumId"),
       );
+    redactObjectAuditInDatabase(database, readNullableString(photoRow!, "museumId"), "photo", photoId);
     database.prepare("DELETE FROM uploaded_photos WHERE id = ?").run(photoId);
     // The DB deletion is committed before asynchronous file cleanup; do not claim cleanup succeeded.
     // Existing jobs return above, so retries and startup recovery cannot duplicate this event.
@@ -190,8 +195,9 @@ export async function deleteUploadedPhotoInDatabase(
   storage: Pick<ImageStorage, "remove">,
   photoId: string,
   scope?: MemoryScope,
+  trashedOnly = false,
 ): Promise<{ deleted: boolean; alreadyDeleted: boolean }> {
-  const plan = prepareDeletion(database, photoId, scope);
+  const plan = prepareDeletion(database, photoId, scope, trashedOnly);
   if (!plan) return { deleted: false, alreadyDeleted: true };
 
   try {

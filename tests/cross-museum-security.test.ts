@@ -137,7 +137,10 @@ for (const actor of ["owner", "both-museum-collaborator", "nonmember", "revoked-
       );
       assert.equal(removed, false);
       // Museum B members may read B independently; A membership must never grant that read.
-      assert.equal(canReadMuseumPhoto(db, scope.userId, target.key), false);
+      assert.equal(
+        canReadMuseumPhoto(db, scope.userId, target.key),
+        actor === "both-museum-collaborator",
+      );
       assert.throws(
         () => configureScopedShare(db, scope, target.memory, { enabled: true, mode: "link" }),
         denied,

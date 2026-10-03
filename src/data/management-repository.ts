@@ -11,6 +11,7 @@ import {
 } from "../domain/rules.ts";
 import { DomainError, type DomainErrorCode } from "../domain/errors.ts";
 import { ApiError } from "../http/errors.ts";
+import { redactMemoryAuditInDatabase, redactObjectAuditInDatabase } from "./audit-content-redaction.ts";
 
 export interface UpdateMemoryDetailsInput {
   version?: number;
@@ -60,7 +61,7 @@ export function updateMemoryDetails(memoryId: string, input: UpdateMemoryDetails
   updateMemoryDetailsInDatabase(getDatabase(), memoryId, input);
 }
 
-export function addLaterNote(memoryId: string, content: string, database = getDatabase()) {
+export function addLaterNote(memoryId: string, content: string, database = getDatabase(), authorUserId: string | null = null) {
   const value = content.trim();
   if (!value) throw new DomainError("NOTE_REQUIRED");
   if (value.length > LATER_NOTE_MAX_LENGTH) throw new DomainError("NOTE_TOO_LONG");
@@ -70,8 +71,8 @@ export function addLaterNote(memoryId: string, content: string, database = getDa
     throw new DomainError("MEMORY_NOT_FOUND");
   const id = randomUUID();
   database
-    .prepare("INSERT INTO later_notes (id, memory_id, content, created_at) VALUES (?, ?, ?, ?)")
-    .run(id, memoryId, value, new Date().toISOString());
+    .prepare("INSERT INTO later_notes (id, memory_id, museum_id, content, created_at, author_user_id) SELECT ?,id,museum_id,?,?,? FROM memories WHERE id=?")
+    .run(id, value, new Date().toISOString(), authorUserId, memoryId);
   return id;
 }
 
@@ -221,12 +222,16 @@ function queueUnreferencedPhotos(database: DatabaseSync, photoIds: string[]): vo
       new Date().toISOString(),
       photo.museumId,
     );
+    redactObjectAuditInDatabase(database, photo.museumId, "photo", photo.id);
     database.prepare("DELETE FROM uploaded_photos WHERE id = ?").run(photo.id);
   }
 }
 
 export function permanentlyDeleteMemoryInDatabase(database: DatabaseSync, id: string): void {
   withTransaction(database, () => {
+    const memory = database.prepare("SELECT museum_id FROM memories WHERE id=?").get(id);
+    if (!memory) throw new DomainError("MEMORY_NOT_FOUND");
+    redactMemoryAuditInDatabase(database, typeof memory.museum_id === "string" ? memory.museum_id : null, id);
     const photoIds = database
       .prepare(
         `
@@ -253,6 +258,9 @@ export function permanentlyDeleteMemory(id: string) {
 
 export function permanentlyDeleteStageInDatabase(database: DatabaseSync, id: string): void {
   withTransaction(database, () => {
+    const stage = database.prepare("SELECT museum_id FROM stages WHERE id=?").get(id);
+    if (!stage) throw new DomainError("STAGE_NOT_FOUND");
+    redactObjectAuditInDatabase(database, typeof stage.museum_id === "string" ? stage.museum_id : null, "stage", id);
     const photoIds = database
       .prepare(
         `

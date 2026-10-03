@@ -93,7 +93,7 @@ export function createMemoryInDatabase(
       .prepare(
         `SELECT id, optimized_storage_key AS storage_key
          FROM uploaded_photos
-         WHERE id IN (${placeholders})`,
+         WHERE id IN (${placeholders}) AND trashed_at IS NULL`,
       )
       .all(...photoIds)
       .map(readPhotoKeyRow);

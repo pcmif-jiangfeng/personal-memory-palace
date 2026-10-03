@@ -39,7 +39,7 @@ function requireBinding(
   table: "stages" | "memories" | "uploaded_photos",
   id: string,
 ) {
-  const active = table === "uploaded_photos" ? "" : " AND trashed_at IS NULL";
+  const active = " AND trashed_at IS NULL";
   if (
     !db
       .prepare(`SELECT id FROM ${table} WHERE id=? AND museum_id=?${active}`)
@@ -59,7 +59,9 @@ export function manageScopedMemory(
       input.action === "trash" || input.action === "restore" || input.action === "permanent"
         ? input.action
         : "update";
-    requireMemoryAccessInDatabase(db, scope.userId, scope.museumId, id, operation);
+    const access = requireMemoryAccessInDatabase(db, scope.userId, scope.museumId, id, operation);
+    if (input.action === "publication" && access.role !== "owner")
+      throw new ApiError("MUSEUM_OWNER_REQUIRED", 403);
     const beforeVersion = readNumber(
       db.prepare("SELECT version FROM memories WHERE id=?").get(id)!, "version",
     );
@@ -109,7 +111,7 @@ export function manageScopedMemory(
         updateMemoryDetailsInDatabase(db, id, input);
         break;
       case "note":
-        addLaterNote(id, input.content, db);
+        addLaterNote(id, input.content, db, scope.userId);
         break;
       case "relations":
         updateMemoryRelationsInDatabase(db, id, input.relatedMemoryIds);

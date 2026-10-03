@@ -35,10 +35,10 @@ test("migration 20 preserves existing content, creates audit storage and runs on
   try {
     db.exec(`
       PRAGMA foreign_keys = ON;
-      CREATE TABLE users (id TEXT PRIMARY KEY);
+      CREATE TABLE users (id TEXT PRIMARY KEY,display_name TEXT);
       CREATE TABLE museums (id TEXT PRIMARY KEY);
       CREATE TABLE memories (id TEXT PRIMARY KEY, story TEXT);
-      INSERT INTO users VALUES ('actor');
+      INSERT INTO users (id) VALUES ('actor');
       INSERT INTO museums VALUES ('museum');
       INSERT INTO memories VALUES ('memory', 'Keep this story');
       CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
@@ -68,6 +68,57 @@ test("migration 20 preserves existing content, creates audit storage and runs on
       .map((row) => row.name);
     assert.ok(indexes.includes("audit_logs_museum_timestamp"));
     assert.ok(indexes.includes("audit_logs_museum_object_timestamp"));
+  } finally {
+    db.close();
+  }
+});
+
+test("migration 34 leaves old nicknames unknown and clears only explicitly deleted object details", () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    db.exec(`CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY,applied_at TEXT NOT NULL);
+      CREATE TABLE audit_logs(id TEXT PRIMARY KEY,museum_id TEXT,object_type TEXT,object_id TEXT,action TEXT,diff TEXT);
+      INSERT INTO audit_logs VALUES
+      ('a','palace','memory','same','memory.details','private'),
+      ('b','palace','memory','same','memory.permanent','private'),
+      ('c','other','memory','same','memory.details','keep'),
+      ('d','palace','stage','same','stage.details','keep'),
+      ('e','palace','memory','live','memory.details','keep');`);
+    const record = db.prepare("INSERT INTO schema_migrations VALUES (?,'old')");
+    for (let version = 1; version <= 33; version++) record.run(version);
+    runDatabaseMigrations(db);
+    const rows = db.prepare("SELECT * FROM audit_logs ORDER BY id").all();
+    assert.deepEqual(
+      rows.map((row) => row.diff),
+      [null, null, "keep", "keep", "keep"],
+    );
+    assert.ok(rows.every((row) => row.actor_name === null));
+    runDatabaseMigrations(db);
+    assert.deepEqual(db.prepare("SELECT * FROM audit_logs ORDER BY id").all(), rows);
+  } finally {
+    db.close();
+  }
+});
+
+test("audit nickname snapshots survive profile changes; historical snapshots stay unknown", () => {
+  const { db, input } = fixture();
+  try {
+    const first = writeAuditLogInDatabase(db, input);
+    db.prepare("UPDATE users SET display_name='Renamed' WHERE id=?").run(input.actorUserId);
+    const second = writeAuditLogInDatabase(db, input);
+    assert.equal(
+      db.prepare("SELECT actor_name FROM audit_logs WHERE id=?").get(first.id)!.actor_name,
+      "Actor",
+    );
+    assert.equal(
+      db.prepare("SELECT actor_name FROM audit_logs WHERE id=?").get(second.id)!.actor_name,
+      "Renamed",
+    );
+    db.prepare("UPDATE audit_logs SET actor_name=NULL WHERE id=?").run(first.id);
+    assert.equal(
+      db.prepare("SELECT actor_name FROM audit_logs WHERE id=?").get(first.id)!.actor_name,
+      null,
+    );
   } finally {
     db.close();
   }
@@ -207,6 +258,10 @@ test("deleting an actor preserves the event; deleting a museum requires explicit
     });
     const entry = writeAuditLogInDatabase(db, { ...input, actorUserId: actor.id });
     db.prepare("DELETE FROM users WHERE id = ?").run(actor.id);
+    assert.equal(
+      db.prepare("SELECT actor_name FROM audit_logs WHERE id=?").get(entry.id)!.actor_name,
+      "Collaborator",
+    );
     assert.equal(
       db.prepare("SELECT actor_user_id FROM audit_logs WHERE id = ?").get(entry.id)?.actor_user_id,
       null,

@@ -53,6 +53,18 @@
   color: var(--ink);
   font: inherit;
 }
+.invitation-list li {
+  overflow-wrap: anywhere;
+}
+.collaboration-members h1 {
+  text-wrap: balance;
+}
+.collaboration-members .text-button {
+  width: fit-content;
+  min-height: 2.75rem;
+  justify-self: start;
+}
+
 .form-field textarea {
   resize: vertical;
   line-height: 1.7;

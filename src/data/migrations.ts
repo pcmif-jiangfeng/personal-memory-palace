@@ -8,6 +8,8 @@ import { museumNotificationSchemaSql } from "./museum-notifications.ts";
 import { supportAccessSchemaSql } from "./platform-admin-support.ts";
 import { museumPermanentDeletionSchemaSql } from "./museum-permanent-deletion.ts";
 import { emailCodeSchemaSql } from "./email-code-schema.ts";
+import { emailInviteSchemaSql } from "./email-invite-schema.ts";
+import { ownerTransferRequestSchemaSql } from "./owner-transfer-request-schema.ts";
 
 type Migration = {
   version: number;
@@ -266,7 +268,9 @@ const migrations: readonly Migration[] = [
       ] as const) {
         for (const column of columns) {
           if (!hasColumn(database, table, column)) {
-            database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT REFERENCES users(id) ON DELETE SET NULL`);
+            database.exec(
+              `ALTER TABLE ${table} ADD COLUMN ${column} TEXT REFERENCES users(id) ON DELETE SET NULL`,
+            );
           }
         }
       }
@@ -276,14 +280,19 @@ const migrations: readonly Migration[] = [
     version: 18,
     migrate(database) {
       if (!hasColumn(database, "memories", "version")) {
-        database.exec("ALTER TABLE memories ADD COLUMN version INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1)");
+        database.exec(
+          "ALTER TABLE memories ADD COLUMN version INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1)",
+        );
       }
     },
   },
   {
     version: 19,
     migrate(database) {
-      if (!hasColumn(database, "stages", "version")) database.exec("ALTER TABLE stages ADD COLUMN version INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1)");
+      if (!hasColumn(database, "stages", "version"))
+        database.exec(
+          "ALTER TABLE stages ADD COLUMN version INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1)",
+        );
     },
   },
   {
@@ -296,7 +305,9 @@ const migrations: readonly Migration[] = [
     version: 21,
     migrate(database) {
       if (!hasColumn(database, "museums", "storage_usage_ready")) {
-        database.exec("ALTER TABLE museums ADD COLUMN storage_usage_ready INTEGER NOT NULL DEFAULT 0 CHECK (storage_usage_ready IN (0,1))");
+        database.exec(
+          "ALTER TABLE museums ADD COLUMN storage_usage_ready INTEGER NOT NULL DEFAULT 0 CHECK (storage_usage_ready IN (0,1))",
+        );
       }
       database.exec(photoStorageUsageSchemaSql);
     },
@@ -337,15 +348,147 @@ const migrations: readonly Migration[] = [
       database.exec(museumPermanentDeletionSchemaSql);
     },
   },
-  { version: 27, migrate(database) { database.exec(emailCodeSchemaSql); } },
+  {
+    version: 27,
+    migrate(database) {
+      database.exec(emailCodeSchemaSql);
+    },
+  },
   {
     version: 28,
     migrate(database) {
       if (!hasColumn(database, "museums", "owner_id")) return;
-      if (database.prepare("SELECT owner_id FROM museums GROUP BY owner_id HAVING COUNT(*)>1 LIMIT 1").get()) {
-        throw new Error("Task13B: multiple owned palaces require an explicit migration decision; no records were merged or deleted");
+      if (
+        database
+          .prepare("SELECT owner_id FROM museums GROUP BY owner_id HAVING COUNT(*)>1 LIMIT 1")
+          .get()
+      ) {
+        throw new Error(
+          "Task13B: multiple owned palaces require an explicit migration decision; no records were merged or deleted",
+        );
       }
       database.exec("CREATE UNIQUE INDEX IF NOT EXISTS museums_owner_unique ON museums(owner_id)");
+    },
+  },
+  {
+    version: 29,
+    migrate(database) {
+      // Databases without the ownership model have no collaboration grants to migrate.
+      if (!hasColumn(database, "museums", "owner_id")) return;
+      if (!hasColumn(database, "museums", "museum_type")) {
+        if (
+          database
+            .prepare("SELECT owner_id FROM museums GROUP BY owner_id HAVING COUNT(*)>1 LIMIT 1")
+            .get()
+        ) {
+          throw new Error(
+            "Collaboration migration requires explicit palace type mapping; no data changed",
+          );
+        }
+        database.exec(
+          "ALTER TABLE museums ADD COLUMN museum_type TEXT NOT NULL DEFAULT 'private' CHECK (museum_type IN ('private','shared'))",
+        );
+      }
+      // Preserve the index name used by maintenance fixtures; constrain only private palaces.
+      database.exec("DROP INDEX IF EXISTS museums_owner_unique");
+      database.exec(
+        "CREATE UNIQUE INDEX museums_owner_unique ON museums(owner_id) WHERE museum_type='private'",
+      );
+      // Retain historical relationship records without restoring their authorization.
+      database.exec("UPDATE museum_memberships SET status='revoked' WHERE status='active'");
+      database
+        .prepare("UPDATE invite_links SET revoked_at=? WHERE revoked_at IS NULL")
+        .run(new Date().toISOString());
+    },
+  },
+  {
+    version: 30,
+    migrate(database) {
+      if (!hasColumn(database, "museums", "owner_id")) return;
+      if (!hasColumn(database, "users", "storage_quota_bytes")) {
+        database.exec(
+          "ALTER TABLE users ADD COLUMN storage_quota_bytes INTEGER CHECK (storage_quota_bytes >= 0)",
+        );
+      }
+      if (
+        database
+          .prepare(
+            `SELECT m.owner_id FROM museums m JOIN users u ON u.id=m.owner_id
+        WHERE u.storage_quota_bytes IS NULL GROUP BY m.owner_id HAVING COUNT(*)>1 LIMIT 1`,
+          )
+          .get()
+      ) {
+        throw new Error(
+          "Account quota migration requires explicit multi-palace quota mapping; no quotas were combined",
+        );
+      }
+      // NULL means no allowance has been assigned. Only a single legacy palace is unambiguous.
+      database.exec(`UPDATE users SET storage_quota_bytes=(SELECT storage_quota_bytes FROM museums WHERE owner_id=users.id)
+        WHERE storage_quota_bytes IS NULL AND (SELECT COUNT(*) FROM museums WHERE owner_id=users.id)=1`);
+    },
+  },
+  {
+    version: 31,
+    migrate(database) {
+      database.exec(emailInviteSchemaSql);
+    },
+  },
+  {
+    version: 32,
+    migrate(database) {
+      if (!hasColumn(database, "later_notes", "id")) return;
+      // Historical authors are unknown: do not infer them from the palace owner or last editor.
+      for (const [column, definition] of [
+        ["author_user_id", "TEXT REFERENCES users(id) ON DELETE SET NULL"],
+        ["trashed_at", "TEXT"],
+        ["updated_at", "TEXT"],
+        ["version", "INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1)"],
+      ]) {
+        if (!hasColumn(database, "later_notes", column))
+          database.exec(`ALTER TABLE later_notes ADD COLUMN ${column} ${definition}`);
+      }
+    },
+  },
+  {
+    version: 33,
+    migrate(database) {
+      if (
+        hasColumn(database, "uploaded_photos", "id") &&
+        !hasColumn(database, "uploaded_photos", "trashed_at")
+      )
+        database.exec("ALTER TABLE uploaded_photos ADD COLUMN trashed_at TEXT");
+    },
+  },
+  {
+    version: 34,
+    migrate(database) {
+      if (!hasColumn(database, "audit_logs", "id")) return;
+      if (!hasColumn(database, "audit_logs", "actor_name"))
+        database.exec("ALTER TABLE audit_logs ADD COLUMN actor_name TEXT");
+      // Only explicit historical permanent-delete events justify clearing an object's detail.
+      // Old nicknames stay NULL: today's profile cannot prove the nickname at operation time.
+      database.exec(`UPDATE audit_logs SET diff=NULL WHERE EXISTS (
+        SELECT 1 FROM audit_logs deleted WHERE deleted.museum_id=audit_logs.museum_id
+        AND deleted.object_type=audit_logs.object_type AND deleted.object_id=audit_logs.object_id
+        AND deleted.action IN ('memory.permanent','stage.permanent','laterNote.permanent','photo.permanent','photo.deleteQueued'))`);
+    },
+  },
+  {
+    version: 35,
+    migrate(database) {
+      database.exec(ownerTransferRequestSchemaSql);
+    },
+  },
+  {
+    version: 36,
+    migrate(database) {
+      for (const [column, definition] of [
+        ["deletion_attempts", "INTEGER NOT NULL DEFAULT 0 CHECK(deletion_attempts>=0)"],
+        ["deletion_last_error", "TEXT"],
+        ["deletion_next_attempt_at", "TEXT"],
+      ])
+        if (hasColumn(database, "museums", "id") && !hasColumn(database, "museums", column))
+          database.exec(`ALTER TABLE museums ADD COLUMN ${column} ${definition}`);
     },
   },
 ];

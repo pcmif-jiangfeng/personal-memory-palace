@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getDatabase } from "@/data/database";
 import { listMuseumActivityInDatabase } from "@/data/museum-activity";
-import { requireMuseumOwnerInDatabase } from "@/data/museum-access";
+import { requireMuseumAccessInDatabase } from "@/data/museum-access";
 import { findMuseumByIdInDatabase } from "@/data/museum-repository";
 import { readAuditLogQuery } from "@/http/audit-log-query";
 import { ApiError } from "@/http/errors";
@@ -23,7 +23,7 @@ export default async function MuseumActivityPage({
   const database = getDatabase();
   let role: "owner" | "collaborator";
   try {
-    const access = requireMuseumOwnerInDatabase(database, user.id, id);
+    const access = requireMuseumAccessInDatabase(database, user.id, id);
     if (access.status !== "active") notFound();
     role = access.role;
   } catch (error) {
@@ -55,7 +55,7 @@ export default async function MuseumActivityPage({
             {result.entries.map((entry) => (
               <li key={entry.id}>
                 <p>
-                  {entry.actorName ?? "已删除用户"} · {entry.summary}
+                  {entry.actorName ?? "历史昵称未知"} · {entry.summary}
                 </p>
                 <time dateTime={entry.timestamp}>
                   {entry.timestamp.replace("T", " ").replace("Z", " UTC")}

@@ -13,6 +13,7 @@ import { createMuseumInDatabase } from "../src/data/museum-repository.ts";
 import { museumPhotoStorageKey } from "../src/storage/photo-storage-key.ts";
 import { permanentlyDeleteMuseum } from "../src/application/permanent-museum-deletion.ts";
 import { finalizeMuseumDeletion } from "../scripts/finalize-museum-deletion.ts";
+import { runMuseumDeletionWorker } from "../scripts/run-museum-deletion-worker.ts";
 
 async function fixture(t: TestContext) {
   const root = await mkdtemp(path.join(tmpdir(), "palace-j6-maintenance-"));
@@ -34,6 +35,7 @@ async function fixture(t: TestContext) {
   const museums = ["due", "other"].map((slug, index) =>
     createMuseumInDatabase(db, { ownerId: index === 0 ? user.id : otherUser.id, name: slug, slug }),
   );
+  db.exec("UPDATE museums SET museum_type='shared'");
   const files: string[] = [];
   for (const museum of museums) {
     const key = museumPhotoStorageKey(museum.id);
@@ -55,6 +57,62 @@ async function fixture(t: TestContext) {
   db.close();
   return { root, data, backups, museums, files, id: museums[0].id };
 }
+
+test("controlled worker is read-only by default and refuses missing maintenance authority", async (t) => {
+  const f = await fixture(t),
+    file = path.join(f.data, "palace.sqlite"),
+    before = await readFile(file);
+  const result = await runMuseumDeletionWorker({ dataDirectory: f.data, limit: 1 });
+  assert.deepEqual(result, { dryRun: true, results: [{ museumId: f.id, status: "planned" }] });
+  assert.deepEqual(await readFile(file), before);
+  await assert.rejects(
+    runMuseumDeletionWorker({ dataDirectory: f.data, apply: true }),
+    /stopped writers/,
+  );
+  await assert.rejects(runMuseumDeletionWorker({ dataDirectory: f.data, limit: 21 }), /1..20/);
+  assert.deepEqual(await readFile(file), before);
+});
+
+test("worker records safe failure, freezes access and retries only after its backoff with a verified backup", async (t) => {
+  const f = await fixture(t),
+    file = path.join(f.data, "palace.sqlite");
+  await rm(f.files[0]);
+  const options = {
+    dataDirectory: f.data,
+    apply: true,
+    quiesced: true,
+    backupRoot: f.backups,
+    limit: 1,
+  };
+  assert.deepEqual((await runMuseumDeletionWorker(options)).results, [
+    { museumId: f.id, status: "failed" },
+  ]);
+  const db = new DatabaseSync(file);
+  try {
+    const row = db
+      .prepare(
+        "SELECT status,deletion_attempts,deletion_last_error,deletion_next_attempt_at FROM museums WHERE id=?",
+      )
+      .get(f.id)!;
+    assert.equal(row.status, "pending_deletion");
+    assert.equal(row.deletion_attempts, 1);
+    assert.equal(row.deletion_last_error, "CLEANUP_FAILED");
+    assert.ok(Date.parse(String(row.deletion_next_attempt_at)) > Date.now());
+    assert.deepEqual((await runMuseumDeletionWorker(options)).results, []);
+    await writeFile(f.files[0], "bytes-due");
+    db.prepare("UPDATE museums SET deletion_next_attempt_at='2000-01-01T00:00:00Z' WHERE id=?").run(
+      f.id,
+    );
+    assert.deepEqual((await runMuseumDeletionWorker(options)).results, [
+      { museumId: f.id, status: "deleted" },
+    ]);
+    assert.equal(db.prepare("SELECT 1 FROM museums WHERE id=?").get(f.id), undefined);
+    assert.ok(db.prepare("SELECT 1 FROM museums WHERE id=?").get(f.museums[1].id));
+    assert.ok(existsSync(f.files[1]));
+  } finally {
+    db.close();
+  }
+});
 
 test("J6 maintenance dry-run and invalid confirmations leave database and photos unchanged", async (t) => {
   const f = await fixture(t);

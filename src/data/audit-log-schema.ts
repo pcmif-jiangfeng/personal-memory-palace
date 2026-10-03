@@ -2,6 +2,7 @@ export const auditLogSchemaSql = `
 CREATE TABLE IF NOT EXISTS audit_logs (
   id TEXT PRIMARY KEY NOT NULL,
   actor_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  actor_name TEXT,
   museum_id TEXT NOT NULL REFERENCES museums(id) ON DELETE RESTRICT,
   action TEXT NOT NULL CHECK (length(trim(action)) > 0),
   object_type TEXT NOT NULL CHECK (length(trim(object_type)) > 0),

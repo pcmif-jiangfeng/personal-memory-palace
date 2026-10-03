@@ -18,7 +18,7 @@ async function fileHash(file: string) {
   return hash.digest("hex");
 }
 
-async function uploadFingerprint(directory: string) {
+export async function uploadFingerprint(directory: string) {
   const hash = createHash("sha256");
   async function walk(relative: string) {
     const target = path.join(directory, relative);
@@ -105,13 +105,15 @@ export async function finalizeMuseumDeletion(options: {
   const lockPath = path.join(data, ".museum-permanent-delete.lock");
   const lock = options.apply ? await open(lockPath, "wx", 0o600) : null;
   let db: DatabaseSync | undefined;
+  let attempted = false;
   try {
     db = new DatabaseSync(databasePath, { readOnly: !options.apply });
     db.exec("PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000");
     const initial = planMuseumPermanentDeletion(db, options.museumId);
-    const storage = await inspectMuseumStorage(images, options.museumId);
-    if (!options.apply)
+    if (!options.apply) {
+      const storage = await inspectMuseumStorage(images, options.museumId);
       return { dryRun: true, ...initial, files: storage.files, bytes: storage.bytes };
+    }
     if (
       !db
         .prepare(
@@ -126,6 +128,13 @@ export async function finalizeMuseumDeletion(options: {
     const backupRoot = await realpath(backupRootCandidate);
     requireExternalBackupRoot(data, backupRoot);
     const database = db;
+    // Update retry state only while the same exclusive lock protects backup and deletion.
+    database
+      .prepare(
+        "UPDATE museums SET deletion_attempts=deletion_attempts+1,deletion_last_error=NULL,deletion_next_attempt_at=NULL WHERE id=?",
+      )
+      .run(options.museumId);
+    attempted = true;
     const result = await permanentlyDeleteMuseum(database, images, options.museumId, {
       quiesced: true,
       backup: {
@@ -192,6 +201,12 @@ export async function finalizeMuseumDeletion(options: {
     )
       throw new Error("Post-deletion database verification failed");
     return { ...result, verified: true };
+  } catch (error) {
+    if (attempted && db)
+      db.prepare(
+        "UPDATE museums SET deletion_last_error='CLEANUP_FAILED',deletion_next_attempt_at=? WHERE id=? AND status='pending_deletion'",
+      ).run(new Date(Date.now() + 60 * 60 * 1000).toISOString(), options.museumId);
+    throw error;
   } finally {
     db?.close();
     if (lock) {

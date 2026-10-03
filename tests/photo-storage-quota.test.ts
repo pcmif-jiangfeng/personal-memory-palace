@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -93,6 +94,102 @@ const imageData = () =>
   sharp({ create: { width: 2, height: 2, channels: 3, background: "#aabbcc" } })
     .webp()
     .toBuffer();
+
+function sharedSibling(f: ReturnType<typeof fixture>) {
+  const id = randomUUID();
+  f.db
+    .prepare(
+      `INSERT INTO museums
+    (id,owner_id,museum_type,name,slug,created_at,updated_at,storage_usage_ready,storage_quota_bytes)
+    VALUES (?,?,'shared','Shared',?,'now','now',1,999999999)`,
+    )
+    .run(id, f.owner.userId, id);
+  return { userId: f.owner.userId, museumId: id };
+}
+
+test("uploads across owned palaces share one account quota, regardless of the new palace's legacy allowance", async () => {
+  const data = await imageData();
+  const f = fixture(data.length);
+  try {
+    const sibling = sharedSibling(f);
+    assert.ok(
+      (await uploadScopedPhoto(f.db, f.owner, { data, requestedName: null }, f.storage)).ok,
+    );
+    await assert.rejects(
+      uploadScopedPhoto(f.db, sibling, { data, requestedName: null }, f.storage),
+      quotaError,
+    );
+    assert.equal(f.count("uploaded_photos"), 1);
+    assert.equal(f.count("pending_uploads"), 0);
+    assert.ok(
+      (await uploadScopedPhoto(f.db, f.other, { data, requestedName: null }, f.storage)).ok,
+    );
+  } finally {
+    f.close();
+  }
+});
+
+test("cross-palace reservations on two database connections cannot spend the same remaining bytes", async () => {
+  const data = await imageData();
+  const f = fixture(data.length);
+  const db2 = new DatabaseSync(f.databasePath);
+  let release: () => void = () => {};
+  let pending: ReturnType<typeof uploadScopedPhoto> | undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let entered: () => void = () => {};
+  const saved = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  try {
+    const sibling = sharedSibling(f);
+    pending = uploadScopedPhoto(
+      f.db,
+      f.owner,
+      { data, requestedName: null },
+      {
+        ...f.storage,
+        saveOptimized: async (image, key) => {
+          entered();
+          await gate;
+          return f.storage.saveOptimized(image, key);
+        },
+      },
+    );
+    await saved;
+    await assert.rejects(
+      uploadScopedPhoto(db2, sibling, { data, requestedName: null }, f.storage),
+      quotaError,
+    );
+    assert.equal(f.count("photo_asset_usage"), 1);
+    release();
+    assert.ok((await pending).ok);
+    assert.equal(f.used(), data.length);
+  } finally {
+    release();
+    if (pending) await pending;
+    db2.close();
+    f.close();
+  }
+});
+
+test("an unmeasured owned palace blocks account uploads rather than understating usage", async () => {
+  const data = await imageData();
+  const f = fixture();
+  try {
+    const sibling = sharedSibling(f);
+    f.db.prepare("UPDATE museums SET storage_usage_ready=0 WHERE id=?").run(sibling.museumId);
+    await assert.rejects(
+      uploadScopedPhoto(f.db, f.owner, { data, requestedName: null }, f.storage),
+      (error) => error instanceof ApiError && error.code === "STORAGE_USAGE_NOT_READY",
+    );
+    assert.equal(f.count("photo_asset_usage"), 0);
+    assert.equal(f.count("uploaded_photos"), 0);
+  } finally {
+    f.close();
+  }
+});
 function quotaError(error: unknown) {
   assert.ok(error instanceof ApiError);
   assert.equal(error.code, "STORAGE_QUOTA_EXCEEDED");

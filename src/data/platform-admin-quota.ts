@@ -4,7 +4,7 @@ import { validateQuotaAdjustment, type QuotaAdjustment } from "../http/platform-
 import { requirePlatformAdminInDatabase } from "./platform-admin.ts";
 import { withTransaction } from "./transaction.ts";
 import { writeAuditLogInDatabase } from "./audit-log.ts";
-import { readNumber } from "./row-readers.ts";
+import { readNumber, readString } from "./row-readers.ts";
 
 export function adjustMuseumQuotaInDatabase(
   database: DatabaseSync,
@@ -16,22 +16,25 @@ export function adjustMuseumQuotaInDatabase(
     const actorUserId = requirePlatformAdminInDatabase(database, userId);
     validateQuotaAdjustment(input);
     const museum = database
-      .prepare("SELECT storage_quota_bytes FROM museums WHERE id=?")
+      .prepare(`SELECT m.owner_id,u.storage_quota_bytes FROM museums m
+        JOIN users u ON u.id=m.owner_id WHERE m.id=?`)
       .get(museumId);
     if (!museum) throw new ApiError("MUSEUM_NOT_FOUND", 404);
+    const ownerId = readString(museum, "owner_id");
+    if (ownerId !== input.expectedOwnerId) throw new ApiError("STORAGE_QUOTA_OWNER_CONFLICT", 409);
     const before = readNumber(museum, "storage_quota_bytes");
     if (before !== input.expectedQuotaBytes) throw new ApiError("STORAGE_QUOTA_CONFLICT", 409);
     if (before !== input.storageQuotaBytes) {
       // Quota is operational metadata: do not change content versions, ownership or used bytes.
       database
-        .prepare("UPDATE museums SET storage_quota_bytes=? WHERE id=?")
-        .run(input.storageQuotaBytes, museumId);
+        .prepare("UPDATE users SET storage_quota_bytes=? WHERE id=?")
+        .run(input.storageQuotaBytes, ownerId);
       writeAuditLogInDatabase(database, {
         actorUserId,
         museumId,
         action: "admin.quota.update",
-        objectType: "museum",
-        objectId: museumId,
+        objectType: "account",
+        objectId: ownerId,
         diff: { beforeQuotaBytes: before, afterQuotaBytes: input.storageQuotaBytes },
       });
     }

@@ -6,7 +6,13 @@ import { accountDisplayLabel } from "@/domain/user-profile";
 import { UserLogoutButton } from "@/components/user-logout-button";
 import { copy } from "@/i18n/zh-CN";
 
-export function AccountMenu({ user }: { user: { displayName: string; email: string } }) {
+export function AccountMenu({
+  user,
+  museumId,
+}: {
+  user: { displayName: string; email: string };
+  museumId?: string | null;
+}) {
   const menu = useRef<HTMLDetailsElement>(null);
   const label = accountDisplayLabel(user);
   useEffect(() => {
@@ -36,6 +42,15 @@ export function AccountMenu({ user }: { user: { displayName: string; email: stri
       </summary>
       <div className="account-menu-panel">
         <Link
+          href={museumId ? `/account?museumId=${encodeURIComponent(museumId)}` : "/account"}
+          prefetch={false}
+          onClick={() => {
+            if (menu.current) menu.current.open = false;
+          }}
+        >
+          宫殿设置
+        </Link>
+        <Link
           href="/account/settings"
           prefetch={false}
           onClick={() => {
@@ -45,6 +60,15 @@ export function AccountMenu({ user }: { user: { displayName: string; email: stri
           {copy.account.title}
         </Link>
         <UserLogoutButton label={copy.account.logout} className="text-button" />
+        <Link
+          href="/account/invites"
+          prefetch={false}
+          onClick={() => {
+            if (menu.current) menu.current.open = false;
+          }}
+        >
+          收到的邀请
+        </Link>
       </div>
     </details>
   );

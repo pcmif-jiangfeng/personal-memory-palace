@@ -68,6 +68,24 @@ test("scoped mutations allow collaborator edits, notes, trash and restore; perma
     db.close();
   }
 });
+test("publication is owner-only even when a collaborator can edit the Memory", () => {
+  const { db, owner, member } = fixture();
+  try {
+    const before = db.prepare("SELECT * FROM memories WHERE id='own'").get();
+    for (const isPublic of [false, true]) {
+      assert.throws(
+        () => manageScopedMemory(db, member, "own", { action: "publication", isPublic }),
+        (error) => error instanceof ApiError && error.code === "MUSEUM_OWNER_REQUIRED",
+      );
+      assert.deepEqual(db.prepare("SELECT * FROM memories WHERE id='own'").get(), before);
+    }
+    manageScopedMemory(db, owner, "own", { action: "publication", isPublic: false });
+    assert.equal(db.prepare("SELECT is_public FROM memories WHERE id='own'").get()?.is_public, 0);
+  } finally {
+    db.close();
+  }
+});
+
 test("cross-Museum IDs and foreign relations are rejected without changing either Museum", () => {
   const { db, owner, member } = fixture();
   try {

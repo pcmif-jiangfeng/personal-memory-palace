@@ -2,15 +2,15 @@ import { NextResponse } from "next/server";
 import { getDatabase } from "@/data/database";
 import { requireMuseumOwnerInDatabase } from "@/data/museum-access";
 import {
-  cancelMuseumDeletionInDatabase,
   readMuseumDeletionInDatabase,
   scheduleMuseumDeletionInDatabase,
+  cancelMuseumDeletionInDatabase,
 } from "@/data/museum-deletion";
+import { parseMuseumDeletionConfirmation } from "@/http/museum-deletion";
+import { scheduleMuseumNotificationDelivery } from "@/email/after-museum-notifications";
 import { apiErrorResponse, sameOriginRequiredResponse } from "@/http/api-error";
 import { ApiError } from "@/http/errors";
-import { parseMuseumDeletionConfirmation } from "@/http/museum-deletion";
 import { currentUser } from "@/user-auth";
-import { scheduleMuseumNotificationDelivery } from "@/email/after-museum-notifications";
 
 export const runtime = "nodejs";
 const noStore = { "Cache-Control": "private, no-store" };
@@ -30,15 +30,14 @@ export async function GET(_request: Request, { params }: Context) {
 }
 
 export async function POST(request: Request, context: Context) {
-  return mutate(request, context, false);
+  return mutateDeletion(request, context, false);
 }
 
-// DELETE removes the deletion plan, not the Museum or any physical assets.
 export async function DELETE(request: Request, context: Context) {
-  return mutate(request, context, true);
+  return mutateDeletion(request, context, true);
 }
 
-async function mutate(request: Request, { params }: Context, cancel: boolean) {
+async function mutateDeletion(request: Request, { params }: Context, cancel: boolean) {
   const originError = sameOriginRequiredResponse(request);
   if (originError) return originError;
   try {
@@ -48,6 +47,9 @@ async function mutate(request: Request, { params }: Context, cancel: boolean) {
     validateId(id);
     const database = getDatabase();
     requireMuseumOwnerInDatabase(database, user.id, id);
+    const museum = readMuseumDeletionInDatabase(database, user.id, id);
+    if (museum.museumType === "private")
+      throw new ApiError("PRIVATE_PALACE_DELETION_DISABLED", 410);
     const input = await parseMuseumDeletionConfirmation(request);
     const result = cancel
       ? cancelMuseumDeletionInDatabase(database, user.id, id, input)
