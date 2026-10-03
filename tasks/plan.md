@@ -1,48 +1,61 @@
-# Implementation Plan: Code quality audit remediation
+# 实施计划：私人及共同宫殿协作恢复
 
-## Overview
+日期：2026-10-03。状态：A–G本地实施与验证完成，532项全量、类型/lint/构建及完整Chrome通过。生产迁移/调度/真实邮件/推送部署尚未执行；一次重新邀请测试超时未再复现，保留诊断与观察，详见最终验收报告。
 
-Apply the audit in small, verifiable slices. Keep the Next.js/SQLite monolith and avoid new dependencies.
+依据：[产品核心](../任务文件/PRODUCT_CORE.md)、[协作规格](../任务文件/COLLABORATION_SPEC.md)、[只读审计](../docs/COLLABORATION_AUDIT_2026-10-03.md)。
+唯一任务清单：[todo.md](todo.md)。原已完成计划见 [历史摘要](../docs/CODE_QUALITY_PLAN_COMPLETED.md)。
 
-## Decisions
+## 最小实现方案
 
-- Domain errors own predictable business failures; HTTP maps them once.
-- Mutation routes enforce same-origin requests before owner authorization.
-- File operations remain a database-backed retry queue; recovery is explicit and testable.
-- Photo catalogs return bounded pages rather than full client-side catalogs.
+保留 Next16/React19/TS/Node SQLite、现有认证、事务、图片存储、文件账本和版本机制；不重建项目，不引入通用 RBAC 或实时协作。
 
-## Task List
+- 复用 museums，新增私人/共同类型，将全局 owner 唯一改成私人类型局部唯一；默认明确选私人馆。
+- 迁移先隔离旧成员和旧邀请，再开放新成员；不全局把 owner 检查换成 member 检查。
+- 文件账本仍按馆，额度按馆长账号聚合，纳入所有自有馆和预留；管理员调整改成账号语义。
+- 指定邮箱邀请、待接受转让、Note 作者及独立状态、照片软删除属于真实缺口，不能假定旧代码已支持。
+- 内容、馆长管理、待删除生命周期、外部分享分别授权，每项动作在服务端检查最新状态。
+- 逐功能路径恢复页面/API/UI，跨馆复制继续停用，中间版本不部署生产。
 
-### Phase 1: Boundaries and security
+## 依赖顺序与检查点
 
-- [x] Task 1: Introduce typed domain errors and remove data-to-HTTP imports.
-- [x] Task 2: Add same-origin protection and route-level mutation tests.
-- [x] Task 3: Add share-token rotation and document proxy/share-link constraints.
+A 数据与安全基础 → B 配额/共同创建 → C 指定邮箱邀请 → D 普通内容与媒体 → E 作者/Note/照片回收站/记录 → F 转让/整馆生命周期 → G 整体回归/上线准备。
 
-### Checkpoint: Phase 1
+具体编号、文件、验收和命令只维护于 todo.md。每项预计最多五个主要文件；超出时先拆分子项，不一次扩散改动。检查点运行全量测试、typecheck、lint、build；每项完成输出针对性自检，失败先自行修复，产品冲突或不可推断的历史归属再询问用户。
 
-- [x] Typecheck, lint, tests, and build pass.
+## 验证入口与完成标准
 
-### Phase 2: Data lifecycle
+仓库根目录执行现有入口：
 
-- [x] Task 4: Recover pending photo deletions and report unresolved jobs.
-- [x] Task 5: Make upload cleanup recoverable and make backup quiescence explicit.
+```powershell
+pnpm test:file tests/<目标文件>.test.ts
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build
+git diff --check
+pnpm dev
+```
 
-### Checkpoint: Phase 2
+每项完成需要验收条件满足、对应运行时/测试证据、边界和失败路径、自查、改动范围内格式检查；非平凡实现进行 code-review-and-quality，安全与迁移变化进行相应审查。不能删除安全测试或把模拟邮件当真实送达。
 
-- [x] Failure-injection tests cover retry and recovery paths.
+Next框架改动前读取 AGENTS.md 指定的安装包指南。浏览器检查使用真实页面、两个账号并发、控制台和网络；最终逐条关联协作规格的32条验收。
 
-### Phase 3: Read-model limits
+## 迁移与风险
 
-- [x] Task 6: Add server-side photo catalog pagination and migrate workspace use.
-- [x] Task 7: Make related-memory edges canonical and test both edit directions.
+| 风险                             | 处理                                                  |
+| -------------------------------- | ----------------------------------------------------- |
+| 恢复成员授权会启用历史active记录 | A先迁移隔离，升级用旧active与旧token证明不能访问      |
+| 多馆历史类型/额度来源不明        | 只读清单、显式映射，不按时间猜类型、不自动求和额度    |
+| 私人整馆删除入口仍可写           | A先关闭，不等共同删除完成                             |
+| 照片归档或物理作业被当回收站     | 新软删除状态，保留文件和额度；永久删除后才走清理作业  |
+| 历史Note作者与日志昵称缺失       | 历史未知展示，不伪造原馆长作者或当时昵称              |
+| 并发上传和转让额度竞争           | 聚合账号预留、事务内重检；失败不改归属                |
+| 现有永久删除依赖全局停写         | 受控后台周期执行与备份/恢复，不能直接在在线请求调用   |
+| 新表遗漏清理                     | 更新整馆白名单、备份和恢复测试                        |
+| 特殊运维支持被误当协作权限       | 保留既有受限支持，不扩大；pending状态阻止支持内容访问 |
 
-### Checkpoint: Complete
+生产输入尚未读取。实施前在隔离副本验证迁移和恢复；生产apply必须有明确数据映射、原额度、全量备份与恢复证据。部署准备说明停写范围、后台调度、候选版本验证、失败回滚和旧成员不复活。
 
-- [x] Full checks pass and audit findings are re-reviewed.
+## 授权边界
 
-## Risks
-
-- Database schema changes require idempotent migration coverage.
-- Route tests must not bypass cookie and origin boundaries.
-- Existing local runtime files remain outside source-control changes.
+产品规则与此计划已确认，用户已批准本地实施。按任务清单逐项推进，不自动推送或部署。已确认权限不反复询问；无法推断的生产映射或会改变产品行为的问题，提供具体证据后再确认。
